@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>تشخیصِ Supabase Auth — فروشگاه جویا</title>
+<!-- اگر این فایل کنارِ sync-config.js باشد، URL و anonKey از همان‌جا خوانده می‌شوند -->
+<script src="sync-config.js" onerror="console.warn('sync-config.js کنارِ این فایل نیست؛ دستی وارد کنید')"></script>
+<style>
+  body{font-family:"Vazirmatn",system-ui,sans-serif;background:#0f172a;color:#e2e8f0;margin:0;padding:18px;line-height:1.9}
+  h1{font-size:18px;margin:0 0 6px}
+  .sub{color:#94a3b8;font-size:12.5px;margin-bottom:14px}
+  .cfg{background:#1e293b;border:1px solid #334155;border-radius:10px;padding:12px;margin-bottom:14px}
+  .cfg label{display:block;font-size:12px;color:#94a3b8;margin:6px 0 3px}
+  .cfg input{width:100%;box-sizing:border-box;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:8px;padding:8px;font-family:inherit;font-size:12.5px;direction:ltr}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+  button{background:#2563eb;color:#fff;border:none;border-radius:8px;padding:9px 12px;font-family:inherit;font-size:12.5px;font-weight:700;cursor:pointer}
+  button.alt{background:#334155}
+  button:hover{filter:brightness(1.08)}
+  pre{background:#020617;border:1px solid #1e293b;border-radius:10px;padding:12px;white-space:pre-wrap;word-break:break-word;font-size:12px;direction:ltr;max-height:60vh;overflow:auto}
+  .ok{color:#34d399}.bad{color:#f87171}.warn{color:#fbbf24}.dim{color:#64748b}
+  .pill{display:inline-block;background:#1e293b;border:1px solid #334155;border-radius:999px;padding:2px 9px;font-size:11px;margin-inline-start:6px}
+</style>
+</head>
+<body>
+  <h1>تشخیصِ Supabase Auth <span class="pill">anon-only • بدونِ service_role</span></h1>
+  <div class="sub">این ابزار مستقیماً با پروژهٔ Supabase شما کار می‌کند و پاسخِ خامِ واقعی (status + JSON) را نشان می‌دهد.
+  هیچ کلیدِ محرمانه‌ای لازم نیست و ذخیره نمی‌شود. آن را کنارِ <code>sync-config.js</code> بگذارید یا مقادیر را دستی وارد کنید.</div>
+
+  <div class="cfg">
+    <label>SUPABASE URL</label>
+    <input id="url" placeholder="https://xxxx.supabase.co">
+    <label>ANON / PUBLIC KEY</label>
+    <input id="anon" placeholder="eyJhbGciOi...">
+  </div>
+
+  <div class="row">
+    <button onclick="T1()">۱) اتصال</button>
+    <button onclick="T2()">۲) نشست فعلی</button>
+    <button onclick="T3()">۳) signUp تستی</button>
+    <button onclick="T4()">۴) signIn تستی</button>
+    <button onclick="T5()">۵) بررسیِ کاربرِ ساخته‌شده</button>
+    <button class="alt" onclick="fullFlow()">▶ اجرای کاملِ ۳→۴→۵</button>
+  </div>
+  <div class="row">
+    <label style="align-self:center;font-size:12px;color:#94a3b8">کدِ لایسنس (برای تست ۶/۷):</label>
+    <input id="lic" style="flex:1;min-width:160px;background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:8px;padding:8px;direction:ltr" placeholder="مثلاً LIC-XXXX">
+    <button onclick="T6()">۶) بررسیِ لایسنس</button>
+    <button onclick="T7()">۷) Claim لایسنس</button>
+    <button class="alt" onclick="Trepro()">R) بازتولیدِ باگِ Bearerِ کهنه</button>
+    <button class="alt" onclick="clearLog()">پاک‌کردنِ لاگ</button>
+  </div>
+
+  <pre id="log"></pre>
+
+<script>
+(function(){
+  var cfg = window.JOUYA_SYNC_CONFIG || {};
+  if (cfg.url)  document.getElementById('url').value  = cfg.url;
+  if (cfg.anonKey) document.getElementById('anon').value = cfg.anonKey;
+})();
+
+var LOG = document.getElementById('log');
+var _session = null;      // نشستِ حاصل از signUp/signIn تستی
+var _testEmail = null;
+
+function stamp(){ return new Date().toLocaleTimeString('en-GB'); }
+function line(cls, txt){ var s=document.createElement('span'); if(cls) s.className=cls; s.textContent=txt+'\n'; LOG.appendChild(s); LOG.scrollTop=LOG.scrollHeight; }
+function jlog(obj){ line('', JSON.stringify(obj, null, 2)); }
+function clearLog(){ LOG.textContent=''; }
+function URLv(){ return (document.getElementById('url').value||'').replace(/\/+$/,''); }
+function ANON(){ return (document.getElementById('anon').value||'').trim(); }
+function need(){ if(!URLv()||!ANON()){ line('bad','⛔ ابتدا URL و anon key را وارد کنید.'); return false;} return true; }
+
+// درخواستِ خام با نمایشِ کاملِ پاسخ. برای endpointهای auth، Bearer=anon (مثلِ اصلاحِ برنامه).
+async function raw(path, opts){
+  opts = opts||{};
+  var headers = { 'apikey': ANON(), 'Content-Type':'application/json' };
+  // قاعدهٔ درست: فقط endpointهای «ورودیِ» auth (signup و token) باید Bearer=anon بگیرند.
+  // /auth/v1/user و بقیهٔ endpointهای احرازشده و همهٔ REST/RPC باید توکنِ خودِ کاربر را بگیرند.
+  var isAuthEntry = (path.indexOf('/auth/v1/signup')===0 || path.indexOf('/auth/v1/token')===0);
+  var bearer = isAuthEntry ? ANON() : ((_session && _session.access_token) ? _session.access_token : ANON());
+  headers['Authorization'] = 'Bearer ' + bearer;
+  if(opts.headers) for(var k in opts.headers) headers[k]=opts.headers[k];
+  var started = performance.now();
+  var res, text='';
+  try{
+    res = await fetch(URLv()+path, { method: opts.method||'GET', headers: headers, body: opts.body?JSON.stringify(opts.body):undefined });
+    text = await res.text();
+  }catch(e){
+    line('bad','   ❌ خطای شبکه: '+ (e && e.message));
+    return { networkError: e && e.message };
+  }
+  var body=null; try{ body = text?JSON.parse(text):null; }catch(_){ body = text; }
+  var ms = Math.round(performance.now()-started);
+  line(res.ok?'ok':'bad', '   HTTP '+res.status+'  ('+ms+'ms)  Bearer='+(bearer===ANON()?'anon':'user-token'));
+  if(body!=null) jlog(body);
+  return { status: res.status, ok: res.ok, body: body };
+}
+
+// ---- Test 1: اتصال + وضعیتِ تنظیماتِ Auth (Email Confirm / Signup) ----
+async function T1(){ if(!need())return; line('warn','\n[۱] اتصال + خواندنِ تنظیماتِ Auth از /auth/v1/settings…');
+  var r = await raw('/auth/v1/settings', { method:'GET' });
+  if(r.ok && r.body){
+    line('ok','   ✅ اتصال و anon key سالم است.');
+    var autoconfirm = (typeof r.body.mailer_autoconfirm!=='undefined') ? r.body.mailer_autoconfirm
+                      : (r.body.mailer && r.body.mailer.autoconfirm);
+    var disableSignup = r.body.disable_signup;
+    line(autoconfirm?'ok':'warn','   Email auto-confirm: '+autoconfirm+(autoconfirm?'  (تأییدِ ایمیل لازم نیست — درست)':'  ⚠️ تأییدِ ایمیل روشن است!'));
+    line(disableSignup?'bad':'ok','   Signups disabled: '+disableSignup+(disableSignup?'  ⛔ ثبت‌نام غیرفعال است!':'  (ثبت‌نام فعال است)'));
+  } else line('bad','   ⛔ اتصال/کلید مشکل دارد — بدنهٔ بالا را ببینید.');
+}
+
+// ---- بازتولیدِ زندهٔ علتِ ریشه‌ای: فرستادنِ Bearerِ «کاربرِ قبلی/نامعتبر» به endpointِ ورود ----
+async function Trepro(){ if(!need())return;
+  line('warn','\n[R] بازتولیدِ باگ: POST /auth/v1/token با Bearerِ نامعتبر (شبیهِ نشستِ کاربرِ قبلی):');
+  var res, text='';
+  try{
+    res = await fetch(URLv()+'/auth/v1/token?grant_type=password', { method:'POST',
+      headers:{ 'apikey':ANON(), 'Content-Type':'application/json', 'Authorization':'Bearer '+'STALE.INVALID.JWT' },
+      body: JSON.stringify({ email:'whoever@x.app', password:'whatever' }) });
+    text = await res.text();
+  }catch(e){ line('bad','   خطای شبکه: '+(e&&e.message)); return; }
+  var body=null; try{ body=text?JSON.parse(text):null; }catch(_){ body=text; }
+  line(res.status>=400?'bad':'ok','   HTTP '+res.status+'  Bearer=STALE.INVALID.JWT');
+  if(body) jlog(body);
+  line('dim','   ← اگر اینجا 400/403 دیدید: دقیقاً همان چیزی است که نسخهٔ قدیمِ برنامه به‌خاطرِ نشستِ کهنه می‌فرستاد.');
+  line('dim','   اصلاحِ sync-layer.js همیشه Bearer=anon می‌فرستد؛ پس این خطا دیگر رخ نمی‌دهد.');
+}
+
+// ---- Test 2: نشست ----
+async function T2(){ line('warn','\n[۲] نشستِ فعلیِ این ابزار:');
+  if(_session){ line('ok','   نشستِ تستی موجود است:'); jlog({ email:_testEmail, hasAccessToken:!!_session.access_token, expires_in:_session.expires_in }); }
+  else line('dim','   نشستی در این ابزار نیست (طبیعی است تا وقتی signUp/signIn تستی اجرا نشده).');
+}
+
+// ---- Test 3: signUp ----
+async function T3(){ if(!need())return;
+  _testEmail = 'diag_'+Date.now()+'@jouya-test.app';
+  var pw = 'Test-'+Math.random().toString(36).slice(2,10);
+  window._diagPw = pw;
+  line('warn','\n[۳] signUp با ایمیلِ تستیِ جدید: '+_testEmail+'  رمز: '+pw);
+  var r = await raw('/auth/v1/signup', { method:'POST', body:{ email:_testEmail, password: pw } });
+  if(r.body && r.body.access_token){ _session = r.body; line('ok','   ✅ کاربر ساخته شد و session فوری داده شد (Email Confirm خاموش).'); }
+  else if(r.status>=200 && r.status<300 && r.body && r.body.user && !r.body.access_token){ _session=null; line('warn','   ⚠️ کاربر ساخته شد ولی session نداد → یعنی Email Confirmation روشن است.'); }
+  else { line('bad','   ⛔ signUp ناموفق — پیامِ خطای بالا را ببینید (error/msg/code).'); }
+}
+
+// ---- Test 4: signIn ----
+async function T4(){ if(!need())return;
+  if(!_testEmail){ line('bad','   ابتدا تست ۳ (signUp) را اجرا کنید.'); return; }
+  line('warn','\n[۴] signInWithPassword برای همان کاربر: '+_testEmail);
+  var r = await raw('/auth/v1/token?grant_type=password', { method:'POST', body:{ email:_testEmail, password: window._diagPw } });
+  if(r.body && r.body.access_token){ _session=r.body; line('ok','   ✅ ورود موفق — session گرفته شد.'); }
+  else {
+    line('bad','   ⛔ Login ناموفق. بدنهٔ کاملِ خطا در بالا. تفسیر:');
+    var e = (r.body && (r.body.error_description||r.body.error||r.body.msg))||'';
+    if(/not confirmed|email_not_confirmed/i.test(e)) line('warn','     → Email Confirmation روشن است؛ کاربر تا تأییدِ ایمیل نمی‌تواند وارد شود.');
+    else if(/invalid|credentials|grant/i.test(e)) line('warn','     → کاربر وجود ندارد یا رمز اشتباه است (یا در signUp ساخته نشده).');
+    else line('warn','     → پیامِ خام را با تنظیماتِ Auth مطابقت دهید.');
+  }
+}
+
+// ---- Test 5: بررسیِ کاربر ----
+async function T5(){ if(!need())return;
+  if(!_session || !_session.access_token){ line('bad','   نشستِ تستی نداریم؛ ابتدا ۳ و ۴ را اجرا کنید.'); return; }
+  line('warn','\n[۵] بررسیِ کاربرِ ساخته‌شده (GET /auth/v1/user با توکنِ خودِ کاربر):');
+  var r = await raw('/auth/v1/user', { method:'GET' });
+  if(r.body && r.body.id){
+    line('ok','   User exists: YES');
+    jlog({ id:r.body.id, email:r.body.email, email_confirmed_at:r.body.email_confirmed_at||null, created_at:r.body.created_at||null });
+    line(r.body.email_confirmed_at?'ok':'warn', r.body.email_confirmed_at ? '   ✅ ایمیل تأییدشده (یا تأیید لازم نیست).' : '   ⚠️ email_confirmed_at = null → Login ممکن است مسدود شود.');
+  } else line('bad','   ⛔ کاربر قابل بازیابی نیست.');
+}
+
+// ---- Test 6: License lookup (RPC check_license) ----
+async function T6(){ if(!need())return;
+  var code=(document.getElementById('lic').value||'').trim().toUpperCase();
+  if(!code){ line('bad','   کدِ لایسنس را وارد کنید.'); return; }
+  line('warn','\n[۶] check_license(p_code='+code+'):');
+  var r = await raw('/rest/v1/rpc/check_license', { method:'POST', body:{ p_code: code } });
+  if(r.body && typeof r.body.valid!=='undefined') line(r.body.valid?'ok':'warn','   نتیجه: valid='+r.body.valid+(r.body.error?(' error='+r.body.error):''));
+  else line('warn','   RPC پاسخِ غیرمنتظره داد — بالا را ببینید (شاید نامِ RPC/پارامتر فرق دارد).');
+}
+
+// ---- Test 7: License claim (نیاز به session کاربر) ----
+async function T7(){ if(!need())return;
+  var code=(document.getElementById('lic').value||'').trim().toUpperCase();
+  if(!code){ line('bad','   کدِ لایسنس را وارد کنید.'); return; }
+  if(!_session || !_session.access_token){ line('bad','   برای claim ابتدا باید وارد شوید (تست ۳/۴).'); return; }
+  line('warn','\n[۷] ابتدا bootstrap_workspace سپس claim_license:');
+  var ws = await raw('/rest/v1/rpc/bootstrap_workspace', { method:'POST', body:{ p_name:'فروشگاه من' } });
+  if(!(ws.ok)){ line('bad','   ⛔ bootstrap_workspace ناموفق (نشست/عضویت را بررسی کنید).'); return; }
+  var wsId = ws.body;
+  line('ok','   workspace: '+wsId);
+  var cl = await raw('/rest/v1/rpc/claim_license', { method:'POST', body:{ p_code: code, p_workspace: wsId } });
+  line(cl.ok?'ok':'bad', cl.ok ? '   ✅ claim اجرا شد — نتیجهٔ بالا را ببینید.' : '   ⛔ claim ناموفق.');
+}
+
+async function fullFlow(){ clearLog(); await T1(); await T3(); await T4(); await T5();
+  line('warn','\n— جمع‌بندی —');
+  line('dim','اگر ۳ موفق بود ولی ۴ خطای 400 داد: یا Email Confirmation روشن است، یا رمز/کاربر ناسازگار.');
+  line('dim','اگر ۳ خطای 400/401 داد: کلیدِ anon یا هدرِ Authorization مشکل دارد (در برنامه باید Bearer=anon باشد).');
+}
+</script>
+</body>
+</html>

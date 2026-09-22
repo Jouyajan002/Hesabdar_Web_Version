@@ -1,0 +1,11 @@
+{
+  "appId": "com.jouya.store",
+  "appName": "حسابدار",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "name": "Hesabdar-management",
+  "version": "1.0.7",
+  "description": "Store Management System",
+  "main": "main.js",
+  "author": "Store Manager",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "download-assets": "node download-assets.js",
+    "build-win": "electron-builder --win --x64",
+    "publish-win": "electron-builder --win --x64 --publish always"
+  },
+  "build": {
+    "appId": "com.jouya.store",
+    "productName": "حسابدار",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "asar": true,
+    "compression": "maximum",
+    "files": [
+      "**/*",
+      "!**/*.md",
+      "!dist/**"
+    ],
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "Jouyajan002",
+        "repo": "rep-system",
+        "releaseType": "release"
+      }
+    ],
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowElevation": true,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "حسابدار ",
+      "uninstallDisplayName": "حذف سیستم مدیریت فروشگاه حسابدار"
+    }
+  },
+  "devDependencies": {
+    "electron": "^28.3.3",
+    "electron-builder": "^24.13.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.3"
+  }
+}
