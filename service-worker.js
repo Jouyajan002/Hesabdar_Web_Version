@@ -97,6 +97,9 @@ self.addEventListener('fetch', function (event) {
   var url;
   try { url = new URL(req.url); } catch (e) { return; }
 
+  // فقط http/https؛ درخواست‌های file:// (نسخهٔ الکترون) یا پروتکل‌های دیگر را اصلاً دست نمی‌زنیم
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return;
+
   // فقط هم‌مبدأ؛ cross-origin (Supabase, CDN realtime و …) را دست نمی‌زنیم
   if (url.origin !== self.location.origin) return;
 

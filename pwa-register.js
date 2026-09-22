@@ -10,6 +10,30 @@
 (function () {
   'use strict';
 
+  // ── ۰) PWA فقط روی http/https معنا دارد. در نسخهٔ الکترون (پروتکل file://) یا هر محیطِ
+  //    غیرِوب، Service Worker نباید ثبت شود؛ چون بارگذاریِ file:// را می‌شکند (ERR_FAILED).
+  //    اگر از قبل SWی ثبت شده، اینجا پاک می‌شود تا نسخهٔ الکترون سالم بالا بیاید.
+  var _proto = (location && location.protocol) || '';
+  var _isHttp = (_proto === 'http:' || _proto === 'https:');
+  var _isElectron = !!(window.electronAPI) || /electron/i.test(navigator.userAgent || '');
+  if (!_isHttp || _isElectron) {
+    if ('serviceWorker' in navigator) {
+      try {
+        navigator.serviceWorker.getRegistrations().then(function (regs) {
+          (regs || []).forEach(function (r) { try { r.unregister(); } catch (e) {} });
+        }).catch(function () {});
+      } catch (e) {}
+      try {
+        if (window.caches && caches.keys) {
+          caches.keys().then(function (keys) {
+            (keys || []).forEach(function (k) { try { caches.delete(k); } catch (e) {} });
+          }).catch(function () {});
+        }
+      } catch (e) {}
+    }
+    return; // نه SW ثبت کن، نه بنرِ نصب — رفتارِ نسخهٔ الکترون دقیقاً مثلِ قبل
+  }
+
   // ── ۱) ثبتِ Service Worker (مسیرِ نسبی تا روی GitHub Pages زیرِ هر زیرمسیری کار کند) ──
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', function () {

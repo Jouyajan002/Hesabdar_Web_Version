@@ -55,7 +55,17 @@ function createWindow() {
         backgroundColor: '#f1f5f9',
     });
 
-    mainWindow.loadFile('index.html');
+    // در نسخهٔ الکترون (پروتکل file://) نباید Service Worker فعال باشد؛ SWِ باقی‌مانده از
+    // نسخهٔ وب، بارگذاریِ index.html را با ERR_FAILED می‌شکند. پیش از بارگذاری، هر SW/کشِ
+    // ثبت‌شده پاک می‌شود (localStorage و داده‌های برنامه دست‌نخورده می‌مانند).
+    var _loaded = false;
+    var _loadApp = function () { if (_loaded) return; _loaded = true; mainWindow.loadFile('index.html'); };
+    try {
+        mainWindow.webContents.session
+            .clearStorageData({ storages: ['serviceworkers', 'cachestorage'] })
+            .then(_loadApp, _loadApp);
+    } catch (e) { _loadApp(); }
+    setTimeout(_loadApp, 1500); // failsafe: اگر پاک‌سازی طول کشید، حتماً بارگذاری شود
 
     if (isDev) {
         mainWindow.webContents.openDevTools({ mode: 'detach' });
