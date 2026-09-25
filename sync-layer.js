@@ -53,7 +53,17 @@
     ];
     var STORE_SETTINGS_TABLE = 'store_settings';
 
-    var POLL_MS       = 1500;    // فاصلهٔ polling — با pullِ موازی، تأخیرِ دستگاهِ دوم ~۱-۲ ثانیه می‌شود
+    // ── کاهشِ مصرفِ پهنای‌باندِ سوپابیس (Egress) ──────────────────────────────────
+    // قبلاً polling هر ۱٫۵ ثانیه بود و در هر چرخه ۱۴ درخواست (برای ۱۴ جدول) می‌فرستاد؛
+    // یعنی ~۹ درخواست در ثانیه، همیشه و برای هر دستگاه — همین سقفِ رایگانِ Egress را سریع
+    // پر می‌کرد. Realtime (WebSocket) از قبل به‌روزرسانی‌ها را «لحظه‌ای» می‌آورد، پس polling
+    // فقط نقشِ fallback دارد و با «فاصلهٔ تطبیقی» اجرا می‌شود:
+    //   • وقتی Realtime وصل است → هر ۳۰ ثانیه (مصرفِ بسیار کم؛ به‌روزرسانی‌ها لحظه‌ای از Realtime می‌آیند)
+    //   • وقتی Realtime قطع است → هر ۸ ثانیه تا سینک همچنان سریع کار کند
+    // این تغییر منطقِ سینک (cursor/incremental/conflict/bootstrap) را دست نمی‌زند؛ فقط فرکانسِ
+    // polling را کم می‌کند. نتیجه: تا ~۹۵٪ کاهشِ درخواست‌های بی‌نتیجه و افتِ چشمگیرِ Egress.
+    var POLL_SLOW_MS  = 30000;   // fallback وقتی Realtime سالم/وصل است
+    var POLL_FAST_MS  = 8000;    // fallback وقتی Realtime قطع است
     var RETRY_MS      = 6000;    // تلاشِ دوبارهٔ صف هنگامِ خطا
     var BATCH_UPLOAD  = 500;
 
@@ -814,14 +824,24 @@
     function startLoops() {
         stopLoops();
         if (!CFG.liveSyncEnabled || !workspaceId) return;
-        // یک pull اولیه، سپس polling
+        // یک pull اولیه، سپس Realtime (مسیرِ اصلیِ لحظه‌ای) + polling تطبیقیِ کم‌مصرف (fallback)
         pullNow();
-        pollTimer = setInterval(function () { if (online) { pushNow(); pullNow(); } }, POLL_MS);
-        connectRealtime();   // شتاب‌دهنده (اختیاری)
-        log('حلقهٔ سینک شروع شد (poll هر', POLL_MS, 'ms)');
+        connectRealtime();   // مسیرِ اصلیِ به‌روزرسانیِ لحظه‌ای
+        scheduleNextPoll();  // fallback با فاصلهٔ تطبیقی (نظر به وضعیتِ Realtime)
+        log('حلقهٔ سینک شروع شد (poll تطبیقی: Realtime-on', POLL_SLOW_MS, 'ms / Realtime-off', POLL_FAST_MS, 'ms)');
+    }
+    // زمان‌بندِ تطبیقیِ polling: اگر WebSocketِ Realtime باز باشد با فاصلهٔ زیاد (کم‌مصرف)،
+    // وگرنه با فاصلهٔ کم اجرا می‌شود. با setTimeoutِ بازگشتی تا فاصله در هر چرخه بازارزیابی شود.
+    function scheduleNextPoll() {
+        var wsOpen = !!(wsAccel && wsAccel.readyState === 1);   // 1 = WebSocket.OPEN
+        var delay = wsOpen ? POLL_SLOW_MS : POLL_FAST_MS;
+        pollTimer = setTimeout(function () {
+            if (online) { pushNow(); pullNow(); }
+            scheduleNextPoll();
+        }, delay);
     }
     function stopLoops() {
-        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
         if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
         if (wsAccel && wsAccel.close) { try { wsAccel.close(); } catch (e) {} wsAccel = null; }
     }

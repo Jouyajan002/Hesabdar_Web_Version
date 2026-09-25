@@ -8982,22 +8982,19 @@ function initExpenseForm() {
     const today = _nowJalaliDateTime();
     document.getElementById('expense-date').value = today;
     
-    // دسته‌بندی‌ها (پیش‌فرض + سفارشی از localStorage)
-    const defaultCategories = ['مصرف روزانه دکان', 'کرایه دکان', 'کرایه اجناس', 'حقوق کارمندان', 'تبلیغات', 'برق و آب', 'حمل و نقل', 'کمیشن حواله', 'دیگر'];
+    // کتگوری مصرف: بدونِ پیش‌فرض؛ فقط کتگوری‌های ساخته‌شدهٔ کاربر. افزودنِ کتگوریِ جدید مثلِ
+    // «واحد شمارشِ» فرم ثبت جنس، از داخلِ همان دراپ‌داون (گزینهٔ «➕ اضافه کردن کتگوری مصرف»)
+    // انجام می‌شود و در localStorage ذخیره و دفعاتِ بعد قابل استفاده است. (دکمهٔ + کنارِ فیلد حذف شد.)
     const customCategories = JSON.parse(localStorage.getItem('customExpenseCategories') || '[]');
-    const allCategories = [...new Set([...defaultCategories, ...customCategories])];
-    
     const categorySelect = document.getElementById('expense-category');
-    categorySelect.innerHTML = '<option value="">انتخاب کنید (اختیاری)</option>';
-    allCategories.forEach(category => {
+    categorySelect.innerHTML = '';
+    customCategories.forEach(category => {
         const option = document.createElement('option');
         option.value = category;
         option.textContent = category;
         categorySelect.appendChild(option);
     });
-    
-    // دکمه + برای اضافه کردن کتگوری جدید
-    setupCategoryAddButton(categorySelect, 'customExpenseCategories');
+    if (typeof setupProductAddSelect === 'function') setupProductAddSelect(categorySelect, 'customExpenseCategories', 'کتگوری مصرف');
     
     // حساب‌ها
     const cashboxes = db.getCashboxes();
@@ -10940,6 +10937,17 @@ function __jouyaHtmlToPdfBlob(html) {
         var cleanup = function () { if (cleaned) return; cleaned = true; try { document.body.removeChild(iframe); } catch (e) {} };
         var doc = iframe.contentWindow.document;
         try { doc.open(); doc.write(String(html)); doc.close(); } catch (e) { try { iframe.srcdoc = String(html); } catch (_) {} }
+        // رفعِ «شکستنِ حروفِ فارسی» در خروجیِ اشتراک: تضمینِ فونتِ شکل‌دهندهٔ فارسی روی متن‌ها
+        // هنگامِ رستر شدن. اگر فونت به یک فونتِ بدونِ اتصالِ حروف fallback شود، حروف جدا و
+        // با فاصله («ف ر و ش گ ا ه») دیده می‌شوند؛ اینجا روی عناصرِ متنی (نه آیکن‌ها) فونتِ
+        // Vazirmatn/Tahoma را الزام می‌کنیم و letter-spacing را عادی نگه می‌داریم.
+        try {
+            var _fst = doc.createElement('style');
+            _fst.textContent =
+                'body,div,span,p,td,th,h1,h2,h3,h4,h5,h6,a,label,strong,b,em,small,li,input,select,textarea{' +
+                "font-family:'Vazirmatn','Tahoma','Segoe UI',Arial,sans-serif !important;letter-spacing:normal !important;}";
+            (doc.head || doc.documentElement).appendChild(_fst);
+        } catch (e) {}
         var started = false;
         var capture = function () {
             if (started) return; started = true;
@@ -14325,7 +14333,7 @@ function renderCategorySearchResults(categories, container, inputField, hiddenFi
 
 // نمایش همه کتگوری‌های هزینه/مصرف هنگام فوکوس روی فیلد
 function showAllExpenseCategoriesForReport(inputEl) {
-    var defaultCategories = ['مصرف روزانه دکان','کرایه دکان','کرایه اجناس','حقوق کارمندان','تبلیغات','برق و آب','حمل و نقل','کمیشن حواله','دیگر'];
+    // بدونِ پیش‌فرض — فقط کتگوری‌های ساخته‌شدهٔ کاربر و کتگوری‌هایی که واقعاً در داده‌ها استفاده شده‌اند
     var customCategories = [];
     try { customCategories = JSON.parse(localStorage.getItem('customExpenseCategories') || '[]'); } catch(e) {}
     var countMap = {};
@@ -14337,7 +14345,7 @@ function showAllExpenseCategoriesForReport(inputEl) {
         });
     } catch(e) {}
     var usedCategories = Object.keys(countMap);
-    var allCategories = Array.from(new Set([].concat(defaultCategories, customCategories, usedCategories)));
+    var allCategories = Array.from(new Set([].concat(customCategories, usedCategories)));
     var container = document.getElementById('rp-category-results');
     var hiddenInput = document.getElementById('rp-category-select');
     if (container && hiddenInput) {
@@ -14348,7 +14356,7 @@ function showAllExpenseCategoriesForReport(inputEl) {
 // جستجوی کتگوری هزینه/مصرف هنگام تایپ — مشابه searchReportPerson
 function searchReportExpenseCategory(inputElement) {
     var query = (inputElement.value || '').toLowerCase().trim();
-    var defaultCategories = ['مصرف روزانه دکان','کرایه دکان','کرایه اجناس','حقوق کارمندان','تبلیغات','برق و آب','حمل و نقل','کمیشن حواله','دیگر'];
+    // بدونِ پیش‌فرض — فقط کتگوری‌های ساخته‌شدهٔ کاربر و کتگوری‌های واقعاً استفاده‌شده
     var customCategories = [];
     try { customCategories = JSON.parse(localStorage.getItem('customExpenseCategories') || '[]'); } catch(e) {}
     var countMap = {};
@@ -14360,7 +14368,7 @@ function searchReportExpenseCategory(inputElement) {
         });
     } catch(e) {}
     var usedCategories = Object.keys(countMap);
-    var allCategories = Array.from(new Set([].concat(defaultCategories, customCategories, usedCategories)));
+    var allCategories = Array.from(new Set([].concat(customCategories, usedCategories)));
     if (query) {
         allCategories = allCategories.filter(function(c) { return c.toLowerCase().indexOf(query) !== -1; });
     }
@@ -19168,6 +19176,57 @@ function closeAllActionMenus() {
 }
 
 // مدیریت منطق عملیات (بدون تغییر در منطق اصلی، فقط فراخوانی فرم‌ها)
+// ساختِ پیامِ محترمانه از «خلاصهٔ بیلانسِ به‌روزِ» شخص و بازکردنِ مستقیمِ شیت اشتراک (واتساپ و …).
+// ارقام از موتورِ واحدِ مانده‌حساب (_computePersonBalance) خوانده می‌شوند تا دقیق و لحظه‌ای باشند.
+function _sendPersonBalanceMessage(id) {
+    try {
+        var person = db.getPersons().find(function (p) { return p.id == id; });
+        if (!person) return;
+        var storeName = '';
+        try { storeName = (db.getSettings() || {}).storeName || ''; } catch (e) {}
+        if (!storeName) storeName = 'حسابداری';
+        var led = (typeof _computePersonBalance === 'function') ? _computePersonBalance(person) : { balances: {} };
+        var balances = (led && led.balances) || {};
+        var _lbl = function (code) { try { return (typeof getCurrencyLabel === 'function') ? getCurrencyLabel(code) : code; } catch (e) { return code; } };
+        var _num = function (v) { try { return (typeof formatNumber === 'function') ? formatNumber(Math.abs(v)) : Math.abs(v); } catch (e) { return Math.abs(v); } };
+        var lines = [];
+        Object.keys(balances).forEach(function (code) {
+            var v = Math.round((parseFloat(balances[code]) || 0) * 100) / 100;
+            if (Math.abs(v) < 0.005) return;
+            // مثبت = بدهیِ شخص به ما (بدهکار)؛ منفی = طلبِ شخص از ما (طلبکار)
+            if (v > 0) lines.push('• ' + _lbl(code) + ': ' + _num(v) + ' (بدهی شما)');
+            else       lines.push('• ' + _lbl(code) + ': ' + _num(v) + ' (طلب شما نزد ما)');
+        });
+        var dateStr = '';
+        try { dateStr = (typeof _nowJalaliDateTime === 'function') ? _nowJalaliDateTime() : (new Date()).toLocaleDateString('fa-IR'); } catch (e) {}
+        var msg =
+            'سلام و احترام، ' + (person.name || 'مشتری گرامی') + ' عزیز 🌹\n' +
+            'خلاصهٔ حساب شما نزد «' + storeName + '»' + (dateStr ? (' تا تاریخ ' + dateStr) : '') + ':\n\n' +
+            (lines.length ? lines.join('\n') : 'حساب شما کاملاً تسویه است ✅') + '\n\n' +
+            'در صورتِ هرگونه پرسش در خدمت هستیم. با تشکر از همکاری شما.';
+
+        // بازکردنِ شیت اشتراکِ نیتیو (موبایل → انتخابِ واتساپ → مخاطب). فالبک: واتساپ/کلیپ‌بورد.
+        var shared = false;
+        try {
+            if (navigator.share) {
+                navigator.share({ text: msg }).catch(function () {});
+                shared = true;
+            }
+        } catch (e) { shared = false; }
+        if (!shared) {
+            var phone = String(person.phone || '').replace(/[^0-9]/g, '');
+            var waUrl = 'https://wa.me/' + (phone || '') + '?text=' + encodeURIComponent(msg);
+            try { window.open(waUrl, '_blank'); shared = true; } catch (e) {}
+        }
+        if (!shared) {
+            try { navigator.clipboard.writeText(msg); if (typeof showToast === 'function') showToast('پیام کپی شد؛ در واتساپ بچسبانید', 'success'); } catch (e) {
+                if (typeof showMessage === 'function') showMessage('پیام', msg);
+            }
+        }
+    } catch (e) { try { console.warn('send-message error:', e && e.message); } catch (_) {} }
+}
+if (typeof window !== 'undefined') window._sendPersonBalanceMessage = _sendPersonBalanceMessage;
+
 function performPersonAction(id, action) {
     const person = db.getPersons().find(p => p.id == id);
     if (!person) return;
@@ -19214,8 +19273,7 @@ function performPersonAction(id, action) {
             break;
 
         case 'send-message':
-            let balanceText = person.previousAccount ? `مانده: ${formatCurrency(person.previousAccount)}` : 'حساب تسویه';
-            alert(`پیام به ${person.name}:\n${balanceText}`);
+            _sendPersonBalanceMessage(id);
             break;
 
         case 'person-detail':
@@ -24423,6 +24481,13 @@ function ssbLoadSubContent(key) {
                 <button class="ssb-btn ssb-btn-danger" onclick="ssbClearAll()">
                     <i class="fas fa-skull-crossbones"></i> پاک‌سازی کامل دیتابیس
                 </button>
+            </div>
+            <div class="ssb-card">
+                <h4><i class="fas fa-power-off"></i> ریسیت کامل برنامه</h4>
+                <p style="font-size:0.85rem;color:#f87171;margin-bottom:10px;">همهٔ نشست‌ها، ورود، لایسنس و پیوندِ سینکِ این دستگاه پاک و برنامه از نو راه‌اندازی می‌شود. (داده‌های کسب‌وکار در فضای ابری دست‌نخورده می‌مانند.)</p>
+                <button class="ssb-btn ssb-btn-danger" onclick="ssbFullReset()">
+                    <i class="fas fa-power-off"></i> ریسیت کامل برنامه
+                </button>
             </div>`;
 
         case 'datasettings':
@@ -25176,6 +25241,30 @@ function ssbClearAll() {
         ssbShowMsg('دیتابیس پاک‌سازی شد ✓');
     } catch(e) { ssbShowMsg('خطا در پاک‌سازی', true); }
 }
+
+// ریسیت کامل برنامه — دقیقاً همان دستورِ کنسول: حذفِ نشست/ورود/لایسنس/وضعیتِ سینکِ این دستگاه
+// و سپس بارگذاریِ مجدد. (با یک تأیید برای جلوگیری از کلیکِ اشتباهی؛ خودِ دستور بدون تغییر اجرا می‌شود.)
+function ssbFullReset() {
+    var _run = function () {
+        try {
+            ['jouya_user_account','jouya_license_info','jouya_remember_login',
+             'jouya_cloud_linked','jouya_sync_session','jouya_sync_workspace',
+             'jouya_sync_snapshot','jouya_sync_cursor','jouya_sync_migrated',
+             'jouya_sync_outbox','jouya_used_license_codes'].forEach(function (k) { localStorage.removeItem(k); });
+        } catch (e) {}
+        location.reload();
+    };
+    if (typeof showConfirm === 'function') {
+        showConfirm('ریسیت کامل برنامه',
+            'همهٔ نشست‌ها، ورود، لایسنس و پیوندِ سینکِ این دستگاه پاک و برنامه از نو راه‌اندازی می‌شود. ادامه می‌دهید؟',
+            _run);
+    } else if (confirm('ریسیت کامل برنامه؟ همهٔ نشست‌ها و ورودِ این دستگاه پاک می‌شود.')) {
+        _run();
+    }
+}
+if (typeof window !== 'undefined') window.ssbFullReset = ssbFullReset;
+
+
 function ssbCreateBackup() {
     try {
         const result = db.createBackup ? db.createBackup() : null;
@@ -36347,12 +36436,11 @@ function _receiptInitExpenseCategory() {
     try {
         var sel = document.getElementById('receipt-expense-category');
         if (!sel || sel._rdInited) return;
-        // کتگوری‌های پیش‌فرض + سفارشی (همان منبعِ فرم مصرف)
-        var defaults = ['مصرف روزانه دکان', 'کرایه دکان', 'کرایه اجناس', 'حقوق کارمندان', 'تبلیغات', 'ترانسپورت', 'قرطاسیه', 'مهمانی', 'متفرقه'];
+        // بدونِ پیش‌فرض — فقط کتگوری‌های ساخته‌شدهٔ کاربر (همان منبعِ فرم مصرف). افزودنِ کتگوری
+        // از داخلِ دراپ‌داون (مثلِ واحد شمارشِ فرم ثبت جنس) انجام می‌شود.
         var customs = [];
         try { customs = JSON.parse(localStorage.getItem('customExpenseCategories') || '[]'); } catch (e) { customs = []; }
-        var all = defaults.concat(customs.filter(function (c) { return defaults.indexOf(c) === -1; }));
-        all.forEach(function (c) {
+        customs.forEach(function (c) {
             if (!Array.prototype.some.call(sel.options, function (o) { return o.value === c; })) {
                 var op = document.createElement('option'); op.value = c; op.textContent = c; sel.appendChild(op);
             }

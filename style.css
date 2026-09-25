@@ -8538,3 +8538,458 @@ body:has(#rp-productpick-bar) { padding-bottom: 64px; }
 .rp-cur-onebar .rp-cur-pill:first-child { border-inline-start:none; }
 .rp-cur-pill:hover { background:#eef2f7; }
 .rp-cur-pill.active { background:#1e3a5f; color:#fff; }
+
+/* ============================================================================
+   دارک‌مودِ فرم‌ها (بل فروش/خرید، ثبت جنس، ثبت شخص، دریافتی/پرداختی، مصرف) —
+   اصلاحِ تخصصیِ رابط کاربری:
+     • پس‌زمینهٔ سفیدِ فیلدها → «سطحِ تیره + استروکِ نازکِ سفیدِ کم‌رنگ» (جذاب و خوانا)
+     • متن‌هایی که سرمه‌ایِ تیره (navy-2) بودند و روی زمینهٔ تیره سیاه‌روی‌سیاه می‌شدند → روشن
+     • آیکن‌های تیره → آبیِ روشن تا دیده شوند
+   فقط داخلِ body.dark-mode اثر دارد؛ حالتِ روشن، چیدمان‌ها و کارت‌های لیست دست‌نخورده‌اند.
+   ============================================================================ */
+body.dark-mode .bill-layout {
+    --bill-card: #1e293b;                  /* فیلدها: سطحِ تیره به‌جای سفید */
+    --bill-line: rgba(255,255,255,0.16);   /* استروکِ نازکِ سفیدِ کم‌رنگ دورِ فیلدها */
+}
+
+/* آیکنِ داخلِ فیلد روشن‌تر شود (سرمه‌ایِ تیره روی زمینهٔ تیره دیده نمی‌شد) */
+body.dark-mode .bill-layout .bill-field-icon { color: #93c5fd; }
+
+/* متن/برچسب‌هایی که با رنگِ سرمه‌ایِ تیره نوشته شده‌اند → روشن و خوانا */
+body.dark-mode .bill-layout .bill-more-toggle,
+body.dark-mode .bill-layout .bill-field-label,
+body.dark-mode .bill-layout .bill-field-label > span,
+body.dark-mode .bill-layout .product-secondary-check,
+body.dark-mode .bill-layout .bill-footer .bill-remaining,
+body.dark-mode .bill-layout .bill-disc-result,
+body.dark-mode .bill-layout .bill-notrack { color: #e2e8f0 !important; }
+
+/* ورودی/سلکت/تکست‌اریا: متنِ روشن + placeholderِ خوانا + گزینه‌های تیره */
+body.dark-mode .bill-layout input,
+body.dark-mode .bill-layout select,
+body.dark-mode .bill-layout textarea { color: #f1f5f9; }
+body.dark-mode .bill-layout input::placeholder,
+body.dark-mode .bill-layout textarea::placeholder { color: #8595ab; }
+body.dark-mode .bill-layout select option { background: #1e293b; color: #f1f5f9; }
+
+/* دکمهٔ «اطلاعات بیشتر» */
+body.dark-mode .bill-layout .bill-more-toggle { background: #1e293b; border-color: rgba(255,255,255,0.16); }
+body.dark-mode .bill-layout .bill-more-toggle:hover { background: #243149; }
+
+/* جعبهٔ اقلامِ بل (جدولِ اجناس): هدر، سطرها و ورودی‌های داخلِ جدول */
+body.dark-mode .bill-items-box table thead th { background: #0b1220; color: #93a4bd; border-left-color: rgba(255,255,255,0.08); border-bottom-color: rgba(255,255,255,0.14); }
+body.dark-mode .bill-items-box table tbody td { border-bottom-color: rgba(255,255,255,0.08); }
+body.dark-mode .bill-cell-input,
+body.dark-mode .bill-items-box table tbody .product-search-input { background: #0f172a; color: #f1f5f9; border-color: rgba(255,255,255,0.16); }
+body.dark-mode .bill-cell-input::placeholder,
+body.dark-mode .bill-items-box table tbody .product-search-input::placeholder { color: #8595ab; }
+body.dark-mode .bill-cell-input:focus,
+body.dark-mode .bill-items-box table tbody .product-search-input:focus { background: #111c33; border-color: #3b82f6; }
+body.dark-mode .bill-items-box .bill-subtotal-row td { background: #0b1220; color: #e2e8f0; border-top-color: rgba(255,255,255,0.14); }
+
+/* دراپ‌داونِ نتایجِ جستجو (اشخاص/اجناس) روی فرم‌ها */
+body.dark-mode .bill-layout .search-results-list { background: #1e293b; border-color: rgba(255,255,255,0.16); }
+
+/* تب‌های مقصدِ دریافتی (حساب‌ها/اشخاص/مصارف) */
+body.dark-mode .receipt-dest-tab { color: #cbd5e1; }
+body.dark-mode .receipt-dest-tab.is-active { color: #ffffff; }
+
+/* ردیفِ افزودنِ کتگوری/واحد (که از داخلِ دراپ‌داون باز می‌شود) */
+body.dark-mode .product-add-row .product-add-input { background: #0f172a; color: #f1f5f9; border-color: rgba(255,255,255,0.16); }
+
+/* ============================================================================
+   دارک‌مود — دورِ دوم (طراحیِ تخصصیِ خوانایی):
+     • کارت‌های ردیفیِ لیست/گزارش: پس‌زمینهٔ تیرهٔ متناسب + استروکِ نازکِ سفید (مثلِ فیلدها)
+     • داشبورد: اعدادِ ریز سفید و خوانا، نمودار بدونِ پس‌زمینهٔ سفید، دکمه‌های تیره با متن/آیکنِ سفید، نام فروشگاه سفید
+     • گزارش‌ها: ارقام/اطلاعاتِ کارت‌ها سفید و شفاف
+   فقط body.dark-mode؛ حالتِ روشن دست‌نخورده. رنگ‌های معناداری (قرمز/سبز/آبیِ وضعیت) حفظ می‌شوند.
+   ============================================================================ */
+
+/* ── (۱) کارت‌های ردیفی: پس‌زمینهٔ تیره + استروکِ نازکِ سفید ───────────────── */
+body.dark-mode .person-card,
+body.dark-mode .product-card,
+body.dark-mode .sales-card,
+body.dark-mode .emp-card-row {
+    background: #1e293b !important;
+    border: 1px solid rgba(255,255,255,0.16) !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.45) !important;
+}
+/* کارت‌هایی که «نوارِ رنگیِ کناری» دارند: نوارِ کناری حفظ، فقط سه ضلعِ دیگر استروکِ سفیدِ نازک */
+body.dark-mode .exp-card-row,
+body.dark-mode .cbtx-card-row,
+body.dark-mode .ptx-card-row {
+    background: #1e293b !important;
+    border-top: 1px solid rgba(255,255,255,0.14);
+    border-right: 1px solid rgba(255,255,255,0.14);
+    border-bottom: 1px solid rgba(255,255,255,0.14);
+    box-shadow: 0 2px 10px rgba(0,0,0,0.45) !important;
+}
+
+/* ── (۲) متنِ داخلِ کارت‌ها: سفید/روشن و خوانا (رنگِ وضعیت‌ها حفظ می‌شود) ──── */
+body.dark-mode .person-card-name,
+body.dark-mode .product-card-name,
+body.dark-mode .sales-card-name,
+body.dark-mode .person-card-debt,
+body.dark-mode .person-card-debt span,
+body.dark-mode .person-card-debt.is-debt span,
+body.dark-mode .product-card-cell-data,
+body.dark-mode .product-card-cell-data span,
+body.dark-mode .sales-card-amount,
+body.dark-mode .sales-card-amount span,
+body.dark-mode .exp-cell,
+body.dark-mode .exp-c-type,
+body.dark-mode .exp-c-note { color: #f1f5f9 !important; }
+
+/* برچسب/مقادیرِ کم‌رنگِ متا داخلِ کارت‌ها → روشن‌تر و خوانا */
+body.dark-mode .sales-meta-label { color: #cbd5e1 !important; }
+body.dark-mode .sales-meta-val   { color: #e2e8f0 !important; }
+
+/* آیکن/کباب/آواتارِ داخلِ کارت‌ها که پس‌زمینهٔ سفید داشتند */
+body.dark-mode .sales-card-icon { background: #0f172a; border-color: rgba(255,255,255,0.22); color: #93c5fd; }
+body.dark-mode .person-card-kebab:hover,
+body.dark-mode .product-card-kebab:hover,
+body.dark-mode .sales-card-kebab:hover,
+body.dark-mode .exp-kebab:hover { background: rgba(255,255,255,0.08); }
+body.dark-mode .person-card-kebab,
+body.dark-mode .product-card-kebab,
+body.dark-mode .sales-card-kebab,
+body.dark-mode .exp-kebab { color: #cbd5e1; }
+
+/* ── (۳) داشبورد ───────────────────────────────────────────────────────── */
+/* اعدادِ ریزِ بیلانس/مقادیر → سفید و کاملاً خوانا */
+body.dark-mode .dash-bal-vals,
+body.dark-mode .dash-bal-vals span,
+body.dark-mode .dash-stat-val,
+body.dark-mode .dash-stat-cur,
+body.dark-mode .dash-bal-label { color: #f1f5f9 !important; }
+body.dark-mode .dash-card-title i { color: #93c5fd; }
+
+/* تب‌های ستونِ اطلاعاتِ داشبورد */
+body.dark-mode .dash-info-tab { background: #0f172a; border-color: rgba(255,255,255,0.14); border-bottom-color: rgba(255,255,255,0.22); color: #cbd5e1; }
+body.dark-mode .dash-info-tab:hover { background: #172236; }
+body.dark-mode .dash-info-tab.active { background: #1e3a5f; border-color: #1e3a5f; border-bottom-color: #3b82f6; color: #fff; }
+
+/* نامِ فروشگاه → سفید */
+body.dark-mode .dash-brand .dsi-name { color: #ffffff !important; }
+
+/* کارتِ نمودار: بدونِ پس‌زمینهٔ سفید — پس‌زمینهٔ عمومیِ برنامه (شفاف) + استروکِ نازک */
+body.dark-mode .dash-center-col .dashboard-charts {
+    background: transparent !important;
+    border-color: rgba(255,255,255,0.12) !important;
+    box-shadow: none !important;
+}
+/* عنوان/لجندِ نمودار (HTML) در صورتِ وجود → روشن */
+body.dark-mode .weekly-chart-title,
+body.dark-mode .weekly-chart-legend,
+body.dark-mode .chart-header,
+body.dark-mode .chart-summary { color: #e2e8f0 !important; }
+
+/* دکمه‌های اکشنِ داشبورد: تیره‌تر از سطحِ عمومی، متن سفید، آیکن سفید (چیپِ رنگیِ آیکن حفظ) */
+body.dark-mode .dash-qa-btn {
+    background: #0f172a !important;
+    color: #f1f5f9 !important;
+    box-shadow: 0 2px 7px rgba(0,0,0,0.4);
+    /* نوارِ رنگیِ کناری (border-right accent) و چیپِ رنگیِ آیکن دست‌نخورده می‌مانند */
+}
+body.dark-mode .dash-qa-btn:hover { background: #172236 !important; }
+body.dark-mode .dash-qa-btn i { color: #fff; }
+
+/* ── (۴) گزارش‌ها: ارقام/اطلاعاتِ کارت‌ها سفید و شفاف ──────────────────────── */
+body.dark-mode #rp-results-container #rp-results-table td { color: #f1f5f9 !important; }
+body.dark-mode #rp-results-container #rp-results-table thead th { background: #0b1220 !important; color: #e2e8f0 !important; border-color: rgba(255,255,255,0.14) !important; }
+body.dark-mode #rp-results-container #rp-results-table tbody tr { border-color: rgba(255,255,255,0.08); }
+/* هر متنِ کم‌رنگِ خاکستری داخلِ کارت‌های گزارش → روشن و خوانا */
+body.dark-mode #rp-results-container .rp-card,
+body.dark-mode #rp-results-container .rp-wrapper { color: #f1f5f9; }
+
+/* ============================================================================
+   دارک‌مود — دورِ سوم (خوانایی و هماهنگی):
+   ۱) لیست‌های سریعِ داشبورد = استایلِ دکمه‌های سریع (چیپِ رنگیِ آیکن) + دارک‌مود
+   ۲) فرم‌های فروش/خرید/دریافت/پرداخت: اجزای باقی‌مانده (تخفیف، تبدیل ارز، فوتر) خوانا
+   ۳) کارت‌های اطلاعاتیِ گزارش: همهٔ ارقام/متن‌ها سفیدِ شفاف
+   ۴) هر متنِ کم‌رنگِ دارک‌مود → سفیدِ خوانا (مثلِ «نوع تبدیل ارز»)
+   ۵) فرم تعیین نرخ ارز (csx-*) دارک‌مودِ کامل با استروکِ فیلدها
+   فقط body.dark-mode؛ حالتِ روشن دست‌نخورده.
+   ============================================================================ */
+
+/* ── (۱) لیست‌های سریع = مثلِ دکمه‌های سریع: چیپِ رنگیِ آیکن با گلیفِ سفید ───── */
+.dash-nav-col .btn-quick-list i {
+    background: #1e3a5f !important;
+    color: #fff !important;
+    width: 34px !important; height: 32px !important; border-radius: 8px !important;
+    font-size: 1.15rem !important;
+    display: inline-flex !important; align-items: center; justify-content: center;
+    flex: 0 0 auto;
+}
+.dash-nav-col .btn-ql-sales i           { background: #1e3a5f !important; }
+.dash-nav-col .btn-ql-purchase i        { background: #2563eb !important; }
+.dash-nav-col .btn-ql-receipt i         { background: #16a34a !important; }
+.dash-nav-col .btn-ql-payment i         { background: #ea8a1e !important; }
+.dash-nav-col .btn-ql-sales-return i    { background: #dc2626 !important; }
+.dash-nav-col .btn-ql-purchase-return i { background: #dc2626 !important; }
+.dash-nav-col .btn-ql-proforma i        { background: #64748b !important; }
+.dash-nav-col .btn-ql-report i          { background: #1e293b !important; }
+.dash-nav-col .btn-ql-changelog i       { background: #64748b !important; }
+.dash-nav-col .btn-ql-services i        { background: #1e293b !important; }
+.dash-nav-col .btn-ql-delivery i        { background: #1e293b !important; }
+/* دارک‌مودِ لیست‌های سریع: پس‌زمینهٔ تیره، متنِ سفید (نوارِ رنگی و چیپ حفظ) */
+body.dark-mode .dash-nav-col .btn-quick-list { background: #0f172a !important; color: #f1f5f9 !important; box-shadow: 0 2px 7px rgba(0,0,0,0.4) !important; }
+body.dark-mode .dash-nav-col .btn-quick-list:hover { background: #172236 !important; }
+
+/* ── (۲) فرم‌های فروش/خرید/دریافت/پرداخت: متنِ پیش‌فرضِ روشن + اجزای باقی‌مانده ─ */
+body.dark-mode .bill-layout { color: #e2e8f0; }
+/* پنل/پاپِ تخفیف */
+body.dark-mode .bill-discount-panel,
+body.dark-mode .bill-discount-pop { background: #1e293b !important; border-color: rgba(255,255,255,0.16) !important; color: #e2e8f0 !important; }
+body.dark-mode .bill-discount-panel.bill-discount-inline .bill-disc-field { background: #0f172a !important; color: #f1f5f9 !important; border-color: rgba(255,255,255,0.16) !important; }
+body.dark-mode .bill-discount-panel.bill-discount-inline label,
+body.dark-mode .bill-discount-panel.bill-discount-inline .bill-disc-result,
+body.dark-mode .bill-footer .bill-remaining { color: #f1f5f9 !important; }
+/* فوترِ اطلاعات (باقی‌مانده/مبالغ) و برچسب‌ها */
+body.dark-mode .bill-footer { color: #e2e8f0; }
+
+/* ── (۴) فرم تبدیل ارز میان حساب + هر متنِ کم‌رنگ → سفیدِ خوانا ─────────────── */
+body.dark-mode .jf-toplabel,
+body.dark-mode .jf-toarrow { color: #f1f5f9 !important; }
+body.dark-mode .cc-op-inline label { color: #e2e8f0 !important; }
+body.dark-mode select.jf-pill,
+body.dark-mode .jf-pill { background: #0f172a !important; color: #f1f5f9 !important; border-color: rgba(255,255,255,0.16) !important; }
+body.dark-mode select.jf-pill option { background: #1e293b !important; color: #f1f5f9 !important; }
+
+/* ── (۳) کارت‌های اطلاعاتیِ گزارش: همهٔ ارقام/متن سفیدِ شفاف ───────────────── */
+body.dark-mode #rp-results-container,
+body.dark-mode #rp-persons-card-wrap { color: #f1f5f9; }
+body.dark-mode #rp-results-container .rp-metric-count,
+body.dark-mode #rp-results-container .rp-metric-val,
+body.dark-mode #rp-results-container .rp-metric-row,
+body.dark-mode #rp-results-container .rp-metric-row .pdc-row-label,
+body.dark-mode #rp-results-container .rp-cur-amt,
+body.dark-mode #rp-results-container .rp-cur-amt em,
+body.dark-mode #rp-results-container .rp-cur-caption,
+body.dark-mode #rp-results-container .rp-cur-box .rp-cur-caption { color: #f1f5f9 !important; }
+body.dark-mode #rp-results-container .rp-cur-box { background: #0f172a !important; border-color: rgba(255,255,255,0.16) !important; }
+body.dark-mode #rp-results-container .rp-chip { background: #16233a !important; border-color: rgba(255,255,255,0.16) !important; color: #dbe6f7 !important; }
+/* جزئیاتِ معامله (tx-detail) که در دارک‌مود سطرهایش سفید و متنش تیره می‌ماند */
+body.dark-mode #tx-detail .pdc-rows .pdc-row-label { color: #e2e8f0 !important; }
+body.dark-mode #tx-detail .pdc-rows .pdc-row:nth-child(odd),
+body.dark-mode #tx-detail .pdc-rows .pdc-row:nth-child(even) { background: #1e293b !important; }
+
+/* ── (۵) فرم تعیین نرخ ارز (csx-*) — دارک‌مودِ کامل مثلِ فرم‌های فروش/خرید ──── */
+body.dark-mode .csx-panel { border-color: rgba(255,255,255,0.16) !important; background: transparent !important; }
+body.dark-mode .csx-panel-body { background: transparent !important; }
+body.dark-mode .csx-rate-head { color: #cbd5e1 !important; border-bottom-color: rgba(255,255,255,0.12) !important; }
+body.dark-mode .csx-rate-cell,
+body.dark-mode .csx-rate-unit,
+body.dark-mode .csx-rate-pair .csx-pp { color: #f1f5f9 !important; }
+body.dark-mode .csx-rate-pair .csx-ps,
+body.dark-mode .csx-chip-sub { color: #cbd5e1 !important; }
+body.dark-mode .csx-rate-empty { color: #94a3b8 !important; }
+body.dark-mode .csx-cancel-edit { background: #0f172a !important; color: #e2e8f0 !important; border-color: rgba(255,255,255,0.16) !important; }
+body.dark-mode .csx-readonly { background: #0b1220 !important; color: #8595ab !important; }
+body.dark-mode .csx-base-hint { color: #cbd5e1 !important; }
+/* فیلدها/ورودی‌های فرم نرخ ارز: پس‌زمینهٔ تیره + استروکِ نازکِ سفید (مثلِ فرم فروش) */
+body.dark-mode .csx-panel input,
+body.dark-mode .csx-panel select,
+body.dark-mode .csx-grid2 input,
+body.dark-mode .csx-grid2 select { background: #0f172a !important; color: #f1f5f9 !important; border-color: rgba(255,255,255,0.16) !important; }
+body.dark-mode .csx-panel input::placeholder { color: #8595ab !important; }
+
+/* ============================================================================
+   دارک‌مود/خوانایی — دورِ چهارم
+   ============================================================================ */
+
+/* (۱) چیپِ آیکنِ لیست‌های سریع کمی پهن‌تر */
+.dash-nav-col .btn-quick-list i { width: 46px !important; height: 34px !important; }
+
+/* (۲) فیلدهای انتخابِ نوع ارز (jf-pill) — استروک و استایلِ یکپارچه با بقیهٔ فیلدها */
+.jf-pill, select.jf-pill {
+    border: 1px solid var(--bill-line, #d8dee9); border-radius: 10px;
+    background: #f8fafc; padding: 8px 12px;
+}
+body.dark-mode .jf-pill,
+body.dark-mode select.jf-pill { background: #0f172a !important; color: #f1f5f9 !important; border: 1px solid rgba(255,255,255,0.16) !important; }
+body.dark-mode .jf-pill:focus, body.dark-mode select.jf-pill:focus { border-color: #3b82f6 !important; }
+body.dark-mode .jf-typewrap, body.dark-mode .jf-currwrap, body.dark-mode .cc-top-controls { color: #f1f5f9 !important; }
+
+/* (۳) لیستِ اجناس و خدماتِ فرم‌های فروش/خرید/دریافت/پرداخت — متنِ سفیدِ خوانا در دارک‌مود */
+body.dark-mode .bill-items-box .item-row,
+body.dark-mode .bill-items-box .item-product,
+body.dark-mode .bill-items-box .item-total,
+body.dark-mode .bill-items-box .item-unit,
+body.dark-mode .item-row .item-product,
+body.dark-mode .item-row .item-total,
+body.dark-mode .item-row .item-unit,
+body.dark-mode .unit-cell-wrap .item-unit,
+body.dark-mode .bill-items-box td { color: #f1f5f9 !important; }
+body.dark-mode .item-row .product-search-input,
+body.dark-mode .item-product .product-search-input { background: #0f172a !important; color: #f1f5f9 !important; border-color: rgba(255,255,255,0.16) !important; }
+body.dark-mode .product-search-results { background: #1e293b !important; border-color: rgba(255,255,255,0.16) !important; }
+body.dark-mode .product-search-results * { color: #f1f5f9 !important; }
+
+/* (۴) گزارش — مقادیرِ مفاد/سرمایه و همهٔ سطرهای کارت‌ها سفید/روشنِ خوانا (رنگِ معنایی روشن می‌ماند) */
+body.dark-mode .pdc-row-value { color: #f1f5f9 !important; }
+body.dark-mode .pdc-v-green { color: #34d399 !important; }
+body.dark-mode .pdc-v-red   { color: #f87171 !important; }
+body.dark-mode .pdc-v-blue  { color: #60a5fa !important; }
+body.dark-mode .pdc-row-strong .pdc-row-label { color: #ffffff !important; font-weight: 800; }
+body.dark-mode .pdc-footer, body.dark-mode .pdc-footer * { color: #f1f5f9 !important; }
+/* اطمینانِ خواناییِ همهٔ متنِ کارت‌های گزارش داخلِ کانتینرِ نتایج */
+body.dark-mode #rp-results-container .pdc-row-value,
+body.dark-mode #rp-results-container .pdc-row-label { color: #f1f5f9 !important; }
+
+/* (۵) فرم «مدیریت ارزها و نرخ‌ها» (مودالِ wh-transfer) — دارک‌مود با استروکِ فیلدها مثلِ فرم فروش */
+body.dark-mode .wh-transfer-box { background: #1e293b !important; color: #e2e8f0 !important; }
+body.dark-mode .wh-transfer-bodyc { background: #1e293b !important; }
+body.dark-mode .wh-tr-field > label { color: #e2e8f0 !important; }
+body.dark-mode .wh-tr-field > label i { color: #93c5fd !important; }
+body.dark-mode .wh-tr-field select,
+body.dark-mode .wh-tr-field > input,
+body.dark-mode .wh-tr-field textarea { background: #0f172a !important; color: #f1f5f9 !important; border-color: rgba(255,255,255,0.16) !important; }
+body.dark-mode .wh-tr-field select:focus,
+body.dark-mode .wh-tr-field > input:focus,
+body.dark-mode .wh-tr-field textarea:focus { border-color: #3b82f6 !important; }
+body.dark-mode .wh-tr-num { color: #cbd5e1 !important; }
+
+/* (۹) هدرِ داشبورد (آیکن سایدبار + اعلان‌ها) — قاعدهٔ نهایی در انتهای همین فایل
+   آمده است (تفکیکِ قطعیِ موبایل از دسکتاپ). */
+
+/* ── تقویتِ خواناییِ لیستِ اجناس/خدمات در فرم‌های فروش/خرید (دارک‌مود) ─────────
+   همهٔ سلول‌ها، span‌ها و ورودی‌های ردیف‌های آیتم → متنِ سفید؛ ورودی‌ها زمینهٔ تیره
+   با استروکِ نازک. (دکمه/آیکنِ عملیات دست‌نخورده می‌ماند.) */
+body.dark-mode #sales-items-table tbody td,
+body.dark-mode #purchase-items-table tbody td,
+body.dark-mode #sales-items-table tbody td span,
+body.dark-mode #purchase-items-table tbody td span,
+body.dark-mode #sales-items-table tbody td .item-total,
+body.dark-mode #purchase-items-table tbody td .item-total,
+body.dark-mode #sales-items-table tbody td .item-unit,
+body.dark-mode #purchase-items-table tbody td .item-unit { color: #f1f5f9 !important; }
+body.dark-mode #sales-items-table tbody input,
+body.dark-mode #sales-items-table tbody select,
+body.dark-mode #purchase-items-table tbody input,
+body.dark-mode #purchase-items-table tbody select {
+    background: #0f172a !important; color: #f1f5f9 !important; border-color: rgba(255,255,255,0.16) !important;
+}
+body.dark-mode #sales-items-table tbody input::placeholder,
+body.dark-mode #purchase-items-table tbody input::placeholder { color: #8595ab !important; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   دارک‌مود — دورِ پنجم (فقط رنگ/خوانایی؛ هیچ منطق و چیدمانی تغییر نمی‌کند)
+   (۱) بخشِ «اجناس و خدمات» در فرم‌های اطلاعاتِ فروش/خرید/دریافتی/پرداختی
+       (#tx-detail) — با همان استایلِ کارتِ «خلاصه …» بالای همان فرم.
+   (۲) نوارِ پایینِ همان فرم («ثبت توسط …») — استروکِ سفید + متنِ سفید.
+   (۳) ارقامِ همهٔ کتگوری‌های گزارش و کارت‌های اطلاعاتی‌شان → سفیدِ خوانا.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+/* ── (۱) جدولِ «اجناس و خدمات» — هم‌سبک با ردیف‌های کارتِ «خلاصه» (.pdc-row) ──── */
+body.dark-mode #tx-detail .txd-items-wrap { background: transparent !important; }
+body.dark-mode #tx-detail .txd-items-table { background: transparent !important; }
+body.dark-mode #tx-detail .txd-items-table thead th {
+    background: #16233a !important;
+    color: #e2e8f0 !important;
+    border-bottom-color: rgba(255, 255, 255, 0.14) !important;
+}
+body.dark-mode #tx-detail .txd-items-table tbody tr { background: #1e293b !important; }
+body.dark-mode #tx-detail .txd-items-table tbody tr:nth-child(even) { background: #17233a !important; }
+body.dark-mode #tx-detail .txd-items-table tbody td,
+body.dark-mode #tx-detail .txd-items-table tbody td span,
+body.dark-mode #tx-detail .txd-items-table tbody td strong,
+body.dark-mode #tx-detail .txd-items-table tbody td b,
+body.dark-mode #tx-detail .txd-items-table tbody td em,
+body.dark-mode #tx-detail .txd-items-table tbody td small,
+body.dark-mode #tx-detail .txd-items-table tbody td div {
+    color: #f1f5f9 !important;
+}
+body.dark-mode #tx-detail .txd-items-table tbody td { border-bottom-color: #26344a !important; }
+body.dark-mode #tx-detail .txd-items-table tbody tr:last-child td { border-bottom-color: transparent !important; }
+/* دکمه‌های لینکیِ داخلِ کارت‌ها («مشاهده لیست معاملات» / «چاپ بل») — هم‌سبک با دارک‌مود */
+body.dark-mode #tx-detail .txd-linkbtn {
+    background: #0f172a !important;
+    border-color: rgba(255, 255, 255, 0.16) !important;
+    color: #dbe6f7 !important;
+}
+body.dark-mode #tx-detail .txd-linkbtn i { color: #93b4de !important; }
+body.dark-mode #tx-detail .txd-linkbtn:hover { background: #223452 !important; }
+
+/* ── (۲) نوارِ پایین: «ثبت توسط …» با استروکِ سفید و متنِ سفید ───────────────── */
+body.dark-mode #tx-detail .txd-footer-center {
+    background: #1e293b !important;
+    border: 1px solid #ffffff !important;
+    color: #ffffff !important;
+}
+body.dark-mode #tx-detail .txd-footer-center i,
+body.dark-mode #tx-detail .txd-footer-center strong,
+body.dark-mode #tx-detail .txd-footer-center span,
+body.dark-mode #tx-detail .txd-footer-center .pdc-footer-dot {
+    color: #ffffff !important;
+}
+body.dark-mode #tx-detail .txd-remaining-wrap,
+body.dark-mode #tx-detail .txd-remaining-wrap strong { color: #ffffff !important; }
+
+/* ── (۳) گزارش: همهٔ ارقام/متنِ کارت‌های اطلاعاتی در همهٔ کتگوری‌ها ──────────────
+   کارت‌های گزارش بسته به کتگوری، یا در #rp-results-container و یا در
+   #rp-persons-card-wrap ساخته می‌شوند؛ پس این قواعد بدونِ محدودشدن به کانتینر
+   نوشته شده‌اند تا «قطعی» همهٔ کتگوری‌ها را بپوشانند. */
+body.dark-mode .rp-cur-amt,
+body.dark-mode .rp-cur-amt em,
+body.dark-mode .rp-cur-caption,
+body.dark-mode .rp-cur-box .rp-cur-caption,
+body.dark-mode .rp-metric-val,
+body.dark-mode .rp-metric-val span,
+body.dark-mode .rp-metric-val strong,
+body.dark-mode .rp-metric-count,
+body.dark-mode .rp-metric-row,
+body.dark-mode .rp-metric-row .pdc-row-label {
+    color: #f1f5f9 !important;
+}
+body.dark-mode .rp-cur-box {
+    background: #0f172a !important;
+    border-color: rgba(255, 255, 255, 0.16) !important;
+}
+body.dark-mode .rp-chip {
+    background: #16233a !important;
+    border-color: rgba(255, 255, 255, 0.16) !important;
+    color: #dbe6f7 !important;
+}
+body.dark-mode .rp-persons-card .dash-card-body,
+body.dark-mode .rp-persons-card .dash-card-body * { color: #f1f5f9; }
+body.dark-mode .rp-persons-card .rp-cur-amt em { color: #cbd5e1 !important; }
+
+/* ── دکمهٔ دانلودِ هر سطرِ گزارش — در دارک‌مود همیشه دیده شود (بدونِ نیاز به هاور) ──
+   قبلاً زمینهٔ روشنِ حالتِ لایت می‌ماند و آیکن روی آن گم می‌شد؛ حالا زمینهٔ تیره +
+   استروکِ روشن + آیکنِ سفید، و در هاور فقط پررنگ‌تر می‌شود. */
+body.dark-mode .rp-dl-btn {
+    background: #16233a !important;
+    border: 1px solid rgba(255, 255, 255, 0.28) !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+}
+body.dark-mode .rp-dl-btn i { color: #ffffff !important; }
+body.dark-mode .rp-dl-btn:hover {
+    background: #2563eb !important;
+    border-color: #2563eb !important;
+    color: #ffffff !important;
+}
+body.dark-mode .rp-dl-btn:hover i { color: #ffffff !important; }
+
+/* ── هدرِ ثابتِ داشبورد — تفکیکِ قطعیِ موبایل از دسکتاپ ─────────────────────────
+   ▸ دسکتاپ (بزرگ‌تر از ۷۶۸px): الکترونِ دسکتاپ و ویبِ کامپیوتر → هدر مثلِ قبل
+     همراهِ محتوا اسکرول می‌شود (هیچ چسبندگی‌ای ندارد).
+   ▸ موبایل (۷۶۸px و کمتر): هدر بالای صفحه ثابت می‌ماند و محتوا زیرِ آن اسکرول می‌شود.
+   هر دو قاعده فقط به هدرِ داخلِ #dashboard کار دارند، پس هیچ صفحه/بخشِ دیگری
+   تحت تأثیر قرار نمی‌گیرد. */
+@media (min-width: 769px) {
+    #dashboard > .dash-topbar {
+        position: static !important;
+        top: auto !important;
+    }
+}
+@media (max-width: 768px) {
+    #dashboard > .dash-topbar {
+        position: -webkit-sticky !important;
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 950 !important;
+    }
+}

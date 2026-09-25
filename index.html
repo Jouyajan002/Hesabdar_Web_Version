@@ -990,39 +990,35 @@
                                 </div>
 
                                 <div class="product-grid">
-                                    <!-- ستون راست -->
+                                    <!-- ستون راست — ترتیبِ ۱ تا ۴ (در موبایل، تک‌ستونه، همین ابتدا می‌آید) -->
                                     <div class="product-col product-col-main">
+                                        <!-- ۱) نام شخص -->
                                         <div class="bill-field bill-field-icononly">
                                             <i class="fas fa-user bill-field-icon"></i>
                                             <input type="text" id="person-name" placeholder="نام و تخلص" required>
                                         </div>
-                                        <div class="bill-field bill-field-icononly">
-                                            <i class="fas fa-phone bill-field-icon"></i>
-                                            <input type="tel" id="person-phone" placeholder="شماره تماس" dir="rtl" style="text-align:right; direction:rtl;">
-                                        </div>
-                                        <div class="bill-field bill-field-icononly">
-                                            <i class="fas fa-arrow-right-to-bracket bill-field-icon"></i>
-                                            <input type="number" id="person-previous-account" step="0.01" placeholder="حساب قبلی">
-                                        </div>
-                                        <div class="bill-field bill-field-icononly">
-                                            <i class="fas fa-dollar-sign bill-field-icon"></i>
-                                            <select id="person-currency" class="bill-inline-input">
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    <!-- ستون چپ -->
-                                    <div class="product-col product-col-side">
+                                        <!-- ۲) کتگوری شخص -->
                                         <div class="bill-field bill-field-icononly">
                                             <i class="fas fa-users bill-field-icon"></i>
                                             <select id="person-category" class="bill-inline-input">
                                                 <option value="">کتگوری شخص</option>
                                             </select>
                                         </div>
+                                        <!-- ۳) شماره تماس -->
                                         <div class="bill-field bill-field-icononly">
-                                            <i class="fas fa-id-card bill-field-icon"></i>
-                                            <input type="text" id="person-id" placeholder="نمبر تذکره">
+                                            <i class="fas fa-phone bill-field-icon"></i>
+                                            <input type="tel" id="person-phone" placeholder="شماره تماس" dir="rtl" style="text-align:right; direction:rtl;">
                                         </div>
+                                        <!-- ۴) حساب قبلی شخص -->
+                                        <div class="bill-field bill-field-icononly">
+                                            <i class="fas fa-arrow-right-to-bracket bill-field-icon"></i>
+                                            <input type="number" id="person-previous-account" step="0.01" placeholder="حساب قبلی">
+                                        </div>
+                                    </div>
+
+                                    <!-- ستون چپ — ترتیبِ ۵ تا ۸ -->
+                                    <div class="product-col product-col-side">
+                                        <!-- ۵) نوع حساب -->
                                         <div class="bill-field bill-field-icononly">
                                             <i class="fas fa-chevron-down bill-field-icon"></i>
                                             <select id="person-account-type" class="bill-inline-input">
@@ -1031,6 +1027,18 @@
                                                 <option value="طلبکار">نوع حساب: طلبکار</option>
                                             </select>
                                         </div>
+                                        <!-- ۶) ارز -->
+                                        <div class="bill-field bill-field-icononly">
+                                            <i class="fas fa-dollar-sign bill-field-icon"></i>
+                                            <select id="person-currency" class="bill-inline-input">
+                                            </select>
+                                        </div>
+                                        <!-- ۷) نمبر تذکره -->
+                                        <div class="bill-field bill-field-icononly">
+                                            <i class="fas fa-id-card bill-field-icon"></i>
+                                            <input type="text" id="person-id" placeholder="نمبر تذکره">
+                                        </div>
+                                        <!-- ۸) آدرس -->
                                         <div class="bill-field bill-field-icononly">
                                             <i class="fas fa-map-marker-alt bill-field-icon"></i>
                                             <input type="text" id="person-address" placeholder="آدرس">

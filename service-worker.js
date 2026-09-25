@@ -10,7 +10,7 @@
  *  مسیرها همه «نسبی» هستند تا روی GitHub Pages زیرِ هر زیرمسیری کار کنند.
  * ========================================================================== */
 
-var SW_VERSION = 'jouya-v1.0.0';
+var SW_VERSION = 'jouya-v1.0.3';
 var CACHE = SW_VERSION;
 
 // فهرستِ هستهٔ اپ — پیش‌ذخیره (best-effort؛ نبودِ یک فایل نصب را خراب نمی‌کند)
@@ -103,16 +103,21 @@ self.addEventListener('fetch', function (event) {
   // فقط هم‌مبدأ؛ cross-origin (Supabase, CDN realtime و …) را دست نمی‌زنیم
   if (url.origin !== self.location.origin) return;
 
-  // درخواست‌های ناوبری (باز کردن اپ): شبکه‌محور با فالبکِ آفلاین به index.html
+  // version.json همیشه مستقیم از شبکه خوانده شود (برای بررسیِ بروزرسانی) — نه از کش.
+  if (/\/version\.json$/i.test(url.pathname)) return;
+
+  // درخواست‌های ناوبری (باز کردن اپ): «کش‌محور» تا اپ همیشه — آنلاین یا آفلاین — فوری و
+  // بدونِ وابستگی به شبکه باز شود (مثلِ یک اپلیکیشنِ نصب‌شده). نسخهٔ تازه در پس‌زمینه گرفته
+  // و برای دفعهٔ بعد کش می‌شود. این رفعِ «گاهی بدونِ اینترنت باز نمی‌شود» است.
   if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(req).then(function (res) {
-        try { var c = res.clone(); caches.open(CACHE).then(function (cache) { cache.put(req, c); }); } catch (e) {}
-        return res;
-      }).catch(function () {
-        return caches.match(req).then(function (m) {
-          return m || caches.match('./index.html') || caches.match('./');
-        });
+      caches.match('./index.html').then(function (cached) {
+        var network = fetch(req).then(function (res) {
+          try { var c = res.clone(); caches.open(CACHE).then(function (cache) { cache.put('./index.html', c); }); } catch (e) {}
+          return res;
+        }).catch(function () { return null; });
+        // فوراً از کش (اگر بود) → باز شدنِ آفلاینِ تضمینی؛ وگرنه منتظرِ شبکه یا فالبک.
+        return cached || network.then(function (r) { return r || caches.match(req) || caches.match('./'); });
       })
     );
     return;
