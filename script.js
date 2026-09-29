@@ -11122,6 +11122,115 @@ function __jouyaPersianPdfName(name) {
     return s;
 }
 
+// ── نامِ فایلِ اشتراک‌گذاری: فارسی روی موبایل، لاتین روی دسکتاپ ─────────────────
+// چرا؟ «واتساپِ دسکتاپ» بایت‌های UTF-8ِ نامِ فایل را با Latin-1 می‌خواند و نامِ فارسی را
+// به‌هم‌ریخته (mojibake مثلِ Ú¯Ø²Ø§Ø±Ø´) نشان می‌دهد؛ این باگِ خودِ واتساپِ دسکتاپ است و با
+// هیچ کدگذاری‌ای از سمتِ ما قابلِ رفع نیست. پس روی دسکتاپ نامِ لاتینِ خوانا می‌سازیم
+// (همان کاری که نسخهٔ الکترون می‌کرد) و روی موبایل نامِ کاملاً فارسی دست‌نخورده می‌ماند،
+// چون واتساپِ موبایل نام را درست نشان می‌دهد.
+function __jouyaIsDesktopShare() {
+    try {
+        if (window.__JOUYA_RUNTIME === 'tauri') return true;
+        var ua = navigator.userAgent || '';
+        if (/Android|iPhone|iPad|iPod/i.test(ua)) return false;
+        if (/Macintosh/.test(ua) && (navigator.maxTouchPoints || 0) > 1) return false;   // iPadOS
+        var narrow = ((window.innerWidth || document.documentElement.clientWidth || 0) <= 768);
+        var coarse = !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
+        return !(narrow || coarse);
+    } catch (e) { return false; }
+}
+
+// ترجمهٔ آواییِ فارسی → لاتین (همان نگاشتی که نسخهٔ الکترون استفاده می‌کرد)
+// ⚠ جدول‌ها عمداً «داخلِ» تابع ساخته می‌شوند و نه به‌صورتِ varِ سطح‌بالا: در این فایل یک
+//   throwِ سطح‌بالا وجود دارد، پس انتسابِ varهای بعد از آن هرگز اجرا نمی‌شود (فقط اعلانِ
+//   function بالا می‌آید). این نکته در همین فایل هم قبلاً یادداشت شده است.
+function __jouyaToLatin(str) {
+    if (!str) return '';
+    str = String(str);
+    // ۱) واژه‌های پرکاربردِ برنامه → معادلِ خوانا (کیفیتِ خواناییِ بهتر از تک‌حرف)
+    var words = {
+        'گزارش': 'Gozaresh', 'معاملات': 'Moamelat', 'معامله': 'Moamele',
+        'پرداختی': 'Pardakhti', 'پرداخت': 'Pardakht', 'دریافتی': 'Daryafti', 'دریافت': 'Daryaft',
+        'رسید': 'Resid', 'بل': 'Bill', 'فروش': 'Forosh', 'خرید': 'Kharid',
+        'فاکتور': 'Factor', 'پیش‌فاکتور': 'PishFactor', 'صورتحساب': 'Surathesab',
+        'صورت': 'Surat', 'حساب': 'Hesab', 'اجناس': 'Ajnas', 'جنس': 'Jens',
+        'انبار': 'Anbar', 'گدام': 'Godam', 'انتقال': 'Enteqal', 'شخص': 'Shakhs',
+        'اشخاص': 'Ashkhas', 'مصرف': 'Masraf', 'مصارف': 'Masaref', 'مصارفات': 'Masarefat',
+        'کمیشن': 'Commission', 'حواله': 'Hawala', 'برگشتی': 'Bargashti', 'برگشت': 'Bargasht',
+        'مشتری': 'Moshtari', 'قیمت': 'Qeymat', 'روزانه': 'Roozane', 'کارمند': 'Karmand',
+        'کارمندان': 'Karmandan', 'صندوق': 'Sandoq', 'بانک': 'Bank', 'میان': 'Mian',
+        // نام‌های پرکاربرد (اشخاص) — چون مصوتِ کوتاه در فارسی نوشته نمی‌شود، این معادل‌ها
+        // خواناییِ نامِ گیرنده را به‌مراتب بهتر می‌کنند. ترتیب: طولانی‌تر/خاص‌تر ابتدا.
+        'عبدالله': 'Abdullah', 'عبدال': 'Abdul', 'احمد': 'Ahmad', 'محمدی': 'Mohammadi',
+        'محمود': 'Mahmood', 'محمد': 'Mohammad', 'الله': 'Ullah', 'کریمی': 'Karimi',
+        'کریم': 'Karim', 'رحیمی': 'Rahimi', 'رحیم': 'Rahim', 'حسینی': 'Hoseini',
+        'حسین': 'Hosein', 'حسن': 'Hasan', 'زلمی': 'Zalmai', 'خان': 'Khan',
+        'الدین': 'uddin', 'نور': 'Noor', 'گل': 'Gul', 'شاه': 'Shah'
+    };
+    Object.keys(words).forEach(function (w) {
+        if (str.indexOf(w) !== -1) str = str.split(w).join(' ' + words[w] + ' ');
+    });
+    // ۲) نگاشتِ تک‌حرفی برای بقیه (به‌ویژه نامِ اشخاص)
+    var map = {
+        'آ': 'a', 'ا': 'a', 'أ': 'a', 'إ': 'e', 'ء': '', 'ئ': 'y', 'ؤ': 'o',
+        'ب': 'b', 'پ': 'p', 'ت': 't', 'ث': 's', 'ج': 'j', 'چ': 'ch', 'ح': 'h', 'خ': 'kh',
+        'د': 'd', 'ذ': 'z', 'ر': 'r', 'ز': 'z', 'ژ': 'zh', 'س': 's', 'ش': 'sh', 'ص': 's',
+        'ض': 'z', 'ط': 't', 'ظ': 'z', 'ع': 'a', 'غ': 'gh', 'ف': 'f', 'ق': 'q',
+        'ک': 'k', 'ك': 'k', 'گ': 'g', 'ل': 'l', 'م': 'm', 'ن': 'n', 'و': 'o',
+        'ه': 'h', 'ة': 'h', 'ی': 'i', 'ي': 'i', 'ى': 'a',
+        'ً': '', 'ٌ': '', 'ٍ': '', 'َ': 'a', 'ُ': 'o', 'ِ': 'e', 'ّ': '', 'ْ': '', 'ٰ': 'a', 'ٓ': '',
+        '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4', '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+        '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
+    };
+    var out = '';
+    for (var i = 0; i < str.length; i++) {
+        var ch = str[i];
+        if (Object.prototype.hasOwnProperty.call(map, ch)) out += map[ch];
+        else if (/[A-Za-z0-9]/.test(ch)) out += ch;
+        else out += ' ';
+    }
+    out = out.replace(/\s+/g, ' ').trim().replace(/\s/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
+    out = out.split('-').map(function (p) { return p ? p.charAt(0).toUpperCase() + p.slice(1) : p; }).join('-');
+    return out;
+}
+
+// نامِ لاتینِ فایل: پیشوندِ انگلیسیِ نوعِ سند + ترجمهٔ آواییِ عنوان
+function __jouyaLatinPdfName(name) {
+    var PFX = [
+        [/بل\s*فروش/, 'SalesInvoice'],
+        [/بل\s*خرید/, 'PurchaseInvoice'],
+        [/پرداخت/, 'PaymentReceipt'],
+        [/دریافت/, 'ReceiptVoucher'],
+        [/رسید/, 'Receipt'],
+        [/گزارش/, 'Report']
+    ];
+    var fn = String(name == null ? '' : name);
+    var pfx = 'Jouya';
+    for (var i = 0; i < PFX.length; i++) {
+        if (PFX[i][0].test(fn)) { pfx = PFX[i][1]; break; }
+    }
+    var lat = __jouyaToLatin(fn);
+    if (lat && lat.toLowerCase().indexOf(pfx.toLowerCase() + '-') === 0) lat = lat.slice(pfx.length + 1);
+    // حذفِ واژه‌های ابتداییِ تکراری: پیشوند از قبل نوعِ سند را می‌گوید، پس «Bill-Forosh» بعد از
+    // «SalesInvoice» فقط نام را شلوغ می‌کند. نتیجه: SalesInvoice-Ahmad-Ullah به‌جای
+    // SalesInvoice-Bill-Forosh-Ahmad-Ullah.
+    var DROP = ['bill', 'forosh', 'kharid', 'gozaresh', 'resid', 'pardakht', 'pardakhti', 'daryaft', 'daryafti'];
+    if (lat) {
+        var parts = lat.split('-');
+        while (parts.length > 1 && DROP.indexOf(String(parts[0]).toLowerCase()) !== -1) parts.shift();
+        lat = parts.join('-');
+    }
+    var out = (pfx + (lat ? '-' + lat : '')).replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, ' ').trim().slice(0, 110);
+    if (!out) out = 'Report';
+    if (!/\.pdf$/i.test(out)) out += '.pdf';
+    return out;
+}
+
+// انتخابِ نهاییِ نامِ فایل برای اشتراک‌گذاری
+function __jouyaShareFileName(name) {
+    return __jouyaIsDesktopShare() ? __jouyaLatinPdfName(name) : __jouyaPersianPdfName(name);
+}
+
 // دانلودِ فایل با نامِ فارسی (فالبک وقتی اشتراکِ نیتیوِ فایل در دسترس نیست)
 function __jouyaDownloadBlob(blob, filename) {
     try {
@@ -11165,7 +11274,7 @@ function __jouyaDoNativeShare(blob, persianName, titleName) {
 // (مسیرِ اصلیِ موبایل، اورلیِ پیش‌نمایش است که PDF را از پیش می‌سازد؛ اینجا برای فراخوانی‌های
 //  مستقیم است و PDF را همان لحظه می‌سازد.)
 function __jouyaShareFileNative(html, name) {
-    var persianName = __jouyaPersianPdfName(name);
+    var persianName = __jouyaShareFileName(name);
     if (typeof showToast === 'function') { try { showToast('در حال آماده‌سازی فایل…', 'info'); } catch (e) {} }
     __jouyaHtmlToPdfBlob(html).then(function (blob) {
         __jouyaDoNativeShare(blob, persianName, name);
@@ -11180,6 +11289,9 @@ if (typeof window !== 'undefined') {
     window.__jouyaShareFileNative = __jouyaShareFileNative;
     window.__jouyaDoNativeShare = __jouyaDoNativeShare;
     window.__jouyaPersianPdfName = __jouyaPersianPdfName;
+    window.__jouyaLatinPdfName = __jouyaLatinPdfName;
+    window.__jouyaShareFileName = __jouyaShareFileName;
+    window.__jouyaIsDesktopShare = __jouyaIsDesktopShare;
     window.__jouyaDownloadBlob = __jouyaDownloadBlob;
 }
 
@@ -11478,7 +11590,9 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
 
     // اشتراکِ نیتیوِ «فایلِ PDF با نامِ فارسی» — اندروید و iOS یکسان (شیت اشتراکِ سیستم)
     function mobileShareFile() {
-        var persianName = (typeof window.__jouyaPersianPdfName === 'function') ? window.__jouyaPersianPdfName(pdfName) : (String(pdfName || 'گزارش') + '.pdf');
+        // نام: روی موبایل فارسی، روی دسکتاپ لاتین (واتساپِ دسکتاپ نامِ فارسی را خراب نشان می‌دهد)
+        var persianName = (typeof window.__jouyaShareFileName === 'function') ? window.__jouyaShareFileName(pdfName)
+            : ((typeof window.__jouyaPersianPdfName === 'function') ? window.__jouyaPersianPdfName(pdfName) : (String(pdfName || 'گزارش') + '.pdf'));
         // اگر فایل آماده است → همین حالا، داخلِ همین لمس، شیت اشتراک را باز کن (سازگار با iOS)
         if (_pdfBlob && typeof window.__jouyaDoNativeShare === 'function') {
             window.__jouyaDoNativeShare(_pdfBlob, persianName, pdfName);

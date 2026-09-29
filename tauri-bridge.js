@@ -183,20 +183,64 @@
     }
 
     // ── نصبِ پل با همان نامِ آشنا ───────────────────────────────────────────────
+    //
+    //  ⚠ نکتهٔ مهم دربارهٔ «ارسال به واتساپ»:
+    //  عمداً کلیدِ sharePdfToWhatsApp اینجا قرار داده **نمی‌شود**. دلیلش این است که کدِ
+    //  اورلیِ پیش‌نمایش این شرط را دارد:
+    //        if (window.electronAPI && window.electronAPI.sharePdfToWhatsApp) { ... }
+    //        else { mobileShareFile(); }
+    //  و mobileShareFile همان مسیرِ navigator.share است که در نسخهٔ وب «پنجرهٔ فهرستِ
+    //  برنامه‌ها» (Windows Share) را درست باز می‌کند. WebView2 — موتورِ نمایشِ Tauri روی
+    //  ویندوز — از navigator.share با فایل پشتیبانی می‌کند، پس با نگذاشتنِ این کلید،
+    //  نسخهٔ نصبی دقیقاً همان رفتارِ نسخهٔ وب را می‌گیرد: همان پنل، همان فایلِ پیوست‌شده.
+    //  مسیرِ PowerShell/WinRT به‌عنوان پشتیبان زیرِ نامِ دیگری در دسترس می‌ماند.
     window.electronAPI = {
         getDownloadsPath: getDownloadsPath,
         openPath: openPath,
         openFile: openFile,
         onRequestAutoBackup: onRequestAutoBackup,
-        sharePdfToWhatsApp: sharePdfToWhatsApp,
         // افزودنی‌های Tauri (اختیاری، برنامه به آن‌ها وابسته نیست)
         saveToDownloads: saveToDownloads,
         revealInDir: function (p) { return call('hb_reveal_in_dir', { path: resolveDownload(p) }); },
         openExternal: function (u) { return call('hb_open_uri', { uri: String(u || '') }); },
         getAppVersion: function () { return call('hb_app_version'); },
+        // مسیرِ پشتیبانِ «پنلِ اشتراکِ ویندوز» از راهِ PowerShell/WinRT — با نامی که اورلی
+        // آن را برنمی‌دارد، تا مسیرِ اصلی همان navigator.share بماند.
+        sharePdfViaWindowsPanel: sharePdfToWhatsApp,
         __runtime: 'tauri'
     };
     window.__JOUYA_RUNTIME = 'tauri';
+
+    // ── فالبکِ دانلود در نسخهٔ نصبی ────────────────────────────────────────────
+    // اگر اشتراکِ نیتیو به هر دلیلی اجرا نشود، کدِ برنامه به __jouyaDownloadBlob می‌رود که
+    // با <a download> کار می‌کند و در WebView ممکن است بی‌صدا هیچ نکند. اینجا همان تابع را
+    // با نسخه‌ای جایگزین می‌کنیم که فایل را واقعاً در پوشهٔ دانلود می‌نویسد و پوشه را نشان
+    // می‌دهد. (script.js بعد از این فایل بارگذاری می‌شود، پس پچ در DOMContentLoaded می‌نشیند.)
+    function patchDownloadFallback() {
+        if (typeof window.__jouyaDownloadBlob !== 'function' || window.__jouyaDownloadBlob.__tauriPatched) return;
+        var original = window.__jouyaDownloadBlob;
+        var patched = function (blob, filename) {
+            try {
+                blobToBytes(blob).then(function (bytes) {
+                    return call('hb_write_file', { dest: 'downloads', fileName: String(filename || 'file.pdf'), bytes: bytes });
+                }).then(function (p) {
+                    call('hb_reveal_in_dir', { path: p }).catch(function () {});
+                    if (typeof window.showMessage === 'function') {
+                        window.showMessage('ذخیرهٔ فایل', 'فایل در پوشهٔ دانلود ذخیره شد:\n' + p);
+                    }
+                }).catch(function () { try { original(blob, filename); } catch (e) {} });
+                return true;
+            } catch (e) { return original(blob, filename); }
+        };
+        patched.__tauriPatched = true;
+        window.__jouyaDownloadBlob = patched;
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', patchDownloadFallback);
+    } else {
+        patchDownloadFallback();
+    }
+    setTimeout(patchDownloadFallback, 1500);
 
     // ── قفلِ ابزارهای توسعه‌دهنده و منویِ راست‌کلیک در نسخهٔ منتشرشده ───────────
     //  در بیلدِ release خودِ Tauri کنسول را غیرفعال می‌کند؛ این‌ها لایهٔ دومِ بازدارنده‌اند
