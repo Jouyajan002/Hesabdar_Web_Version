@@ -237,6 +237,107 @@ fn hb_app_version() -> String {
 // ════════════════════════════════════════════════════════════════════════════
 
 #[cfg(target_os = "windows")]
+// ════════════════════════════════════════════════════════════════════════════
+//  مسیرِ اصلی: «پنلِ اشتراکِ ویندوز» به‌صورتِ نیتیو در خودِ Rust
+//  ---------------------------------------------------------------------------
+//  چرا این روش از روشِ PowerShell بهتر و مطمئن‌تر است:
+//  IDataTransferManagerInterop::GetForWindow فقط HWNDی را می‌پذیرد که متعلق به
+//  «همان پراسسِ فراخوان» باشد. در الکترون این شدنی نبود (Node نمی‌توانست WinRT را با
+//  HWNDِ خودش صدا بزند)، برای همین آنجا مجبور بودیم یک پراسسِ PowerShell جدا اجرا کنیم
+//  که پنجرهٔ «لنگر»ِ خودش را بسازد. در Tauri، خودِ Rust مالکِ پنجره است، پس HWNDِ واقعیِ
+//  پنجرهٔ برنامه را مستقیم می‌دهیم — همان چیزی که API انتظار دارد. نه پراسسِ اضافه،
+//  نه پنجرهٔ جعلی، نه wscript، نه فایلِ موقتِ اسکریپت.
+//
+//  همهٔ امضاهای زیر از روی سورسِ واقعیِ windows 0.62.2 بررسی شده‌اند:
+//    Win32::UI::Shell::IDataTransferManagerInterop::{GetForWindow, ShowShareUIForWindow}
+//    DataPackage::SetStorageItems(value, readonly)  ← دو آرگومان
+//    TypedEventHandler::new(|Ref<TSender>, Ref<TResult>| -> Result<()>)  + Send + 'static
+//    IIterable<T>: From<Vec<T::Default>>  و برای اینترفیس‌ها T::Default = Option<T>
+// ════════════════════════════════════════════════════════════════════════════
+#[cfg(target_os = "windows")]
+mod win_share {
+    use std::cell::RefCell;
+    use windows::core::{factory, Interface, HSTRING};
+    use windows::ApplicationModel::DataTransfer::{DataRequestedEventArgs, DataTransferManager};
+    use windows::Foundation::TypedEventHandler;
+    use windows::Storage::{IStorageItem, StorageFile};
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::Shell::IDataTransferManagerInterop;
+    use windows_collections::IIterable;
+
+    // DataTransferManager باید تا لحظه‌ای که کاربر مخاطب را انتخاب می‌کند زنده بماند؛
+    // اگر drop شود، پنل بسته یا فایل تحویل نمی‌شود. این نوع Send نیست و فقط روی نخِ UI
+    // ساخته و استفاده می‌شود، پس thread_local دقیقاً ابزارِ درست است (بدونِ نیاز به Send).
+    thread_local! {
+        static KEEP_ALIVE: RefCell<Option<DataTransferManager>> = RefCell::new(None);
+    }
+
+    // انتظارِ همگام برای IAsyncOperation. عملیاتِ StorageFile روی thread-poolِ سیستم کامل
+    // می‌شود (نه روی نخِ UI)، پس این نظرسنجیِ کوتاه بن‌بست ایجاد نمی‌کند.
+    // AsyncStatus::Started == 0 — با .0 مقایسه می‌شود تا یک import کمتر لازم باشد.
+    fn resolve_storage_file(path: &str) -> windows::core::Result<StorageFile> {
+        let op = StorageFile::GetFileFromPathAsync(&HSTRING::from(path))?;
+        for _ in 0..600 {
+            if op.Status()?.0 != 0 {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        op.GetResults()
+    }
+
+    /// باید روی «نخِ اصلیِ برنامه» صدا زده شود (همان نخی که مالکِ پنجره است).
+    pub fn show_share_panel(hwnd_raw: isize, file_path: String, title: String) -> Result<(), String> {
+        let hwnd = HWND(hwnd_raw as *mut core::ffi::c_void);
+
+        let interop: IDataTransferManagerInterop =
+            factory::<DataTransferManager, IDataTransferManagerInterop>()
+                .map_err(|e| format!("factory: {}", e))?;
+
+        let dtm: DataTransferManager = unsafe { interop.GetForWindow(hwnd) }
+            .map_err(|e| format!("GetForWindow: {}", e))?;
+
+        // کلوژر باید Send + 'static باشد؛ پس فقط String می‌گیرد و خودِ StorageFile را
+        // همان لحظه‌ای که ویندوز داده را می‌خواهد می‌سازد (StorageFile نوعِ Send نیست).
+        let path_for_handler = file_path.clone();
+        let title_for_handler = title;
+        let handler = TypedEventHandler::<DataTransferManager, DataRequestedEventArgs>::new(
+            move |_sender, args| {
+                let args = args.ok()?;
+                let request = args.Request()?;
+                // Deferral: تحویلِ فایل ممکن است چند لحظه طول بکشد؛ تا Complete، بستهٔ داده
+                // برای هدف (واتساپ) باز می‌ماند.
+                let deferral = request.GetDeferral()?;
+                let filled = (|| -> windows::core::Result<()> {
+                    let data = request.Data()?;
+                    data.Properties()?
+                        .SetTitle(&HSTRING::from(title_for_handler.as_str()))?;
+                    let file = resolve_storage_file(&path_for_handler)?;
+                    let item: IStorageItem = file.cast()?;
+                    let items: IIterable<IStorageItem> = vec![Some(item)].into();
+                    data.SetStorageItems(&items, true)?;
+                    Ok(())
+                })();
+                let _ = deferral.Complete();
+                filled
+            },
+        );
+
+        dtm.DataRequested(&handler)
+            .map_err(|e| format!("DataRequested: {}", e))?;
+
+        KEEP_ALIVE.with(|k| {
+            *k.borrow_mut() = Some(dtm);
+        });
+
+        unsafe { interop.ShowShareUIForWindow(hwnd) }
+            .map_err(|e| format!("ShowShareUIForWindow: {}", e))?;
+
+        Ok(())
+    }
+}
+
+#[cfg(target_os = "windows")]
 const SHARE_PS1: &str = include_str!("share_win.ps1");
 
 #[derive(serde::Serialize, Clone)]
@@ -377,10 +478,37 @@ fn share_file_win_blocking(_file_path: String, _title: String) -> ShareResult {
     ShareResult { ok: false, diag: "not-win32".into() }
 }
 
+// ── مسیرِ اصلی: پنلِ اشتراکِ نیتیو، روی نخِ اصلیِ برنامه ──────────────────────────
+//  ShowShareUIForWindow باید روی همان نخی اجرا شود که مالکِ پنجره است، وگرنه پنل
+//  نمایش داده نمی‌شود. پس کار با run_on_main_thread به نخِ اصلی سپرده و نتیجه از راهِ
+//  یک کانال برگردانده می‌شود (با سقفِ زمانی، تا هیچ‌وقت معلق نماند).
+#[cfg(target_os = "windows")]
+fn try_native_share_panel(
+    app: &tauri::AppHandle,
+    hwnd_raw: isize,
+    file_path: &str,
+    title: &str,
+) -> Result<(), String> {
+    use std::sync::mpsc;
+    let (tx, rx) = mpsc::channel::<Result<(), String>>();
+    let p = file_path.to_string();
+    let t = title.to_string();
+    app.run_on_main_thread(move || {
+        let _ = tx.send(win_share::show_share_panel(hwnd_raw, p, t));
+    })
+    .map_err(|e| format!("run_on_main_thread: {}", e))?;
+
+    match rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        Ok(r) => r,
+        Err(e) => Err(format!("main-thread-timeout: {}", e)),
+    }
+}
+
 // دستور به‌صورتِ async اعلام شده و کارِ مسدودکننده در یک نخِ جداگانه انجام می‌شود، تا
-// حلقهٔ ۳۰ ثانیه‌ایِ انتظار هیچ‌وقت رابطِ کاربری را قفل نکند.
+// انتظارها هیچ‌وقت رابطِ کاربری را قفل نکنند.
 #[tauri::command]
 async fn hb_share_file_win(
+    app: tauri::AppHandle,
     window: tauri::WebviewWindow,
     file_path: String,
     title: String,
@@ -396,9 +524,48 @@ async fn hb_share_file_win(
     let _ = window.set_focus();
     std::thread::sleep(std::time::Duration::from_millis(120));
 
-    match tauri::async_runtime::spawn_blocking(move || share_file_win_blocking(file_path, title)).await {
-        Ok(r) => r,
-        Err(e) => ShareResult { ok: false, diag: format!("join-err:{}", e) },
+    // ── تلاشِ اول: پنلِ نیتیو با HWNDِ واقعیِ پنجرهٔ برنامه ──
+    #[cfg(target_os = "windows")]
+    {
+        let hwnd_raw = match window.hwnd() {
+            Ok(h) => h.0 as isize,
+            Err(e) => {
+                return ShareResult { ok: false, diag: format!("hwnd: {}", e) };
+            }
+        };
+        match try_native_share_panel(&app, hwnd_raw, &file_path, &title) {
+            Ok(()) => {
+                return ShareResult { ok: true, diag: "native-share-panel".into() };
+            }
+            Err(native_err) => {
+                // ── تلاشِ دوم: مسیرِ PowerShell/WinRT (همان اسکریپتِ آزموده‌شدهٔ الکترون) ──
+                //  اگر این هم نشد، سمتِ جاوااسکریپت به «کلیپ‌بورد + بازکردنِ واتساپ» می‌رود؛
+                //  پس کاربر هیچ‌وقت با «هیچ اتفاقی نیفتاد» روبه‌رو نمی‌شود.
+                let ps = tauri::async_runtime::spawn_blocking(move || {
+                    share_file_win_blocking(file_path, title)
+                })
+                .await;
+                return match ps {
+                    Ok(mut r) => {
+                        r.diag = format!("native failed → {}\n---- powershell ----\n{}", native_err, r.diag);
+                        r
+                    }
+                    Err(e) => ShareResult {
+                        ok: false,
+                        diag: format!("native failed → {} | join-err: {}", native_err, e),
+                    },
+                };
+            }
+        }
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = &app;   // روی غیرِویندوز استفاده نمی‌شود
+        match tauri::async_runtime::spawn_blocking(move || share_file_win_blocking(file_path, title)).await {
+            Ok(r) => r,
+            Err(e) => ShareResult { ok: false, diag: format!("join-err:{}", e) },
+        }
     }
 }
 
