@@ -22,10 +22,16 @@ serde_json = "1"
 # (windows 0.62.2 و windows-collections 0.3.2)، تا نسخهٔ تکراری ساخته نشود و
 # نوعِ HWND که Tauri برمی‌گرداند دقیقاً همان نوعی باشد که اینجا استفاده می‌شود.
 [target.'cfg(windows)'.dependencies]
+# ⚠ فهرستِ فیچرها «حدسی» نیست: هر نوع و هر متدی که استفاده می‌شود در سورسِ خودِ
+#   windows 0.62.2 بررسی شده و گیتِ #[cfg(feature = …)] آن استخراج شده است.
+#   نکتهٔ غافلگیرکننده: StorageFile پشتِ فیچرِ «Storage_Streams» است، نه «Storage»
+#   (چون IStorageFile به Streams وابسته است) — و DataPackage::SetStorageItems پشتِ
+#   «Storage». نبودنِ Storage_Streams همان خطای «no StorageFile in Storage» را می‌دهد.
 windows = { version = "0.62", features = [
     "Foundation",
     "Foundation_Collections",
     "Storage",
+    "Storage_Streams",
     "ApplicationModel_DataTransfer",
     "Win32_Foundation",
     "Win32_UI_Shell",
