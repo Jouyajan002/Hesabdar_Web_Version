@@ -96,6 +96,11 @@
         return out.replace(/-{2,}/g, '-').replace(/^-|-$/g, '');
     }
     function safePdfName(faName) {
+        // اگر نسخهٔ بهترِ ترجمهٔ آوایی در خودِ برنامه موجود است (همان که نسخهٔ الکترون داشت و
+        // دیکشنریِ واژه‌ها دارد) از آن استفاده کن تا نامِ فایل در هر دو مسیر یکسان و خوانا بماند.
+        try {
+            if (typeof window.__jouyaLatinPdfName === 'function') return window.__jouyaLatinPdfName(faName);
+        } catch (e) {}
         var fn = String(faName || '');
         var pfx = 'Jouya';
         for (var i = 0; i < PFX.length; i++) { if (PFX[i][0].test(fn)) { pfx = PFX[i][1]; break; } }
@@ -184,28 +189,26 @@
 
     // ── نصبِ پل با همان نامِ آشنا ───────────────────────────────────────────────
     //
-    //  ⚠ نکتهٔ مهم دربارهٔ «ارسال به واتساپ»:
-    //  عمداً کلیدِ sharePdfToWhatsApp اینجا قرار داده **نمی‌شود**. دلیلش این است که کدِ
-    //  اورلیِ پیش‌نمایش این شرط را دارد:
-    //        if (window.electronAPI && window.electronAPI.sharePdfToWhatsApp) { ... }
-    //        else { mobileShareFile(); }
-    //  و mobileShareFile همان مسیرِ navigator.share است که در نسخهٔ وب «پنجرهٔ فهرستِ
-    //  برنامه‌ها» (Windows Share) را درست باز می‌کند. WebView2 — موتورِ نمایشِ Tauri روی
-    //  ویندوز — از navigator.share با فایل پشتیبانی می‌کند، پس با نگذاشتنِ این کلید،
-    //  نسخهٔ نصبی دقیقاً همان رفتارِ نسخهٔ وب را می‌گیرد: همان پنل، همان فایلِ پیوست‌شده.
-    //  مسیرِ PowerShell/WinRT به‌عنوان پشتیبان زیرِ نامِ دیگری در دسترس می‌ماند.
+    //  ⚠ «ارسال به واتساپ» در نسخهٔ نصبی — چرا مسیرِ نیتیو و نه navigator.share:
+    //  در WebView2 (موتورِ نمایشِ Tauri روی ویندوز) Web Share API کار نمی‌کند. این یک
+    //  محدودیتِ شناخته‌شده و مستندِ خودِ WebView2 است، نه چیزی که با تنظیمات حل شود:
+    //  MicrosoftEdge/WebView2Feedback#1038 — «در مرورگر کار می‌کند ولی در WebView2 نه»، و
+    //  حتی جایی که navigator.share وجود دارد، از روی رویدادِ کلیکِ کاربر باز نمی‌شود.
+    //  نتیجه: اگر این کلید را نگذاریم، اورلی به navigator.share می‌رود و «هیچ اتفاقی
+    //  نمی‌افتد». پس کلید سرِ جای خودش است و اورلی به مسیرِ نیتیو می‌رود:
+    //        پنلِ اشتراکِ ویندوز (WinRT)  →  اگر نشد: کلیپ‌بورد + بازکردنِ واتساپ
+    //  هر دو حالت پیامِ روشن به کاربر می‌دهند، پس هیچ‌وقت بی‌صدا نمی‌ماند.
     window.electronAPI = {
         getDownloadsPath: getDownloadsPath,
         openPath: openPath,
         openFile: openFile,
         onRequestAutoBackup: onRequestAutoBackup,
+        sharePdfToWhatsApp: sharePdfToWhatsApp,
         // افزودنی‌های Tauri (اختیاری، برنامه به آن‌ها وابسته نیست)
         saveToDownloads: saveToDownloads,
         revealInDir: function (p) { return call('hb_reveal_in_dir', { path: resolveDownload(p) }); },
         openExternal: function (u) { return call('hb_open_uri', { uri: String(u || '') }); },
         getAppVersion: function () { return call('hb_app_version'); },
-        // مسیرِ پشتیبانِ «پنلِ اشتراکِ ویندوز» از راهِ PowerShell/WinRT — با نامی که اورلی
-        // آن را برنمی‌دارد، تا مسیرِ اصلی همان navigator.share بماند.
         sharePdfViaWindowsPanel: sharePdfToWhatsApp,
         __runtime: 'tauri'
     };
