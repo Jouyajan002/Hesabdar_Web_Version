@@ -319,28 +319,44 @@ fn share_file_win_blocking(file_path: String, title: String) -> ShareResult {
         let b = vbs_path.clone();
         let c = log_path.clone();
         thread::spawn(move || {
-            thread::sleep(Duration::from_secs(15));
+            // بیش از سقفِ ۳۰ ثانیه‌ایِ حلقهٔ انتظار، تا پاک‌سازی با خواندنِ مارکرها تداخل نکند.
+            thread::sleep(Duration::from_secs(40));
             let _ = fs::remove_file(a);
             let _ = fs::remove_file(b);
             let _ = fs::remove_file(c);
         });
     }
 
+    // نگه‌داشتنِ یک کپیِ خوانا از لاگِ مرحله‌ای کنارِ خودِ فایلِ PDF.
+    // چرا: اگر پنلِ اشتراک باز نشد، مارکرهای STEP1_OK … STEP7_OK / SHARE_ERR دقیقاً می‌گویند
+    // کدام مرحله شکست خورده است. فایلِ موقتِ لاگ پاک می‌شود، ولی این کپی می‌ماند و در همان
+    // پوشه‌ای است که به کاربر نشان داده می‌شود.
+    let keep_log = Path::new(&file_path)
+        .parent()
+        .map(|p| p.join("share-log.txt"))
+        .unwrap_or_else(|| tmp.join("hesabdar-share-log.txt"));
+    let finish = |ok: bool, content: &str, note: &str| -> ShareResult {
+        let body = if note.is_empty() {
+            content.to_string()
+        } else {
+            format!("{}\n{}", note, content)
+        };
+        let _ = fs::write(&keep_log, body.as_bytes());
+        ShareResult { ok, diag: trim_diag(&body) }
+    };
+
     // خواندنِ مارکرها از فایلِ لاگ — به‌محضِ SHARE_OK موفق، SHARE_ERR ناموفق، و ۳۰ ثانیه سقف.
     let started = Instant::now();
     loop {
         let content = fs::read_to_string(&log_path).unwrap_or_default();
         if content.contains("SHARE_OK") {
-            return ShareResult { ok: true, diag: trim_diag(&content) };
+            return finish(true, &content, "");
         }
         if content.contains("SHARE_ERR") {
-            return ShareResult { ok: false, diag: trim_diag(&content) };
+            return finish(false, &content, "");
         }
         if started.elapsed() >= Duration::from_secs(30) {
-            return ShareResult {
-                ok: false,
-                diag: format!("timeout-no-share\n{}", trim_diag(&content)),
-            };
+            return finish(false, &content, "timeout-no-share");
         }
         thread::sleep(Duration::from_millis(300));
     }
@@ -364,7 +380,22 @@ fn share_file_win_blocking(_file_path: String, _title: String) -> ShareResult {
 // دستور به‌صورتِ async اعلام شده و کارِ مسدودکننده در یک نخِ جداگانه انجام می‌شود، تا
 // حلقهٔ ۳۰ ثانیه‌ایِ انتظار هیچ‌وقت رابطِ کاربری را قفل نکند.
 #[tauri::command]
-async fn hb_share_file_win(file_path: String, title: String) -> ShareResult {
+async fn hb_share_file_win(
+    window: tauri::WebviewWindow,
+    file_path: String,
+    title: String,
+) -> ShareResult {
+    // ── پیش‌شرطی که در نسخهٔ الکترون بود و در نسخهٔ اول Tauri جا افتاده بود ──
+    //  پنلِ اشتراکِ ویندوز فقط برای پنجره‌ای که «فورگراند» است نمایش داده می‌شود. اسکریپت
+    //  خودش پنجرهٔ لنگر را فورگراند می‌کند، ولی این کار با AttachThreadInput به نخِ
+    //  «پنجرهٔ فورگراندِ فعلی» چنگ می‌زند؛ اگر در آن لحظه پنجرهٔ برنامه فورگراند نباشد،
+    //  SetForegroundWindow بی‌صدا شکست می‌خورد و پنل دیده نمی‌شود.
+    //  الکترون پیش از فراخوانی این کار را می‌کرد: shareWin.show(); shareWin.focus();
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+    std::thread::sleep(std::time::Duration::from_millis(120));
+
     match tauri::async_runtime::spawn_blocking(move || share_file_win_blocking(file_path, title)).await {
         Ok(r) => r,
         Err(e) => ShareResult { ok: false, diag: format!("join-err:{}", e) },
