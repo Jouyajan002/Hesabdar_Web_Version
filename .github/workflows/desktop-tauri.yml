@@ -112,6 +112,7 @@ jobs:
           if ($missing.Count -gt 0) { Write-Host "موجود نبود (رد شد): $($missing -join ', ')" }
 
       - name: ساخت نصب‌کننده
+        working-directory: ./src-tauri
         run: cargo tauri build
 
       - name: فهرستِ خروجی‌ها
