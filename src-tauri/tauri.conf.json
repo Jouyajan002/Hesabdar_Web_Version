@@ -5,7 +5,7 @@
   "version": "1.0.7",
   "identifier": "com.hesabdar.desktop",
   "build": {
-    "frontendDist": "../",
+"frontendDist": "./dist-web",
     "beforeDevCommand": "",
     "beforeBuildCommand": ""
   },
