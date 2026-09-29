@@ -6,8 +6,8 @@
   "identifier": "com.hesabdar.desktop",
   "build": {
     "frontendDist": "dist-web",
-    "beforeDevCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File prepare-dist.ps1",
-    "beforeBuildCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File prepare-dist.ps1"
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
   },
   "app": {
     "withGlobalTauri": true,
