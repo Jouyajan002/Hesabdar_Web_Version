@@ -5,9 +5,9 @@
   "version": "1.0.7",
   "identifier": "com.hesabdar.desktop",
   "build": {
-"frontendDist": "./dist-web",
-    "beforeDevCommand": "",
-    "beforeBuildCommand": ""
+    "frontendDist": "dist-web",
+    "beforeDevCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File prepare-dist.ps1",
+    "beforeBuildCommand": "powershell -NoProfile -ExecutionPolicy Bypass -File prepare-dist.ps1"
   },
   "app": {
     "withGlobalTauri": true,
@@ -36,7 +36,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi", "deb", "appimage", "dmg"],
+    "targets": ["nsis", "msi"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
