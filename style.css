@@ -8993,3 +8993,86 @@ body.dark-mode .rp-dl-btn:hover i { color: #ffffff !important; }
         z-index: 950 !important;
     }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   (۱) هدرِ بخش «گزارش» ثابت بماند — دقیقاً مثلِ بخش‌های اشخاص/اجناس/امورمالی.
+   علتِ کار نکردنِ sticky تا امروز: هدر داخلِ یک wrapper (.bill-layout) بود که
+   ارتفاعش فقط به اندازهٔ خودِ هدر است، و دامنهٔ چسبندگیِ sticky به کادرِ والد محدود
+   می‌شود؛ پس فاصلهٔ لغزشِ ممکن صفر بود. با display:contents آن wrapper از چیدمان
+   حذف می‌شود و هدر فرزندِ مستقیمِ section#reports می‌گردد — همان ساختاری که در
+   بخش اشخاص هست. فقط به #reports محدود است، پس ۲۲ بخشِ دیگری که .bill-header-bar
+   دارند دست‌نخورده می‌مانند.
+   ══════════════════════════════════════════════════════════════════════════ */
+#reports > .bill-layout { display: contents !important; }
+#reports > .bill-layout > .bill-header-bar {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 30 !important;
+    margin-bottom: 0 !important;   /* حذفِ نوارِ شفافِ زیرِ هدر هنگام چسبیدن */
+}
+#reports > .rp-filterbar { margin-top: 16px; }   /* همان فاصلهٔ قبلی، حالا در جای درست */
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   (۲) رنگِ آیکنِ دکمه‌های «لیست‌های سریع» داشبورد — هم موبایل، هم دسکتاپ، هم وب.
+   پیش از این آیکنِ همهٔ دکمه‌ها رنگِ متنِ دکمه (#1e293b) را به ارث می‌برد و همه
+   خاکستری/تیره دیده می‌شدند؛ تنها تفاوت، نوارِ باریکِ رنگیِ کنارِ دکمه بود. حالا هر
+   آیکن همان رنگِ نوارِ کنارِ دکمهٔ خودش را می‌گیرد. فقط رنگ است — اندازه، چیدمان،
+   پس‌زمینه و رفتارِ دکمه‌ها هیچ تغییری نمی‌کند.
+   ══════════════════════════════════════════════════════════════════════════ */
+.btn-quick-list.btn-ql-sales           { --ql-accent: #1e3a5f; }
+.btn-quick-list.btn-ql-purchase        { --ql-accent: #2563eb; }
+.btn-quick-list.btn-ql-receipt         { --ql-accent: #16a34a; }
+.btn-quick-list.btn-ql-payment         { --ql-accent: #ea8a1e; }
+.btn-quick-list.btn-ql-sales-return    { --ql-accent: #dc2626; }
+.btn-quick-list.btn-ql-purchase-return { --ql-accent: #0891b2; }
+.btn-quick-list.btn-ql-proforma        { --ql-accent: #7c3aed; }
+.btn-quick-list.btn-ql-report          { --ql-accent: #d97706; }
+.btn-quick-list.btn-ql-changelog       { --ql-accent: #64748b; }
+.btn-quick-list.btn-ql-services        { --ql-accent: #0f766e; }
+.btn-quick-list.btn-ql-delivery        { --ql-accent: #be185d; }
+
+.dash-nav-col .btn-quick-list i,
+#dashboard .btn-quick-list i,
+.dashboard-quick-lists .btn-quick-list i { color: var(--ql-accent, #1e3a5f) !important; }
+
+/* نوارِ کنارِ دکمه هم از همان متغیر بخواند تا همیشه با آیکن هم‌رنگ بماند */
+.dash-nav-col .btn-quick-list,
+#dashboard .btn-quick-list { border-right-color: var(--ql-accent, #1e3a5f) !important; }
+
+/* دارک‌مود: همان رنگ‌ها اما روشن‌تر تا روی زمینهٔ تیره خوانا بمانند */
+body.dark-mode .btn-quick-list.btn-ql-sales           { --ql-accent: #93b4de; }
+body.dark-mode .btn-quick-list.btn-ql-purchase        { --ql-accent: #60a5fa; }
+body.dark-mode .btn-quick-list.btn-ql-receipt         { --ql-accent: #34d399; }
+body.dark-mode .btn-quick-list.btn-ql-payment         { --ql-accent: #fbbf24; }
+body.dark-mode .btn-quick-list.btn-ql-sales-return    { --ql-accent: #f87171; }
+body.dark-mode .btn-quick-list.btn-ql-purchase-return { --ql-accent: #22d3ee; }
+body.dark-mode .btn-quick-list.btn-ql-proforma        { --ql-accent: #c4b5fd; }
+body.dark-mode .btn-quick-list.btn-ql-report          { --ql-accent: #fcd34d; }
+body.dark-mode .btn-quick-list.btn-ql-changelog       { --ql-accent: #cbd5e1; }
+body.dark-mode .btn-quick-list.btn-ql-services        { --ql-accent: #5eead4; }
+body.dark-mode .btn-quick-list.btn-ql-delivery        { --ql-accent: #f9a8d4; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   پیش‌نمایشِ درون‌برنامه‌ای روی صفحه‌های عریض (وبِ دسکتاپ و نسخهٔ نصبی)
+   ---------------------------------------------------------------------------
+   اورلیِ پیش‌نمایش (jouya-pp-*) در mobile-responsive.css و خارج از @media تعریف شده و
+   از قبل روی دسکتاپ هم درست استایل می‌گیرد. حالا که پیش‌نمایش در نسخهٔ وبِ دسکتاپ و
+   نسخهٔ نصبی هم به‌جای پاپ‌آپ در همین اورلی باز می‌شود، فقط عرضِ ناحیهٔ محتوا محدود و
+   وسط‌چین می‌شود تا یک بل روی نمایشگرِ عریض کشیده و نامتناسب نشود.
+   نکته: عرض روی «خودِ ناحیهٔ اسکرول» (framewrap) محدود می‌شود، نه روی iframe؛ چون تابعِ
+   جاسازیِ محتوا مقیاس را از clientWidth همان ناحیه می‌خواند و اگر این دو ناهم‌خوان شوند
+   محتوا بریده می‌شود. فقط اندازه/فاصله است؛ هیچ رفتاری تغییر نمی‌کند.
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (min-width: 769px) {
+    .jouya-pp-bar { padding: 10px 18px; }
+    .jouya-pp-title { font-size: 15px; }
+    .jouya-pp-framewrap {
+        width: 100%;
+        max-width: 1000px;
+        margin: 0 auto;
+        padding: 18px;
+    }
+    .jouya-pp-frame { border-radius: 12px; }
+    .jouya-pp-sharemenu { top: 66px; }
+}

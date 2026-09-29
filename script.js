@@ -2389,6 +2389,10 @@ function showSection(sectionId) {
     // اسکرولِ مشترک دارند، اسکرولِ یک بخش روی بخشِ بعدی (مثلاً داشبورد) باقی می‌ماند.
     // این ریست باعث می‌شود هر بخش از بالا و مستقل باز شود. فقط رفتارِ ناوبری؛ هیچ
     // منطق/محاسبه‌ای تغییر نمی‌کند.
+    // ⬆ به‌جای ریستِ بی‌قیدوشرط، موقعیتِ اسکرولِ بخشی که داریم ترکش می‌کنیم ذخیره می‌شود و
+    //   در انتهای همین تابع، موقعیتِ ذخیره‌شدهٔ بخشِ مقصد بازگردانی می‌شود (اگر داشته باشد،
+    //   وگرنه از بالا). این قاعده برای همهٔ بخش‌های اسکرول‌شونده یکسان است.
+    try { _jqScrollSave(); } catch (_e) {}
     try {
         window.scrollTo(0, 0);
         var _scArea = document.querySelector('.content-area'); if (_scArea) _scArea.scrollTop = 0;
@@ -2930,7 +2934,60 @@ const storeInfo = document.querySelector('.store-info-header');
         && sectionId === _activePickerState.sectionId) {
         setTimeout(_applyPickerBackButton, 0);
     }
+    // بازگردانیِ موقعیتِ اسکرولِ بخشِ مقصد (پس از ساخته‌شدنِ محتوای بخش)
+    try { _jqScrollRestore(sectionId); } catch (_e) {}
 }
+
+// ══════════════════════════════════════════════════════════════════════════
+// حافظهٔ موقعیتِ اسکرولِ بخش‌ها — یک قاعدهٔ واحد برای همهٔ بخش‌های اسکرول‌شونده.
+// وقتی کاربر از یک لیست (مثلاً «لیست اشخاص» در ردیفِ بیست‌ویکم) به نمایی دیگر می‌رود و
+// برمی‌گردد، به همان موقعیتِ قبلی بازمی‌گردد. فقط رفتارِ اسکرول است؛ هیچ داده/منطقی
+// دست نمی‌خورد. اسکرولِ واقعیِ برنامه روی خودِ سند است، و بخشِ «امور مالی» استثناست
+// (اسکرولش داخلِ .financial-content-wrapper است) که همان هم پوشش داده می‌شود.
+var _jqScrollMem = {};
+function _jqScrollY() {
+    try { return window.scrollY || window.pageYOffset || (document.documentElement && document.documentElement.scrollTop) || 0; } catch (e) { return 0; }
+}
+function _jqScrollSave() {
+    var cur = document.querySelector('.section.active');
+    if (!cur || !cur.id) return;
+    var inner = 0;
+    try { var w = cur.querySelector('.financial-content-wrapper'); if (w) inner = w.scrollTop || 0; } catch (e) {}
+    _jqScrollMem[cur.id] = { y: _jqScrollY(), inner: inner };
+}
+function _jqScrollRestore(sectionId) {
+    var st = _jqScrollMem[sectionId];
+    if (!st) return;                       // بخشِ تازه → از بالا باز شود (رفتارِ قبلی)
+    var apply = function () {
+        try {
+            if (st.y > 0) {
+                var max = 0;
+                try {
+                    var sc = document.scrollingElement || document.documentElement;
+                    max = Math.max(0, (sc.scrollHeight || 0) - (sc.clientHeight || 0));
+                } catch (e) { max = st.y; }
+                window.scrollTo(0, Math.min(st.y, max || st.y));
+            }
+            if (st.inner > 0) {
+                var sec = document.getElementById(sectionId);
+                var w = sec ? sec.querySelector('.financial-content-wrapper') : null;
+                if (w) w.scrollTop = st.inner;
+            }
+        } catch (e) {}
+    };
+    // محتوای بعضی بخش‌ها با تأخیر ساخته می‌شود؛ چند نوبتِ کوتاه تا ارتفاعِ نهایی آماده شود.
+    apply();
+    try { requestAnimationFrame(apply); } catch (e) {}
+    setTimeout(apply, 60);
+    setTimeout(apply, 220);
+}
+if (typeof window !== 'undefined') {
+    window._jqScrollSave = _jqScrollSave;
+    window._jqScrollRestore = _jqScrollRestore;
+    // پاک‌کردنِ حافظهٔ اسکرولِ یک بخش (اگر جایی لازم شد بخش از بالا باز شود)
+    window._jqScrollForget = function (id) { if (id) delete _jqScrollMem[id]; else _jqScrollMem = {}; };
+}
+
 // ================ تنظیم رویدادهای فرم‌ها (Event Listeners) ================
 function setupEventListeners() {
     // 1. فرم ثبت شخص
@@ -2964,7 +3021,7 @@ if (employeeForm) {
     if (salesForm) {
         salesForm.onsubmit = function(e) {
             e.preventDefault();
-            saveSale();
+            _jqfConfirmSave('sale', saveSale);
         };
     }
     
@@ -2973,7 +3030,7 @@ if (employeeForm) {
     if (purchaseForm) {
         purchaseForm.onsubmit = function(e) {
             e.preventDefault();
-            savePurchase();
+            _jqfConfirmSave('purchase', savePurchase);
         };
     }
     
@@ -2982,7 +3039,7 @@ if (employeeForm) {
     if (receiptForm) {
         receiptForm.onsubmit = function(e) {
             e.preventDefault();
-            saveReceipt();
+            _jqfConfirmSave('receipt', saveReceipt);
         };
     }
 
@@ -2991,7 +3048,7 @@ if (employeeForm) {
     if (paymentForm) {
         paymentForm.onsubmit = function(e) {
             e.preventDefault();
-            savePayment();
+            _jqfConfirmSave('payment', savePayment);
         };
     }
     
@@ -10334,16 +10391,79 @@ function editCashbox(id) {
 }
 
 function deleteCashbox(id) {
-    showConfirm('حذف حساب', 'آیا از حذف این حساب اطمینان دارید؟ تمام تراکنش‌ها و مصارف مرتبط با این حساب نیز حذف می‌شوند.', function() {
+    // تاییدِ واقعی با همان دیالوگِ استایل‌دارِ برنامه (showConfirm عامدانه بی‌اثر است و
+    // بدونِ پرسش اجرا می‌کند؛ پس اینجا نقطه‌ای جایگزین می‌شود تا بقیهٔ مسیرها دست‌نخورده بمانند).
+    var _cb = null;
+    try { _cb = (db.getCashboxes() || []).find(function (c) { return c.id == id; }) || null; } catch (e) { _cb = null; }
+    var _nm = _cb ? (((_cb.type ? _cb.type + ' ' : '') + (_cb.name || '')).trim()) : '';
+    var _ask = 'آیا از حذف حساب «' + (_nm || '—') + '» اطمینان دارید؟\nتمام تراکنش‌ها و مصارف مرتبط با این حساب نیز حذف می‌شوند.\n\nاین حذف در «آخرین تغییرات» ثبت می‌شود و قابل برگشت است.';
+    var _run = function () {
+        // ── عکسِ کاملِ پیش از حذف، برای «برگشت از تغییر» ──
+        // db.deleteCashbox حذفِ آبشاری انجام می‌دهد (تراکنش‌ها و مصارف پاک می‌شوند)، پس فقط
+        // شناسهٔ حساب برای بازگردانی کافی نیست و همه‌چیز از قبل برداشته می‌شود.
+        var snap = null;
+        try {
+            var _txs = (db.getTransactions() || []).filter(function (t) { return t && t.cashboxId == id; });
+            var _exps = (db.getExpenses() || []).filter(function (e) { return e && e.cashboxId == id; });
+            var _cbLogs = [];
+            try {
+                var _allLogs = JSON.parse(localStorage.getItem('cashboxTransactions') || '[]');
+                if (Array.isArray(_allLogs)) _cbLogs = _allLogs.filter(function (l) { return l && l.cashboxId == id; });
+            } catch (e) {}
+            var _wasDefault = false;
+            try { var _st = db.getSettings ? (db.getSettings() || {}) : {}; _wasDefault = (_st.defaultCashboxId != null && _st.defaultCashboxId == id); } catch (e) {}
+            // شکلِ snapshot: خودِ حساب + آرایه‌های وابسته (فیلدهای name/currency برای نمایشِ ردیفِ تاریخچه)
+            snap = JSON.parse(JSON.stringify(_cb || { id: id, name: '' }));
+            snap.__kind = 'cashbox';
+            snap.__transactions = JSON.parse(JSON.stringify(_txs));
+            snap.__expenses = JSON.parse(JSON.stringify(_exps));
+            snap.__cashboxLogs = JSON.parse(JSON.stringify(_cbLogs));
+            snap.__wasDefault = _wasDefault;
+        } catch (e) { snap = null; }
+
         const result = db.deleteCashbox(id);
         if (result.success) {
-            showMessage('موفقیت', 'حساب با موفقیت حذف شد.');
-            loadCashboxes();
+            // ثبت در «آخرین تغییرات» (پس از موفقیتِ حذف، تا ردیفِ اشتباه ثبت نشود)
+            try {
+                if (snap && typeof addChangelog === 'function') {
+                    addChangelog('حذف', 'صندوق', snap,
+                        'حذف حساب: ' + (_nm || '') +
+                        ' — ' + ((snap.__transactions || []).length) + ' معامله و ' + ((snap.__expenses || []).length) + ' مصرف مرتبط');
+                }
+            } catch (e) {}
+            // پاک‌سازیِ لاگ‌های داخلیِ همان حساب و پیش‌فرضِ آویزان (تا داده یتیم نماند)
+            try {
+                var _lg = JSON.parse(localStorage.getItem('cashboxTransactions') || '[]');
+                if (Array.isArray(_lg)) localStorage.setItem('cashboxTransactions', JSON.stringify(_lg.filter(function (l) { return !(l && l.cashboxId == id); })));
+            } catch (e) {}
+            try {
+                var _s2 = db.getSettings ? (db.getSettings() || {}) : {};
+                if (_s2.defaultCashboxId != null && _s2.defaultCashboxId == id && db.saveSettings) { _s2.defaultCashboxId = null; db.saveSettings(_s2); }
+            } catch (e) {}
+            _jqRefreshAfterCashboxChange();
+            showMessage('موفقیت', 'حساب حذف شد. در صورت نیاز می‌توانید از «آخرین تغییرات» آن را برگردانید.');
         } else {
             showMessage('خطا', result.error || 'حذف حساب با خطا مواجه شد.');
         }
-    });
+    };
+    if (typeof showStyledConfirm === 'function') showStyledConfirm('حذف حساب', _ask, _run);
+    else if (window.confirm(_ask.replace(/\n/g, ' '))) _run();
 }
+
+// رفرشِ لحظه‌ایِ همهٔ نماهای وابسته به حساب‌ها (پس از حذف یا بازگردانیِ یک حساب)
+function _jqRefreshAfterCashboxChange() {
+    try { if (typeof db !== 'undefined' && db.migrateCashboxBalancesModel) db.migrateCashboxBalancesModel(); } catch (e) {}
+    try { if (typeof rebuildAllDerivedData === 'function') rebuildAllDerivedData(); } catch (e) {}
+    ['loadCashboxes', 'loadCashboxesSummary', 'loadDashboard', 'loadChangelogList',
+     'loadSalesList', 'loadPurchasesList', 'loadReceiptsList', 'loadPaymentsList',
+     'loadExpensesList', 'loadTransactionsList', 'loadPersonsList'].forEach(function (fn) {
+        try { if (typeof window[fn] === 'function') window[fn](); } catch (e) {}
+    });
+    try { if (typeof updateDashboardCards === 'function') updateDashboardCards(); } catch (e) {}
+    try { if (typeof window._rpRerunLast === 'function') window._rpRerunLast(); } catch (e) {}
+    try { if (typeof window._rpInvalidateCashboxCache === 'function') window._rpInvalidateCashboxCache(); } catch (e) {}
+}
+if (typeof window !== 'undefined') window._jqRefreshAfterCashboxChange = _jqRefreshAfterCashboxChange;
 
 // توابع تنظیمات
 function loadSettings() {
@@ -11067,13 +11187,33 @@ if (typeof window !== 'undefined') {
 // چرا؟ در پنجرهٔ جدا، دکمهٔ واتساپ به window.opener برمی‌گشت و navigator.share در پنجرهٔ
 // اصلی «فعال‌سازیِ لمسِ کاربر» نداشت؛ برای همین شیت اشتراک باز نمی‌شد. اورلی، اشتراکِ فایل را
 // در همان صفحه و همان لمس انجام می‌دهد (اندروید و iOS یکسان). true = مدیریت شد.
-function __jouyaMaybeMobilePreview(rawHtml, titleName) {
-    var touch = false;
+// ── تصمیمِ واحد: پیش‌نمایش در «اورلیِ درون‌برنامه» یا در «پنجرهٔ جدا»؟ ─────────────
+// چرا اورلی: پنجرهٔ جدا در نسخهٔ وب یک پاپ‌آپِ واقعیِ مرورگر است و مرورگر خودش نشانیِ
+// مبدأ (آدرسِ میزبان) را لحظه‌ای بالای پنجره نشان می‌دهد؛ در نسخهٔ نصبیِ Tauri هم
+// window.open یا کار نمی‌کند یا پنجرهٔ اضافه می‌سازد. اورلی همان محتوا را در خودِ برنامه
+// باز می‌کند — هیچ نوارِ آدرسی، هیچ پاپ‌آپی.
+//   ▸ Tauri (نصبی)      → اورلی
+//   ▸ وبِ موبایل و دسکتاپ → اورلی
+//   ▸ الکترون            → دقیقاً مثلِ قبل، پنجرهٔ جدا (جریانِ «پنلِ اشتراکِ ویندوز» به
+//                          window.opener وابسته است و دست نمی‌خورد)
+// منطقِ چاپ و اشتراک‌گذاری هیچ تغییری نمی‌کند؛ فقط ظرفِ نمایش عوض می‌شود.
+function __jouyaUseInAppPreview() {
     try {
-        touch = ((window.innerWidth || document.documentElement.clientWidth || 0) <= 768) ||
-                !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
-    } catch (e) { touch = false; }
-    if (!touch || typeof __ppOpenMobileOverlay !== 'function') return false;
+        if (typeof __ppOpenMobileOverlay !== 'function') return false;
+        if (window.__JOUYA_RUNTIME === 'tauri') return true;
+        var proto = (location && location.protocol) || '';
+        var isElectron = !!window.electronAPI || /electron/i.test(navigator.userAgent || '') || proto === 'file:';
+        if (isElectron) return false;
+        if (proto === 'http:' || proto === 'https:') return true;
+        // محیط‌های دیگر → همان قاعدهٔ قبلیِ «لمسی/باریک»
+        return ((window.innerWidth || document.documentElement.clientWidth || 0) <= 768) ||
+               !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
+    } catch (e) { return false; }
+}
+if (typeof window !== 'undefined') window.__jouyaUseInAppPreview = __jouyaUseInAppPreview;
+
+function __jouyaMaybeMobilePreview(rawHtml, titleName) {
+    if (!__jouyaUseInAppPreview()) return false;
     var bh = '';
     try { bh = (location && location.href) ? location.href.replace(/[?#].*$/, '').replace(/[^\/]*$/, '') : ''; } catch (e) { bh = ''; }
     var ah = (bh ? ('<base href="' + bh + '">') : '')
@@ -11195,17 +11335,13 @@ function __openPrintPreview(rawHtml, opts) {
         out = out + bar + scr;
     }
 
-    // ── محیطِ لمسی/موبایل: پیش‌نمایشِ درون‌برنامه‌ای (iframe) به‌جای پنجرهٔ جدید ──
+    // ── پیش‌نمایشِ درون‌برنامه‌ای (iframe) به‌جای پنجرهٔ جدید ──
     // در WebView/APK (و صفحاتِ باریک) window.open اغلب کار نمی‌کند و دکمهٔ برگشتِ
-    // سخت‌افزاری پنجرهٔ جدید را نمی‌بندد؛ پس اینجا پیش‌نمایش داخلِ خودِ برنامه در یک
-    // اورلی نمایش داده می‌شود که «زوم‌اوت»، «برگشت»، «چاپ» و «اشتراک‌گذاری»‌اش کار می‌کند.
-    // دسکتاپ (بدونِ تغییر) همان مسیرِ window.open را می‌رود.
-    var __ppTouch = false;
-    try {
-        __ppTouch = ((window.innerWidth || document.documentElement.clientWidth || 0) <= 768) ||
-                    !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
-    } catch (e) { __ppTouch = false; }
-    if (__ppTouch && typeof __ppOpenMobileOverlay === 'function') {
+    // سخت‌افزاری پنجرهٔ جدید را نمی‌بندد؛ در نسخهٔ وبِ دسکتاپ هم پاپ‌آپ، نشانیِ میزبان را
+    // لحظه‌ای نشان می‌دهد؛ و در نسخهٔ نصبیِ Tauri پنجرهٔ جدا اصلاً مطلوب نیست. پس پیش‌نمایش
+    // داخلِ خودِ برنامه در یک اورلی نمایش داده می‌شود که «زوم‌اوت»، «برگشت»، «چاپ» و
+    // «اشتراک‌گذاری»‌اش همان‌طور کار می‌کند. الکترون بدونِ تغییر همان مسیرِ window.open را می‌رود.
+    if (__jouyaUseInAppPreview()) {
         try {
             return __ppOpenMobileOverlay(rawHtml, assetsHead, css, {
                 title: title, pdfName: pdfName, shareText: shareText
@@ -13868,7 +14004,36 @@ function undoChange(changeId) {
 
         if (log.action === 'حذف') {
             // بازگردانی آیتم حذف شده
-            if (log.type === 'مصرف') {
+            if (log.type === 'صندوق' || data.__kind === 'cashbox') {
+                // ── بازگردانیِ کاملِ یک حسابِ حذف‌شده: خودِ حساب + همهٔ معاملات، مصارف و
+                //    لاگ‌های داخلیِ آن، از روی snapshotی که هنگام حذف گرفته شده است.
+                //    درج بر اساسِ id انجام می‌شود تا رکوردِ تکراری ساخته نشود.
+                var _mergeById = function (key, arr) {
+                    if (!Array.isArray(arr) || !arr.length) return;
+                    var cur = [];
+                    try { cur = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { cur = []; }
+                    if (!Array.isArray(cur)) cur = [];
+                    var have = {};
+                    cur.forEach(function (o) { if (o && o.id != null) have[String(o.id)] = true; });
+                    arr.forEach(function (o) { if (o && (o.id == null || !have[String(o.id)])) cur.push(o); });
+                    localStorage.setItem(key, JSON.stringify(cur));
+                };
+                // ۱) خودِ حساب (با همان id و همان balances)
+                var _cbClean = {};
+                Object.keys(data).forEach(function (k) { if (k.indexOf('__') !== 0) _cbClean[k] = data[k]; });
+                _mergeById('cashboxes', [_cbClean]);
+                // ۲) داده‌های وابسته
+                _mergeById('transactions', data.__transactions || []);
+                _mergeById('expenses', data.__expenses || []);
+                _mergeById('cashboxTransactions', data.__cashboxLogs || []);
+                // ۳) پیش‌فرض بودن (اگر پیش‌فرض بود و حالا پیش‌فرضی نیست)
+                try {
+                    if (data.__wasDefault && db.getSettings && db.saveSettings) {
+                        var _sx = db.getSettings() || {};
+                        if (_sx.defaultCashboxId == null) { _sx.defaultCashboxId = _cbClean.id; db.saveSettings(_sx); }
+                    }
+                } catch (e) {}
+            } else if (log.type === 'مصرف') {
                 var expenses = db.getExpenses();
                 expenses.push(data);
                 localStorage.setItem('expenses', JSON.stringify(expenses));
@@ -13948,7 +14113,11 @@ function undoChange(changeId) {
         if (typeof loadDashboard === 'function') loadDashboard();
         if (typeof loadChangelogList === 'function') loadChangelogList();
         // رفرش لیست مرتبط
-        if (data.type === 'فروش' && typeof loadSalesList === 'function') loadSalesList();
+        if (log.type === 'صندوق' || data.__kind === 'cashbox') {
+            // بازگردانیِ حساب: همهٔ نماهای وابسته لحظه‌ای آپدیت می‌شوند
+            if (typeof _jqRefreshAfterCashboxChange === 'function') _jqRefreshAfterCashboxChange();
+        }
+        else if (data.type === 'فروش' && typeof loadSalesList === 'function') loadSalesList();
         else if (data.type === 'خرید' && typeof loadPurchasesList === 'function') loadPurchasesList();
         else if (data.type === 'دریافت' && typeof loadReceiptsList === 'function') loadReceiptsList();
         else if (data.type === 'پرداخت' && typeof loadPaymentsList === 'function') loadPaymentsList();
@@ -15068,6 +15237,9 @@ if (typeof window !== 'undefined') window._rpPickCurOne = _rpPickCurOne;
 // خروجیِ اکسلِ لحظه‌ایِ گزارشِ اشخاص — ساختارِ دقیقِ قالب‌های Word، همهٔ ارزهای موجود در داده
 function _rpBuildReportAOA(kind) {
     try {
+        // کشِ حساب‌ها در هر بار ساختِ گزارش تازه‌سازی می‌شود تا نام/نوعیتِ تغییریافته دیده شود.
+        try { if (typeof window !== 'undefined' && window._rpInvalidateCashboxCache) window._rpInvalidateCashboxCache(); } catch (e) {}
+        try { if (typeof window !== 'undefined' && window._rpInvalidatePersonCache) window._rpInvalidatePersonCache(); } catch (e) {}
         var dr = (typeof getNewReportDateRange === 'function') ? getNewReportDateRange() : { fromDate: '', toDate: '' };
         var allPersonsChk = document.getElementById('rp-all-persons');
         var isAll = !allPersonsChk || allPersonsChk.checked;
@@ -15088,7 +15260,15 @@ function _rpBuildReportAOA(kind) {
         var pc = agg.perCur;
         var R = function (v) { return (typeof _srRound === 'function') ? _srRound(v) : (Math.round((parseFloat(v) || 0) * 100) / 100); };
         function inRange(tx) { var d = tx.date || tx.createdAt || ''; return isInNewReportDateRange(d, dr.fromDate, dr.toDate); }
-        function belongs(tx, pid) { return (tx.personId == pid || tx.customerId == pid || tx.supplierId == pid); }
+        function belongs(tx, pid) {
+            // pid می‌تواند یک شناسه یا آرایه‌ای از شناسه‌ها باشد (انتخابِ چند شخص). پیش از این
+            // مقایسهٔ == با آرایه انجام می‌شد و جدولِ جزئیاتِ پرداختی/دریافتی خالی درمی‌آمد.
+            if (Array.isArray(pid)) {
+                for (var _bi = 0; _bi < pid.length; _bi++) { if (belongs(tx, pid[_bi])) return true; }
+                return false;
+            }
+            return (tx.personId == pid || tx.customerId == pid || tx.supplierId == pid);
+        }
         function personTxs(pid, type) { return allTx.filter(function (t) { return t.type === type && inRange(t) && belongs(t, pid); }); }
 
         var aoa = [];
@@ -15186,15 +15366,17 @@ function _rpBuildReportAOA(kind) {
             curs.forEach(function (c) { var m = byCur[c]; if (!m) return; aoa.push([m.count, R(m.bank), R(m.sarafi), R(m.khazana), R(m.hawala), R(m.amt), c]); });
             aoa.push([]);
             // ---- جدول ۲: جزئیاتِ تراکنش ----
-            aoa.push(['مبدا پرداختی', 'مقصد پرداختی', 'علت پرداختی', 'نوع پرداختی', 'ارز پرداختی', 'مبلغ', 'نمبر', 'زمان', 'توضیحات']);
+            // سرستون‌ها بر اساسِ نوعِ گزارش (پرداختی/دریافتی) نوشته می‌شوند تا گزارشِ دریافتی
+            // عنوانِ «پرداختی» نداشته باشد.
+            var _kw = isPay ? 'پرداختی' : 'دریافتی';
+            aoa.push(['مبدا ' + _kw, 'مقصد ' + _kw, 'علت ' + _kw, 'نوع ' + _kw, 'ارز ' + _kw, 'مبلغ', 'نمبر رسید', 'زمان', 'توضیحات']);
             allTx.forEach(function (tx) {
                 if (tx.type !== type || !inRange(tx) || (personId != null && !belongs(tx, personId))) return;
                 var cur = tx.currency || _baseCur(); var amt = parseFloat(tx.totalAmount || tx.amount || 0) || 0;
                 var when = (tx.date || (tx.createdAt || '').split('T')[0] || '');
-                var party = tx.personName || tx.customerName || tx.supplierName || '';
-                var src = isPay ? (tx.cashboxName || 'خزانه') : party;
-                var dst = isPay ? party : (tx.cashboxName || 'خزانه');
-                aoa.push([src, dst, tx.reason || tx.category || '', _rpPayMethod(tx), cur, R(amt), tx.billNumber || '', when, tx.notes || '']);
+                // مبدا/مقصد دقیقاً مطابقِ همان مقصدی که در فرم انتخاب شده: حساب، شخص، یا مصرف.
+                var _ep = _rpTxEndpoints(tx, isPay);
+                aoa.push([_ep.src, _ep.dst, tx.reason || tx.category || '', _rpTxMethodLabel(tx), cur, R(amt), _rpTxRefNo(tx), when, _rpTxNote(tx)]);
             });
         } else if (kind === 'p_all' || kind === 'p_instock' || kind === 'p_soldout') {
             title = (kind === 'p_all') ? 'تعداد کل اجناس' : (kind === 'p_instock') ? 'موجودی اجناس' : 'اجناس تمام شده';
@@ -15274,7 +15456,7 @@ if (typeof window !== 'undefined') window._rpBuildReportAOA = _rpBuildReportAOA;
 // عنوانِ فارسیِ هر نوع گزارش برای سربرگ
 function _rpKindTitle(kind) {
     return ({ all: 'تعداد کل اشخاص', debtor: 'باقیداری', creditor: 'طلب‌ها', net: 'بالانس خالص',
-        sale: 'مجموع فروش', purchase: 'مجموع خرید', payment: 'مجموعه پرداختی‌ها', receipt: 'دریافتی‌ها',
+        sale: 'مجموع فروش', purchase: 'مجموع خرید', payment: 'مجموعه پرداختی‌ها', receipt: 'مجموعه دریافتی‌ها',
         p_all: 'تعداد کل اجناس', p_instock: 'موجودی اجناس', p_soldout: 'اجناس تمام شده',
         f_expenses: 'مصارفات', pr_profit: 'مفاد', pr_fx: 'مفاد و ضرر تسعیر ارزی' })[kind] || 'گزارش';
 }
@@ -15338,7 +15520,7 @@ function _rpPersonsPdf(kind) {
         var esc = function (v) { return String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
         // ردیفِ نخستِ AOA = هدرِ جدولِ اول
         var rowsHtml = built.aoa.map(function (r, ri) {
-            var isHeaderish = (ri === 0) || (r.length && typeof r[0] === 'string' && (r[0] === 'ارز' || r[0] === 'نام' || r[0].indexOf('مجموعه') === 0 || r[0].indexOf('تعداد') === 0 || r[0] === 'مبدا پرداختی'));
+            var isHeaderish = (ri === 0) || (r.length && typeof r[0] === 'string' && (r[0] === 'ارز' || r[0] === 'نام' || r[0].indexOf('مجموعه') === 0 || r[0].indexOf('تعداد') === 0 || r[0].indexOf('مبدا ') === 0));
             var blank = r.every(function (c) { return c === '' || c == null; });
             if (blank) return '<tr class="rp-pdf-gap"><td colspan="99"></td></tr>';
             var tag = isHeaderish ? 'th' : 'td';
@@ -15376,13 +15558,125 @@ function _rpCashOf(tx, dir, cur) {
     var rem = (typeof calculateTxRemaining === 'function') ? calculateTxRemaining(tx) : (parseFloat(tx.remaining) || 0);
     return total - rem;
 }
-// روشِ پرداخت/دریافت (بهترین حدس از فیلدهای موجود)
+// ── منبعِ حقیقتِ گزارشِ پرداختی/دریافتی: همان فیلدهایی که فرم‌های «پرداخت فوری» و
+//    «دریافت فوری» ذخیره می‌کنند (cashboxId، paymentType/receiptType، reference، description).
+//    پیش از این گزارش فیلدهای ناموجود (cashboxName/method/billNumber/notes) را می‌خواند و
+//    ستون‌ها یا خالی می‌ماندند یا با مقدارِ ثابت («خزانه»/«حواله») پر می‌شدند.
+
+// آبجکتِ حسابِ ثبت‌شده روی تراکنش (با کشِ سبک تا در حلقه‌های بزرگ هزینه‌بر نباشد)
+var _rpCbCache = null;
+function _rpCashboxById(id) {
+    if (id == null || id === '') return null;
+    try {
+        if (!_rpCbCache) {
+            _rpCbCache = {};
+            (db.getCashboxes() || []).forEach(function (c) { if (c && c.id != null) _rpCbCache[String(c.id)] = c; });
+        }
+        return _rpCbCache[String(id)] || null;
+    } catch (e) { return null; }
+}
+if (typeof window !== 'undefined') window._rpInvalidateCashboxCache = function () { _rpCbCache = null; };
+
+// برچسبِ نمایشیِ حساب برای ستونِ «مبدا/مقصد» — دقیقاً مثلِ فرم: «نوعیت + نام» (مثلاً «صرافی عبدالله»)
+function _rpCashboxLabel(tx) {
+    try {
+        if (tx && tx.noTrack) return 'بدون پیگیری';
+        var cb = _rpCashboxById(tx && tx.cashboxId);
+        if (cb) {
+            var nm = String(cb.name || '').trim();
+            var ty = String(cb.type || '').trim();
+            if (nm && ty && nm.indexOf(ty) === -1) return ty + ' ' + nm;
+            return nm || ty || '';
+        }
+        // فرمِ «دریافت فوری» سه مقصد دارد: حساب‌ها / اشخاص / مصارف. در مقصدِ «مصارف» هیچ
+        // حسابی ثبت نمی‌شود و به‌جایش کتگوریِ مصرف ذخیره می‌گردد؛ پس مقصدِ واقعی همان است.
+        if (tx && tx.expenseGroup && tx.category) return 'مصرف: ' + String(tx.category);
+        if (tx && tx.cashboxName) return String(tx.cashboxName);
+        if (tx && (tx.cashboxId == null || tx.cashboxId === '') && tx.category) return 'مصرف: ' + String(tx.category);
+    } catch (e) {}
+    return '';
+}
+if (typeof window !== 'undefined') window._rpCashboxLabel = _rpCashboxLabel;
+
+// نامِ یک شخص از روی شناسه (برای انتقال‌های بین دو شخص که نامِ طرفِ مقابل ذخیره نشده باشد)
+var _rpPersonCache = null;
+function _rpPersonName(id) {
+    if (id == null || id === '') return '';
+    try {
+        if (!_rpPersonCache) {
+            _rpPersonCache = {};
+            (db.getPersons() || []).forEach(function (p) { if (p && p.id != null) _rpPersonCache[String(p.id)] = p.name || ''; });
+        }
+        return _rpPersonCache[String(id)] || '';
+    } catch (e) { return ''; }
+}
+if (typeof window !== 'undefined') window._rpInvalidatePersonCache = function () { _rpPersonCache = null; };
+
+// ── «مبدا» و «مقصد» یک پرداختی/دریافتی، دقیقاً مطابقِ همان چیزی که در فرم ثبت شده ──
+//  ▸ تبِ حساب‌ها   → نامِ حساب (مثلاً «صرافی عبدالله»)
+//  ▸ تبِ مصارف     → «مصرف: <کتگوری>»
+//  ▸ تبِ اشخاص     → نامِ شخصِ طرفِ دیگرِ انتقال (هر دو سرِ انتقال، شخص‌اند و حسابی در میان نیست)
+//  ▸ بدون پیگیری   → «بدون پیگیری»
+function _rpTxEndpoints(tx, isPay) {
+    var party = (tx && (tx.personName || tx.customerName || tx.supplierName)) || '';
+    try {
+        // انتقالِ بین دو شخص: دو لِنگِ «پرداخت A» و «دریافت B» با یک transferGroup ساخته می‌شوند.
+        if (tx && tx.transferGroup) {
+            var other = String(tx.counterpartyName || '').trim() || _rpPersonName(tx.counterpartyId);
+            if (other) {
+                if (tx.type === 'پرداخت') return { src: party, dst: other };
+                return { src: other, dst: party };
+            }
+        }
+    } catch (e) {}
+    var acc = _rpCashboxLabel(tx);
+    return isPay ? { src: acc, dst: party } : { src: party, dst: acc };
+}
+if (typeof window !== 'undefined') window._rpTxEndpoints = _rpTxEndpoints;
+
+// نوعِ پرداخت/دریافت — عیناً همان گزینه‌ای که کاربر در فرم انتخاب کرده (نقد/چک/حواله/دیگر)
+function _rpTxMethodLabel(tx) {
+    try {
+        var v = (tx && (tx.paymentType || tx.receiptType || tx.method || tx.paymentMethod || tx.payMethod || tx.transferType)) || '';
+        v = String(v).trim();
+        if (v) return v;
+    } catch (e) {}
+    return '';
+}
+if (typeof window !== 'undefined') window._rpTxMethodLabel = _rpTxMethodLabel;
+
+// نمبر رسید — فرم آن را در reference ذخیره می‌کند (billNumber فقط برای فروش/خرید است)
+function _rpTxRefNo(tx) {
+    try {
+        var v = (tx && (tx.reference || tx.receiptNumber || tx.billNumber)) || '';
+        return String(v).trim();
+    } catch (e) { return ''; }
+}
+if (typeof window !== 'undefined') window._rpTxRefNo = _rpTxRefNo;
+
+// توضیحات / «اطلاعات بیشتر» — فرم آن را در description ذخیره می‌کند
+function _rpTxNote(tx) {
+    try {
+        var v = (tx && (tx.description || tx.notes || tx.note)) || '';
+        return String(v).trim();
+    } catch (e) { return ''; }
+}
+if (typeof window !== 'undefined') window._rpTxNote = _rpTxNote;
+
+// دسته‌بندیِ جدولِ خلاصه (بانک/صرافی/خزانه/حواله):
+// اول روشِ انتخاب‌شده در فرم (اگر «حواله» بود همان)، بعد «نوعیتِ حساب» که در فرمِ حساب تعیین شده.
 function _rpPayMethod(tx) {
-    var m = (tx.method || tx.paymentMethod || tx.payMethod || tx.transferType || '').toString();
+    var m = _rpTxMethodLabel(tx);
+    if (m.indexOf('حوال') > -1) return 'حواله';
+    var cb = _rpCashboxById(tx && tx.cashboxId);
+    var t = cb ? String(cb.type || '') : '';
+    if (t.indexOf('بانک') > -1) return 'بانک';
+    if (t.indexOf('صراف') > -1) return 'صرافی';
+    if (t.indexOf('خزان') > -1 || t.indexOf('صندوق') > -1) return 'خزانه';
     if (m.indexOf('بانک') > -1) return 'بانک';
     if (m.indexOf('صراف') > -1) return 'صرافی';
-    if (m.indexOf('خزان') > -1 || m.indexOf('صندوق') > -1 || m.indexOf('نقد') > -1) return 'خزانه';
-    if (m.indexOf('حوال') > -1) return 'حواله';
+    if (m.indexOf('نقد') > -1 || m.indexOf('خزان') > -1 || m.indexOf('صندوق') > -1) return 'خزانه';
+    if (t) return 'خزانه';
     return 'حواله';
 }
 
@@ -36252,6 +36546,27 @@ function _confirmNegBalance(message, proceedFn) {
     return false;                                          // این بار متوقف شو تا کاربر تصمیم بگیرد
 }
 if (typeof window !== 'undefined') window._confirmNegBalance = _confirmNegBalance;
+
+// ══════════════════════════════════════════════════════════════════════════
+// تاییدِ ثبت در فرم‌های «فوری» (فروش / خرید / دریافت / پرداخت)
+// با همان دیالوگِ استایل‌دارِ «کمبود موجودی حساب» (#confirmModal).
+// این گارد روی «نقطهٔ کلیکِ دکمهٔ ثبت» نشسته است، نه داخلِ توابعِ ذخیره؛ بنابراین:
+//   • هیچ منطقی از ذخیره‌سازی تغییر نمی‌کند (توابعِ ذخیره عیناً همان‌طور صدا می‌شوند)،
+//   • با دیالوگِ «کمبود موجودی حساب» تداخل/تکرار ندارد (آن دیالوگ بعداً و در جای خودش می‌آید)،
+//   • اگر کاربر «لغو» کند هیچ کاری انجام نمی‌شود و روی همان فرم باقی می‌ماند.
+function _jqfConfirmSave(kind, saveFn) {
+    var map = {
+        sale:     { t: 'ثبت فروش',    q: 'آیا از ثبتِ این فاکتورِ فروش اطمینان دارید؟' },
+        purchase: { t: 'ثبت خرید',    q: 'آیا از ثبتِ این فاکتورِ خرید اطمینان دارید؟' },
+        receipt:  { t: 'ثبت دریافتی', q: 'آیا از ثبتِ این دریافتی اطمینان دارید؟' },
+        payment:  { t: 'ثبت پرداختی', q: 'آیا از ثبتِ این پرداختی اطمینان دارید؟' }
+    };
+    var m = map[kind] || { t: 'ثبت', q: 'آیا از ثبت اطمینان دارید؟' };
+    var run = function () { try { if (typeof saveFn === 'function') saveFn(); } catch (e) { console.error('_jqfConfirmSave:', e); } };
+    if (typeof showStyledConfirm === 'function') { showStyledConfirm(m.t, m.q, run); return; }
+    if (window.confirm(m.q)) run();
+}
+if (typeof window !== 'undefined') window._jqfConfirmSave = _jqfConfirmSave;
 
 // ============================================================================
 //  اعتبارسنجیِ درون‌فیلدی — هشدارِ سرخ زیر فیلدِ الزامیِ خالی (بدونِ تغییرِ منطقِ ذخیره)
