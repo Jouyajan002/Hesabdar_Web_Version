@@ -19,6 +19,19 @@ jobs:
       - name: دریافت کد
         uses: actions/checkout@v4
 
+      # ── تشخیص: دقیقاً ببینیم چه چیزی در ریشهٔ ریپو هست ──────────────────────
+      # اگر بیلد جایی گیر کرد، اول به خروجیِ همین مرحله نگاه کنید.
+      - name: بررسیِ محتوای ریشهٔ پروژه
+        shell: pwsh
+        run: |
+          Write-Host "پوشهٔ کاری: $(Get-Location)"
+          Write-Host "`n— فایل‌ها و پوشه‌های ریشه —"
+          Get-ChildItem -Force | Select-Object Mode, Name | Format-Table -AutoSize
+          foreach ($m in @('index.html','script.js','style.css','database.js','src-tauri')) {
+            $ok = Test-Path -LiteralPath $m
+            Write-Host ("  {0,-14} {1}" -f $m, $(if ($ok) { 'موجود' } else { '*** نیست ***' }))
+          }
+
       - name: نصب Rust
         uses: dtolnay/rust-toolchain@stable
 
@@ -39,13 +52,64 @@ jobs:
         if: steps.cli-cache.outputs.cache-hit != 'true'
         run: cargo install tauri-cli --version "^2" --locked
 
-      # Tauri خودش prepare-dist.ps1 را به‌عنوان beforeBuildCommand اجرا می‌کند؛ این مرحله
-      # همان کار را یک‌بار صریح انجام می‌دهد تا پوشهٔ dist-web قطعاً پیش از هر بررسیِ CLI
-      # موجود باشد. اسکریپت idempotent است (پوشه را از صفر می‌سازد)، پس اجرای دوباره
-      # هیچ ضرری ندارد و لاگ هم نشان می‌دهد چه فایل‌هایی کپی شده‌اند.
+      # ══════════════════════════════════════════════════════════════════════
+      #  آماده‌سازیِ dist-web — کاملاً درون‌خطی
+      #  ---------------------------------------------------------------------
+      #  عمداً هیچ فایلِ بیرونی صدا زده نمی‌شود. اگر این مرحله به یک اسکریپتِ جدا
+      #  (مثلِ prepare-dist.ps1) وابسته باشد و آن فایل به هر دلیلی در ریپو نباشد،
+      #  کلِ بیلد می‌شکند. پس منطق همین‌جاست و بیلد به هیچ فایلِ اضافه‌ای نیاز ندارد.
+      #
+      #  چرا این کار لازم است؟ اگر frontendDist را روی ریشهٔ پروژه بگذاریم، Tauri کلِ
+      #  پوشه را داخلِ باینری embed می‌کند — از جمله src-tauri\target که چند گیگابایت
+      #  محصولِ بیلد است. نتیجه: شکستِ بیلد با «No space left on device».
+      #
+      #  ▸ فایلِ وبِ جدید اضافه کردید؟ نامش را به $WebFiles اضافه کنید.
+      #  ▸ فایلی که نباشد بی‌صدا رد می‌شود، پس فهرست می‌تواند سخاوتمند باشد.
+      #  ▸ service-worker.js عمداً کپی نمی‌شود: نسخهٔ نصبی Service Worker لازم ندارد.
+      # ══════════════════════════════════════════════════════════════════════
       - name: آماده‌سازیِ فایل‌های وب (dist-web)
         shell: pwsh
-        run: ./prepare-dist.ps1
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $Root = (Get-Location).Path
+          $Dist = Join-Path $Root 'src-tauri\dist-web'
+
+          $WebFiles = @(
+            'index.html',
+            'style.css', 'auth-system.css', 'dashboard-store-info-fix.css', 'mobile-responsive.css',
+            'tauri-bridge.js', 'database.js', 'script.js', 'persian-date-utils.js',
+            'auth-system.js', 'drive-backup.js', 'instant-update-fix.js', 'delivery-list.js',
+            'currency-system.js', 'sync-config.js', 'sync-layer.js', 'auth-cloud.js',
+            'demo-mode.js', 'mobile-fit.js', 'jouya-selftest.js', 'pwa-register.js',
+            'manifest.webmanifest', 'version.json'
+          )
+          $WebDirs = @('assets', 'build')
+
+          if (Test-Path $Dist) { Remove-Item -Recurse -Force $Dist }
+          New-Item -ItemType Directory -Force -Path $Dist | Out-Null
+
+          $copied = 0; $missing = @()
+          foreach ($f in $WebFiles) {
+            $src = Join-Path $Root $f
+            if (Test-Path -LiteralPath $src -PathType Leaf) {
+              Copy-Item -LiteralPath $src -Destination (Join-Path $Dist $f) -Force
+              $copied++
+            } else { $missing += $f }
+          }
+          foreach ($d in $WebDirs) {
+            $src = Join-Path $Root $d
+            if (Test-Path -LiteralPath $src -PathType Container) {
+              Copy-Item -LiteralPath $src -Destination $Dist -Recurse -Force
+            } else { $missing += "$d\" }
+          }
+
+          if (-not (Test-Path -LiteralPath (Join-Path $Dist 'index.html'))) {
+            throw "index.html در ریشهٔ پروژه پیدا نشد ($Root). به خروجیِ مرحلهٔ «بررسیِ محتوای ریشهٔ پروژه» نگاه کنید."
+          }
+
+          $mb = [math]::Round(((Get-ChildItem -Recurse -File $Dist | Measure-Object Length -Sum).Sum / 1MB), 2)
+          Write-Host "کپی شد: $copied فایلِ ریشه + پوشه‌های $($WebDirs -join ', ')  →  $mb مگابایت"
+          if ($missing.Count -gt 0) { Write-Host "موجود نبود (رد شد): $($missing -join ', ')" }
 
       - name: ساخت نصب‌کننده
         run: cargo tauri build
@@ -54,9 +118,12 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          $b = "src-tauri/target/release/bundle"
-          if (Test-Path $b) { Get-ChildItem -Recurse -File $b | Select-Object FullName, @{n='MB';e={[math]::Round($_.Length/1MB,2)}} | Format-Table -AutoSize }
-          else { Write-Host "پوشهٔ bundle ساخته نشد." }
+          $b = 'src-tauri/target/release/bundle'
+          if (Test-Path $b) {
+            Get-ChildItem -Recurse -File $b |
+              Select-Object @{n='فایل';e={$_.Name}}, @{n='مگابایت';e={[math]::Round($_.Length/1MB,2)}} |
+              Format-Table -AutoSize
+          } else { Write-Host "پوشهٔ bundle ساخته نشد." }
 
       - name: بارگذاریِ نصب‌کننده
         uses: actions/upload-artifact@v4
