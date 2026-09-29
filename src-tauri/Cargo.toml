@@ -17,6 +17,21 @@ tauri      = { version = "2", features = [] }
 serde      = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# ── فقط ویندوز: پنلِ اشتراکِ سیستم (WinRT DataTransferManager) ──────────────────
+# نسخه‌ها عمداً همان نسخه‌هایی است که خودِ Tauri 2.12 در Cargo.lock می‌آورد
+# (windows 0.62.2 و windows-collections 0.3.2)، تا نسخهٔ تکراری ساخته نشود و
+# نوعِ HWND که Tauri برمی‌گرداند دقیقاً همان نوعی باشد که اینجا استفاده می‌شود.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Foundation",
+    "Foundation_Collections",
+    "Storage",
+    "ApplicationModel_DataTransfer",
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+] }
+windows-collections = "0.3"
+
 # بیلدِ کم‌حجم.
 # نکته: عمداً "thin" LTO انتخاب شده و نه fat LTO. با fat LTO حجمِ نهایی تقریباً همان است
 # ولی مرحلهٔ لینک چند گیگابایت RAM می‌خواهد و روی ماشین‌های معمولی/رانرهای کوچک با خطای
