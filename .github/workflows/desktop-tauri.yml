@@ -28,12 +28,6 @@ jobs:
       - name: دریافت کد
         uses: actions/checkout@v4
 
-      - name: آماده‌سازی فایل‌های وب
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          Copy-Item index.html, script.js, style.css, database.js -Destination dist
-
       - name: نصب Rust
         uses: dtolnay/rust-toolchain@stable
 
