@@ -1,0 +1,75 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "حسابدار",
+  "mainBinaryName": "hesabdar",
+  "version": "1.0.7",
+  "identifier": "com.hesabdar.desktop",
+  "build": {
+    "frontendDist": "../",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "حسابدار",
+        "width": 1280,
+        "height": 840,
+        "minWidth": 1000,
+        "minHeight": 640,
+        "resizable": true,
+        "maximized": true,
+        "center": true,
+        "decorations": true,
+        "fullscreen": false,
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": null,
+      "assetProtocol": {
+        "enable": false
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi", "deb", "appimage", "dmg"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": [],
+    "externalBin": [],
+    "copyright": "حسابدار",
+    "category": "Business",
+    "shortDescription": "حسابدار — سیستم مدیریت فروشگاه",
+    "longDescription": "سیستم مدیریت فروشگاه و حسابداری — نسخهٔ دسکتاپ، کاملاً آفلاین.",
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "allowDowngrades": true,
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["English"],
+        "displayLanguageSelector": false,
+        "compression": "lzma"
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": []
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "10.15"
+    }
+  }
+}
