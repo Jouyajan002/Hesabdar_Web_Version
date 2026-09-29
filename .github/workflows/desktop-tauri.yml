@@ -1,6 +1,6 @@
-name: ساخت نسخهٔ دسکتاپ (Tauri)
+name: ساخت نسخهٔ نصبیِ ویندوز (Tauri)
 
-# دستی اجرا می‌شود، و همچنین با ساختِ یک تگِ نسخه (مثلاً v1.0.7) خودکار اجرا می‌گردد.
+# دستی اجرا می‌شود، و همچنین با ساختِ یک تگِ نسخه (مثلاً v1.0.7) خودکار.
 on:
   workflow_dispatch:
   push:
@@ -11,18 +11,9 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          # ویندوز: خروجی NSIS (setup.exe) + MSI — همان «فایلِ نصبیِ سبک»
-          - os: windows-latest
-            label: windows
-            args: ''
-
-    runs-on: ${{ matrix.os }}
-    name: ${{ matrix.label }}
+  windows:
+    name: ویندوز (x64)
+    runs-on: windows-latest
 
     steps:
       - name: دریافت کد
@@ -36,24 +27,46 @@ jobs:
         with:
           workspaces: './src-tauri -> target'
 
+      # نصبِ CLI کش می‌شود تا اجراهای بعدی چند دقیقه سریع‌تر باشند.
+      - name: کشِ Tauri CLI
+        id: cli-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-tauri.exe
+          key: cargo-tauri-v2-${{ runner.os }}
+
       - name: نصب Tauri CLI
+        if: steps.cli-cache.outputs.cache-hit != 'true'
         run: cargo install tauri-cli --version "^2" --locked
 
-      - name: ساخت نصب‌کننده
-        working-directory: src-tauri
-        run: cargo tauri build ${{ matrix.args }}
+      # Tauri خودش prepare-dist.ps1 را به‌عنوان beforeBuildCommand اجرا می‌کند؛ این مرحله
+      # همان کار را یک‌بار صریح انجام می‌دهد تا پوشهٔ dist-web قطعاً پیش از هر بررسیِ CLI
+      # موجود باشد. اسکریپت idempotent است (پوشه را از صفر می‌سازد)، پس اجرای دوباره
+      # هیچ ضرری ندارد و لاگ هم نشان می‌دهد چه فایل‌هایی کپی شده‌اند.
+      - name: آماده‌سازیِ فایل‌های وب (dist-web)
+        shell: pwsh
+        run: ./prepare-dist.ps1
 
-      # ── جمع‌آوریِ خروجی‌ها ──
-      - name: بارگذاریِ خروجیِ ویندوز
+      - name: ساخت نصب‌کننده
+        run: cargo tauri build
+
+      - name: فهرستِ خروجی‌ها
+        if: always()
+        shell: pwsh
+        run: |
+          $b = "src-tauri/target/release/bundle"
+          if (Test-Path $b) { Get-ChildItem -Recurse -File $b | Select-Object FullName, @{n='MB';e={[math]::Round($_.Length/1MB,2)}} | Format-Table -AutoSize }
+          else { Write-Host "پوشهٔ bundle ساخته نشد." }
+
+      - name: بارگذاریِ نصب‌کننده
         uses: actions/upload-artifact@v4
         with:
-          name: hesabdar-windows
-          if-no-files-found: warn
+          name: hesabdar-windows-setup
+          if-no-files-found: error
           path: |
             src-tauri/target/release/bundle/nsis/*.exe
             src-tauri/target/release/bundle/msi/*.msi
 
-      # ── انتشار در Releases (فقط وقتی تگ زده شده باشد) ──
       - name: انتشار در Releases
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
