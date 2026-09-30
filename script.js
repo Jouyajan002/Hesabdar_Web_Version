@@ -2,6 +2,29 @@
    مدیریت تب‌های امور مالی - نسخه نهایی
    ========================================================================== */
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   بازگردانیِ «حالت تاریک» — عمداً در ابتدای فایل
+   ---------------------------------------------------------------------------
+   چرا اینجا؟ پایین‌ترِ همین فایل یک دستورِ سطحِ بالا وجود دارد که روی این صفحه
+   استثنا می‌اندازد و اجرای دستورهای سطحِ بالای بعدی را متوقف می‌کند؛ بازگردانیِ
+   قبلیِ حالت تاریک پس از آن نقطه بود و هیچ‌وقت اجرا نمی‌شد — برای همین با هر
+   ریفرش یا بستنِ برنامه، حالت تاریک از بین می‌رفت. اینجا پیش از آن نقطه اجرا
+   می‌شود، پس تا وقتی کاربر خودش از سایدبار غیرفعالش نکند فعال می‌ماند.
+   (فقط همین؛ هیچ منطقِ دیگری تغییر نکرده است.)
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function () {
+    function __hbApplyDarkMode() {
+        try {
+            if (!document.body) return false;
+            if (localStorage.getItem('darkMode') === '1') document.body.classList.add('dark-mode');
+            return true;
+        } catch (e) { return true; }
+    }
+    if (!__hbApplyDarkMode()) {
+        try { document.addEventListener('DOMContentLoaded', __hbApplyDarkMode); } catch (e) {}
+    }
+})();
+
 /* ===== ارزِ پایه: منبعِ واحدِ حقیقت برای پیش‌فرضِ ارز (به‌جای هاردکدِ 'AFN') ===== */
 // نمایشِ موجودی با «واحدِ اصلی + فرعی». موجودی همیشه به واحدِ اصلی نگه‌داری می‌شود؛ اگر جنس
 // واحدِ فرعی و ضریب داشته باشد، بخشِ کسری به واحدِ فرعی نشان داده می‌شود (مثلاً 4.8 بوری با ضریب
@@ -2158,7 +2181,7 @@ function loadQuickListData(type) {
             <td><i class="fas fa-chevron-left" style="color:#94a3b8;"></i></td>
         `;
         row.style.cursor = 'pointer';
-        (function(txId){ row.onclick = function(){ viewTransaction(txId); }; })(tx.id);
+        (function(txId){ row.onclick = function(e){ if (__hbFromRowMenu(e)) return; viewTransaction(txId); }; })(tx.id);
         tbody.appendChild(row);
     });
 }
@@ -6741,6 +6764,22 @@ function loadPersonsList() {
 }
 
 // باز/بستن منوی سه‌نقطهٔ ردیف شخص
+// ══════════════════════════════════════════════════════════════════════════════
+//  نگهبانِ کلیکِ ردیف: اگر کلیک از «دکمهٔ سه‌نقطه» یا از منوی بازشدهٔ آن آمده باشد،
+//  ردیف نباید باز شود. در موبایل، لمسِ دکمهٔ سه‌نقطه هم رویدادِ کلیک را به ردیف
+//  می‌رساند و هم‌زمان فورمِ متصل به ردیف باز می‌شد. (فقط همین بررسی؛ هیچ منطقِ
+//  دیگری تغییر نمی‌کند.)
+function __hbFromRowMenu(e) {
+    try {
+        var t = e && e.target;
+        if (!t || !t.closest) return false;
+        return !!t.closest('button, a, .action-trigger-btn, .person-card-kebab, '
+            + '.product-card-kebab, .sales-card-kebab, .cbtx-kebab, .fin-cb-kebab, '
+            + '.person-row-menu, .person-actions-menu, .floating-action-toolbar, .clog-action-bar');
+    } catch (err) { return false; }
+}
+if (typeof window !== 'undefined') window.__hbFromRowMenu = __hbFromRowMenu;
+
 function togglePersonRowMenu(btn, ev) {
     if (ev) { ev.stopPropagation(); }
     var menu = btn.parentElement.querySelector('.person-row-menu');
@@ -6921,6 +6960,18 @@ function loadProductsList(productsArg) {
             if (_card) _card.style.cursor = 'pointer';
             tr.dataset.pickId = product.id;
             tr.addEventListener('click', function () { _selectProductForPicker(product); });
+        } else {
+            // ردیفِ جنس کلیک‌پذیر است و به «لیست ورودی و خروجی» می‌رود — همان گزینه‌ای که
+            // در منوی سه‌نقطه هم هست (مثلِ بخشِ اشخاص). کلیک روی خودِ دکمهٔ سه‌نقطه یا
+            // منوی بازشده‌اش ردیف را باز نمی‌کند.
+            var _pcard = tr.querySelector('.product-card');
+            if (_pcard) _pcard.style.cursor = 'pointer';
+            (function (pid) {
+                tr.addEventListener('click', function (e) {
+                    if (typeof __hbFromRowMenu === 'function' && __hbFromRowMenu(e)) return;
+                    if (typeof showProductInOutList === 'function') showProductInOutList(pid);
+                });
+            })(product.id);
         }
 
         tbody.appendChild(tr);
@@ -9940,7 +9991,7 @@ function loadCashboxTransactionsList(cashboxId) {
         `;
         if (item._source === 'transaction') {
             row.style.cursor = 'pointer';
-            (function(sid){ row.onclick = function(){ if (typeof viewTransaction === 'function') viewTransaction(sid); }; })(item._srcId);
+            (function(sid){ row.onclick = function(e){ if (__hbFromRowMenu(e)) return; if (typeof viewTransaction === 'function') viewTransaction(sid); }; })(item._srcId);
         }
         tbody.appendChild(row);
     });
@@ -11919,10 +11970,15 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
 
     var wrap = document.createElement('div');
     wrap.className = 'jouya-pp-framewrap';
+    // نگه‌دارندهٔ iframe: روی موبایل، iframe با «عرضِ طراحیِ ثابت» رندر و سپس یکنواخت
+    // کوچک می‌شود؛ ارتفاعِ این نگه‌دارنده همان ارتفاعِ کوچک‌شده است تا فضای خالی نماند.
+    var holder = document.createElement('div');
+    holder.className = 'jouya-pp-frameholder';
     var frame = document.createElement('iframe');
     frame.className = 'jouya-pp-frame';
     frame.setAttribute('title', esc(title));
-    wrap.appendChild(frame);
+    holder.appendChild(frame);
+    wrap.appendChild(holder);
 
     ov.appendChild(bar);
     ov.appendChild(wrap);
@@ -11940,15 +11996,46 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
     }
 
     // زوم‌اوت: کلِ عرضِ محتوا در عرضِ صفحه جا شود (حاشیهٔ دو طرف از paddingِ framewrap می‌آید)
+    // ── عرضِ طراحیِ ثابت ──
+    //  گزارش‌ها و بل‌ها برای عرضِ ~۸۰۰px طراحی شده‌اند (همان عرضی که PDF هم با آن ساخته
+    //  می‌شود). اگر iframe روی موبایل عرضِ باریک‌ترِ خودش را بگیرد، جدول‌ها فشرده و ستون‌ها
+    //  درهم می‌شوند. پس روی نمایشگرِ باریک، سند با همان ۸۰۰px رندر و بعد یکنواخت کوچک
+    //  می‌شود؛ نتیجه دقیقاً همان چیدمانِ نسخهٔ نصبی است، فقط کوچک‌تر و کاملاً جاشده.
+    //  روی نمایشگرِ عریض (وبِ دسکتاپ و نسخهٔ نصبی) رفتارِ قبلی بدونِ تغییر می‌ماند.
+    var PP_DESIGN_W = 800;
     function fit() {
         try {
             var d = frame.contentWindow.document;
             var body = d && d.body; if (!body) return;
             body.style.margin = '0';
+            var avail = wrap.clientWidth || 0;
+
+            if (avail && avail < PP_DESIGN_W) {
+                // ── موبایل / نمایشگرِ باریک ──
+                body.style.transform = ''; body.style.width = '';
+                frame.style.width = PP_DESIGN_W + 'px';
+                frame.style.maxWidth = 'none';
+                var sc = avail / PP_DESIGN_W;
+                var ch = Math.max(body.scrollHeight || 0,
+                                  (d.documentElement ? d.documentElement.scrollHeight : 0) || 0, 220);
+                frame.style.height = Math.ceil(ch + 8) + 'px';
+                frame.style.transformOrigin = 'top right';
+                frame.style.transform = 'scale(' + sc + ')';
+                holder.style.width = '100%';
+                holder.style.overflow = 'hidden';
+                holder.style.height = Math.ceil((ch + 8) * sc) + 'px';
+                try { console.log('[jouya-preview] fit(mobile)', { avail: avail, design: PP_DESIGN_W, scale: Math.round(sc * 100) / 100 }); } catch (_) {}
+                return;
+            }
+
+            // ── نمایشگرِ عریض: همان مسیرِ قبلی ──
+            frame.style.width = ''; frame.style.maxWidth = '';
+            frame.style.transform = ''; frame.style.transformOrigin = '';
+            holder.style.height = ''; holder.style.overflow = '';
             body.style.transform = ''; body.style.width = '';
             var natural = Math.max(body.scrollWidth || 0, (d.documentElement ? d.documentElement.scrollWidth : 0) || 0, 1);
-            var avail = wrap.clientWidth || natural;
-            var scale = avail / natural;
+            var avail2 = avail || natural;
+            var scale = avail2 / natural;
             if (!(scale > 0)) scale = 1;
             if (scale > 1) scale = 1;   // بزرگ‌نمایی نکن؛ فقط کوچک تا جا شود
             body.style.transformOrigin = 'top right';
@@ -11956,7 +12043,7 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
             body.style.transform = 'scale(' + scale + ')';
             var h = body.scrollHeight || 0;
             frame.style.height = Math.ceil(h * scale + 24) + 'px';
-            try { console.log('[jouya-preview] fit', { natural: natural, avail: avail, scale: Math.round(scale * 100) / 100 }); } catch (_) {}
+            try { console.log('[jouya-preview] fit', { natural: natural, avail: avail2, scale: Math.round(scale * 100) / 100 }); } catch (_) {}
         } catch (e) {
             try { console.warn('[jouya-preview] fit error:', e && e.message); } catch (_) {}
         }
@@ -18260,7 +18347,7 @@ function formatCurrency(amount, currencyCode) {
                             <div>تلفن: ${settings.storePhone || '---'}</div>
                         </div>
                     </div>
-                    
+                
                     <div class="invoice-info">
                         <div>
                             <div>شماره فاکتور: ${transaction.billNumber || '---'}</div>
@@ -18271,7 +18358,7 @@ function formatCurrency(amount, currencyCode) {
                             <div>نوع پرداخت: ${transaction.saleType || 'نقد'}</div>
                         </div>
                     </div>
-                    
+                
                     <table class="invoice-details">
                         <thead>
                             <tr>
@@ -18296,7 +18383,7 @@ function formatCurrency(amount, currencyCode) {
                             `).join('') : '<tr><td colspan="6">هیچ آیتمی یافت نشد</td></tr>'}
                         </tbody>
                     </table>
-                    
+                
                     <div class="totals">
                         <div class="total-row">
                             <strong>جمع کل:</strong> ${formatNumber(transaction.totalAmount || 0)} ${transaction.currency || _baseCur()}
@@ -18316,7 +18403,7 @@ function formatCurrency(amount, currencyCode) {
                             <strong>باقی‌مانده:</strong> ${formatNumber(transaction.remaining || 0)} ${getCurrencyLabel(transaction.currency)}
                         </div>
                     </div>
-                    
+                
                     <div class="footer">
                         <div>${settings.invoiceFooter || 'با تشکر از خرید شما'}</div>
                         <button class="print-btn no-print" onclick="window.print()">چاپ فاکتور</button>
@@ -18326,7 +18413,7 @@ function formatCurrency(amount, currencyCode) {
             </body>
             </html>
         `;
-        
+    
         printWindow.document.write(invoiceHTML);
         printWindow.document.close();
         
@@ -19079,7 +19166,7 @@ function loadPersonTransactions(personId) {
         row.innerHTML = r.html;
         row.style.cursor = 'pointer';
         if (r.txId != null) row.dataset.txId = r.txId;
-        (function(txId){ row.onclick = function(){ if (typeof viewTransaction === 'function') viewTransaction(txId); }; })(r.txId);
+        (function(txId){ row.onclick = function(e){ if (__hbFromRowMenu(e)) return; if (typeof viewTransaction === 'function') viewTransaction(txId); }; })(r.txId);
         tbody.appendChild(row);
     });
 
@@ -20668,7 +20755,7 @@ function displayPersonTransactions(transactions) {
         row.className = 'sales-card-row ptx-row ' + r.typeClass;
         row.innerHTML = r.html;
         row.style.cursor = 'pointer';
-        (function(txId){ row.onclick = function(){ if (typeof viewTransaction === 'function') viewTransaction(txId); }; })(r.txId);
+        (function(txId){ row.onclick = function(e){ if (__hbFromRowMenu(e)) return; if (typeof viewTransaction === 'function') viewTransaction(txId); }; })(r.txId);
         tbody.appendChild(row);
     });
 }
@@ -24868,7 +24955,7 @@ function loadRecent(idSuffix, typeFilter) {
             <td><i class="fas fa-chevron-left" style="color:#94a3b8;"></i></td>
         `;
         row.style.cursor = 'pointer';
-        (function(txId){ row.onclick = function(){ viewTransaction(txId); }; })(tx.id);
+        (function(txId){ row.onclick = function(e){ if (__hbFromRowMenu(e)) return; viewTransaction(txId); }; })(tx.id);
         tbody.appendChild(row);
     });
 }
@@ -26567,7 +26654,7 @@ function renderListModal(type, period) {
             </td>
         `;
         row.style.cursor = 'pointer';
-        (function(txId){ row.onclick = function(){ viewTransaction(txId); }; })(tx.id);
+        (function(txId){ row.onclick = function(e){ if (__hbFromRowMenu(e)) return; viewTransaction(txId); }; })(tx.id);
         tbody.appendChild(row);
     });
 }

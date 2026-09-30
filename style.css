@@ -9076,3 +9076,59 @@ body.dark-mode .btn-quick-list.btn-ql-delivery        { --ql-accent: #f9a8d4; }
     .jouya-pp-frame { border-radius: 12px; }
     .jouya-pp-sharemenu { top: 66px; }
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   حالتِ تاریک برای «منوهای دکمهٔ سه‌نقطه»
+   ---------------------------------------------------------------------------
+   این منوها (نوارِ عملیاتِ شناور، منوی ردیفِ اشخاص/اجناس، منوی آخرین تغییرات) رنگِ
+   پس‌زمینه و رنگِ متنِ خود را به‌صورتِ inline از جاوااسکریپت می‌گیرند، پس در حالتِ
+   تاریک سفید می‌ماندند و متن‌شان ناخوانا می‌شد. چون استایلِ inline از CSS معمولی
+   قوی‌تر است، اینجا از !important استفاده شده — و دامنهٔ قواعد فقط همین منوهاست،
+   پس هیچ بخشِ دیگری از برنامه تحتِ تأثیر نیست. (فقط رنگ؛ هیچ رفتاری تغییر نمی‌کند.)
+   ══════════════════════════════════════════════════════════════════════════ */
+body.dark-mode .floating-action-toolbar,
+body.dark-mode .person-row-menu,
+body.dark-mode .person-actions-menu,
+body.dark-mode .clog-action-bar {
+    background: #1e293b !important;
+    background-color: #1e293b !important;
+    border-color: #334155 !important;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .55) !important;
+}
+body.dark-mode .floating-action-toolbar button,
+body.dark-mode .person-row-menu button,
+body.dark-mode .clog-action-bar button,
+body.dark-mode .person-actions-menu a {
+    color: #e2e8f0 !important;
+    background: transparent !important;
+}
+/* متنِ دکمه‌ها داخلِ span با رنگِ inline ساخته می‌شود */
+body.dark-mode .floating-action-toolbar button span,
+body.dark-mode .person-row-menu button span,
+body.dark-mode .clog-action-bar button span,
+body.dark-mode .person-actions-menu a span {
+    color: #e2e8f0 !important;
+}
+body.dark-mode .person-actions-menu a {
+    border-bottom-color: #334155 !important;
+}
+body.dark-mode .floating-action-toolbar button:hover,
+body.dark-mode .person-row-menu button:hover,
+body.dark-mode .clog-action-bar button:hover,
+body.dark-mode .person-actions-menu a:hover {
+    background: #334155 !important;
+}
+/* گزینهٔ «حذف» در حالتِ تاریک هم قرمزِ خوانا بماند */
+body.dark-mode .person-row-menu button.danger,
+body.dark-mode .person-row-menu button.danger span {
+    color: #f87171 !important;
+}
+body.dark-mode .person-row-menu button.danger:hover {
+    background: #7f1d1d !important;
+}
+/* جداکنندهٔ داخلیِ منوها */
+body.dark-mode .floating-action-toolbar hr,
+body.dark-mode .person-row-menu hr,
+body.dark-mode .clog-action-bar hr {
+    border-color: #334155 !important;
+}

@@ -408,15 +408,32 @@ body:has(#dashboard.section.active) #financial.section.active { display: none !i
         gap: 4px !important; min-width: 0; width: 100%;
     }
     .fin-balance-amounts { flex-wrap: wrap !important; gap: 4px 16px !important; }
+    /* دکمهٔ «تبدیل ارز بین حساب‌ها» — مثلِ نسخهٔ نصبی، نام هم کنارِ آیکن دیده می‌شود،
+       ولی آیکن و متن هر دو بسیار ریز تا مزاحمِ ارقامِ موجودیِ حساب‌ها نشوند. */
     .fin-transfer-btn span,
-    .fin-transfer-btn.fin-transfer-btn-new span { display: none !important; }
+    .fin-transfer-btn.fin-transfer-btn-new span {
+        display: inline !important; font-size: 0.6rem !important;
+        font-weight: 700 !important; line-height: 1.2 !important; white-space: nowrap !important;
+    }
+    .fin-transfer-btn,
+    .fin-transfer-btn.fin-transfer-btn-new {
+        font-size: 0.6rem !important; gap: 4px !important;
+        padding: 6px 9px !important; border-radius: 8px !important;
+    }
+    .fin-transfer-btn > i,
+    .fin-transfer-btn.fin-transfer-btn-new > i {
+        font-size: 0.6rem !important; margin: 0 !important;
+        width: 18px !important; height: 17px !important; border-radius: 5px !important;
+    }
+    .fin-transfer-btn.fin-transfer-btn-new {
+        border-right-width: 3px !important;
+        padding: 5px 8px !important;
+    }
     .fin-transfer-btn.fin-transfer-btn-new {
         position: static !important; transform: none !important; left: auto !important; top: auto !important;
         align-self: flex-end !important; flex: 0 0 auto; margin: 2px 0 0 0 !important;
-        padding: 9px !important; gap: 0 !important;
     }
     .fin-transfer-btn.fin-transfer-btn-new:hover { transform: none !important; }
-    .fin-transfer-btn.fin-transfer-btn-new i { margin: 0 !important; }
 
     /* منوهای عملیات (سه‌نقطه) → «شیتِ پایینِ» اپ‌مانند */
     .floating-action-toolbar, .person-row-menu, .person-actions-menu, .clog-action-bar {
@@ -800,15 +817,25 @@ body:has(#dashboard.section.active) #financial.section.active { display: none !i
     #floating-add-btn .person-fab-add > i {
         font-size: 1.25rem !important; margin: 0 !important;
     }
-    /* ۲ب) تب‌های «مصارفات» و «کارمندان» → فقط آیکن (تبِ «حساب‌ها» با متن می‌ماند) */
+    /* ۲ب) تب‌های «مصارفات» و «کارمندان» → نام‌ها دیده می‌شوند، فقط با فونتِ کوچک‌تر
+       (پیش‌تر font-size:0 بود و نام‌ها اصلاً نمایش داده نمی‌شدند) */
     #financial .financial-tabs-centered .fin-tab[data-tab="expenses"],
     #financial .financial-tabs-centered .fin-tab[data-tab="employee-management"] {
-        font-size: 0 !important; gap: 0 !important;
+        font-size: 0.66rem !important; gap: 5px !important;
+        padding-left: 9px !important; padding-right: 9px !important;
+        white-space: nowrap !important;
     }
     #financial .financial-tabs-centered .fin-tab[data-tab="expenses"] > i,
     #financial .financial-tabs-centered .fin-tab[data-tab="employee-management"] > i {
-        font-size: 1.05rem !important; margin: 0 !important;
+        font-size: 0.86rem !important; margin: 0 !important;
     }
+    /* تبِ «حساب‌ها» هم کمی جمع‌تر تا هر سه نام در عرضِ موبایل کنارِ هم جا شوند */
+    #financial .financial-tabs-centered .fin-tab[data-tab="cashbox"] {
+        font-size: 0.72rem !important; gap: 5px !important;
+        padding-left: 10px !important; padding-right: 10px !important;
+        white-space: nowrap !important;
+    }
+    #financial .financial-tabs-centered .fin-tab[data-tab="cashbox"] > i { font-size: 0.9rem !important; }
 
     /* (۴) بخشِ «گزارش» — کارت‌های اطلاعاتی: هیچ رقمی پنهان/بریده نشود
        ریشهٔ مشکل: در ردیفِ .rp-metric-row برچسب و مقدار در یک خطِ بدونِ شکست
@@ -1155,3 +1182,17 @@ body:has(#dashboard.section.active) #financial.section.active { display: none !i
 }
 .jouya-pp-sharemenu button:active { transform: scale(.98); }
 .jouya-pp-sharemenu i { width: 18px; text-align: center; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   پیش‌نمایشِ درون‌برنامه‌ای روی موبایل — نگه‌دارندهٔ iframe
+   ---------------------------------------------------------------------------
+   روی نمایشگرِ باریک، سندِ گزارش/بل با «عرضِ طراحیِ ثابتِ ۸۰۰px» رندر و سپس یکنواخت
+   کوچک می‌شود تا دقیقاً همان چیدمانِ نسخهٔ نصبی دیده شود (بدونِ فشرده‌شدنِ ستون‌ها).
+   این نگه‌دارنده ارتفاعِ «کوچک‌شده» را می‌گیرد تا زیرِ محتوا فضای خالی نماند.
+   ══════════════════════════════════════════════════════════════════════════ */
+.jouya-pp-frameholder {
+    width: 100%;
+    display: block;
+    border-radius: 10px;
+    overflow: hidden;
+}
