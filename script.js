@@ -11426,15 +11426,20 @@ function __jouyaHtmlToPdfBlob(html) {
             if (started) return; started = true;
             var body = doc.body || doc.documentElement;
             if (body) { try { body.style.margin = '0'; body.style.background = '#fff'; } catch (e) {} }
-            window.html2canvas(body, { scale: 2, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', windowWidth: 800 }).then(function (canvas) {
+            // scale = 1.5 و کیفیتِ JPEG = 0.8 → حجمِ فایلِ ارسالی حدودِ یک‌سومِ قبل، با خوانایی کامل
+            window.html2canvas(body, { scale: 1.5, useCORS: true, allowTaint: false, backgroundColor: '#ffffff', windowWidth: 800 }).then(function (canvas) {
                 try {
                     var pdf = new jsPDFctor('p', 'pt', 'a4');
                     var pw = pdf.internal.pageSize.getWidth();
                     var ph = pdf.internal.pageSize.getHeight();
-                    var pagePxH = Math.floor(canvas.width * ph / pw);   // پیکسل‌های معادلِ یک صفحهٔ A4
+                    // حاشیهٔ صفحه (pt): محتوا به لبهٔ کاغذ نمی‌چسبد و فورم قالبِ خودش را نگه می‌دارد
+                    var MX = 20, MY = 16;
+                    var cw = pw - MX * 2;                                // عرضِ ناحیهٔ محتوا
+                    var chh = ph - MY * 2;                               // بلندیِ ناحیهٔ محتوا
+                    var pagePxH = Math.floor(canvas.width * chh / cw);   // پیکسل‌های معادلِ یک صفحه
                     var sY = 0, page = 0;
                     if (canvas.height <= pagePxH) {
-                        pdf.addImage(canvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pw, canvas.height * pw / canvas.width);
+                        pdf.addImage(canvas.toDataURL('image/jpeg', 0.8), 'JPEG', MX, MY, cw, canvas.height * cw / canvas.width);
                     } else {
                         while (sY < canvas.height) {
                             var sliceH = Math.min(pagePxH, canvas.height - sY);
@@ -11444,7 +11449,7 @@ function __jouyaHtmlToPdfBlob(html) {
                             ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
                             ctx.drawImage(canvas, 0, sY, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
                             if (page > 0) pdf.addPage();
-                            pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.92), 'JPEG', 0, 0, pw, sliceH * pw / canvas.width);
+                            pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.8), 'JPEG', MX, MY, cw, sliceH * cw / canvas.width);
                             sY += sliceH; page++;
                             if (page > 80) break;   // ایمنی برای گزارش‌های خیلی بلند
                         }
@@ -11877,7 +11882,19 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
 
     // سندِ داخلِ iframe: viewport + فونت/آیکن + استایلِ کمکی، بدونِ نوارِ پنجرهٔ جدید
     var vp = '<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=yes">';
-    var headInject = vp + (assetsHead || '') + (extraCss || '');
+    // ── دو اصلاحِ ظاهریِ پیش‌نمایشِ درون‌برنامه‌ای ───────────────────────────────────
+    //  ۱) نوارهای دکمهٔ «چاپ/اشتراک‌گذاری» که داخلِ خودِ سندِ گزارش/بل هستند حذف می‌شوند؛
+    //     چون نوارِ بالای اورلی همین دو دکمه را دارد و تکرارشان روی فایل اضافی است.
+    //     (این قاعده در ساختِ PDF هم اعمال می‌شود، پس دکمه‌ها در فایلِ ارسالی هم نیستند.)
+    //  ۲) حاشیهٔ دورِ محتوا: فقط در «پیش‌نمایشِ زندهٔ اورلی» (کلاسِ jouya-pp-live روی <html>)
+    //     تا صفحه چسبیده به لبهٔ کاغذ نباشد. در PDF حاشیه از خودِ صفحه‌بندی می‌آید و در
+    //     چاپ هیچ تغییری نمی‌کند، پس جذابیتِ فورم‌ها دست‌نخورده می‌ماند.
+    var ppFix = '<style id="__jouya_pp_fix">'
+        + '.rep-actions,#rep-share-menu,#rep-share-btn,.rep-share-wrap,#__ppbar,#__ppmenu,.print-btn{display:none !important;}'
+        + 'html.jouya-pp-live body{padding:18px 20px !important;box-sizing:border-box !important;}'
+        + '@media print{html.jouya-pp-live body{padding:0 !important;}}'
+        + '</style>';
+    var headInject = vp + (assetsHead || '') + (extraCss || '') + ppFix;
     var doc = String(rawHtml);
     if (doc.indexOf('</head>') !== -1) doc = doc.replace('</head>', headInject + '</head>');
     else if (doc.indexOf('<head>') !== -1) doc = doc.replace('<head>', '<head>' + headInject);
@@ -11916,6 +11933,8 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
     try {
         var fd = frame.contentWindow.document;
         fd.open(); fd.write(doc); fd.close();
+        // نشانهٔ «پیش‌نمایشِ زنده» — حاشیهٔ دورِ محتوا فقط همین‌جا اعمال می‌شود، نه در PDF/چاپ
+        try { fd.documentElement.className = (fd.documentElement.className || '') + ' jouya-pp-live'; } catch (_) {}
     } catch (e) {
         try { frame.srcdoc = doc; } catch (_) {}
     }
@@ -19994,19 +20013,33 @@ function _sendPersonBalanceMessage(id) {
         var phone = String(person.phone || '').replace(/[^0-9]/g, '');
         var waUrl = 'https://wa.me/' + (phone || '') + '?text=' + encodeURIComponent(msg);
 
-        // ── نسخهٔ نصبی: نه navigator.share و نه window.open ──
-        //  در WebView2 اولی بی‌صدا معلق می‌ماند (و قابلیت اشتراک را برای همان نشست می‌سوزاند)
-        //  و دومی پنجره‌ای باز نمی‌کند. لینکِ wa.me با فرمانِ سیستمی باز می‌شود؛ واتساپ همان
-        //  مخاطب را با متنِ آماده باز می‌کند.
+        // ── نسخهٔ نصبی: دقیقاً مثلِ بقیهٔ گزینه‌های اشتراک ──
+        //  اول «پنلِ اشتراکِ ویندوز» با لیستِ برنامه‌ها باز می‌شود (انتخابِ واتساپ → واتساپِ
+        //  ویندوز با همان متن)، نه مرورگر. اگر پنل باز نشد، واتساپِ ویندوز مستقیم با
+        //  whatsapp:// باز می‌شود و در آخرین مرحله متن در کلیپ‌بورد کپی می‌شود.
+        //  navigator.share و window.open اینجا استفاده نمی‌شوند (در WebView2 معلق می‌مانند).
         if (typeof __jouyaIsTauri === 'function' && __jouyaIsTauri()) {
-            __jouyaTauriInvoke('hb_open_uri', { uri: waUrl }).catch(function () {
+            var waApp = 'whatsapp://send?' + (phone ? ('phone=' + phone + '&') : '') + 'text=' + encodeURIComponent(msg);
+            var _copyMsg = function () {
                 try {
                     navigator.clipboard.writeText(msg);
                     if (typeof showToast === 'function') showToast('پیام کپی شد؛ در واتساپ بچسبانید', 'success');
                 } catch (e2) {
                     if (typeof showMessage === 'function') showMessage('پیام', msg);
                 }
-            });
+            };
+            __jouyaTauriInvoke('hb_share_text_win', { text: msg, title: 'خلاصهٔ حساب — ' + (person.name || '') })
+                .then(function (res) {
+                    if (res && res.ok) return;                       // پنل باز شد → سکوت
+                    return __jouyaTauriInvoke('hb_open_uri', { uri: waApp })
+                        .catch(function () { return __jouyaTauriInvoke('hb_open_uri', { uri: waUrl }); })
+                        .catch(function () { _copyMsg(); });
+                })
+                .catch(function () {
+                    __jouyaTauriInvoke('hb_open_uri', { uri: waApp })
+                        .catch(function () { return __jouyaTauriInvoke('hb_open_uri', { uri: waUrl }); })
+                        .catch(function () { _copyMsg(); });
+                });
             return;
         }
 

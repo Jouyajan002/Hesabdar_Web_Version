@@ -4940,6 +4940,27 @@
 
     <!-- SheetJS برای کار با فایل‌های اکسل (آفلاین) — اگر در assets/js نبود از CDN لود می‌شود -->
     <script src="assets/js/xlsx.full.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';document.head.appendChild(s);})();"></script>
+    <script>
+    /* اگر XLSX به هر دلیل (فایلِ ناقص، مسدودشدنِ CDN در نسخهٔ نصبی) بارگذاری نشد، یک بارِ دیگر
+       از فایلِ محلی و سپس از CDN تلاش می‌شود؛ وگرنه دیالوگِ «کتابخانهٔ اکسل بارگذاری نشده» ظاهر می‌شد. */
+    (function () {
+        function load(src, next) {
+            var s = document.createElement("script");
+            s.src = src; s.async = false;
+            s.onerror = function () { if (next) next(); };
+            document.head.appendChild(s);
+        }
+        function check() {
+            if (typeof window.XLSX !== "undefined") return;
+            load("assets/js/xlsx.full.min.js", function () {
+                load("https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js");
+            });
+        }
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", check);
+        else check();
+        setTimeout(check, 2500);
+    })();
+    </script>
 
     <!-- تولیدِ PDF در خودِ دستگاه (موبایل/مرورگر) برای «اشتراک‌گذاری با نامِ فارسی» از طریق شیت اشتراکِ نیتیو.
          html2canvas تصویرِ صفحه را می‌گیرد و jsPDF آن را به PDF تبدیل می‌کند (فارسی/راست‌چین حفظ می‌شود).
@@ -4947,6 +4968,9 @@
     <script src="assets/js/html2canvas.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';document.head.appendChild(s);})();"></script>
     <script src="assets/js/jspdf.umd.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';document.head.appendChild(s);})();"></script>
 
+    <!-- پلِ نسخهٔ نصبی (Tauri): electronAPI را می‌سازد تا «ذخیره در پوشهٔ دانلودها» و
+         «بازکردنِ فایلِ اکسل» مثلِ نسخهٔ الکترون کار کند. در وب/موبایل بی‌اثر است. -->
+    <script src="tauri-bridge.js" onerror="console.warn('tauri-bridge.js not found')"></script>
     <script src="database.js"></script>
     <script src="script.js"></script>
     <script src="persian-date-utils.js" onerror="console.warn('persian-date-utils.js not found')"></script>
