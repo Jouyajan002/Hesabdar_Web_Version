@@ -335,6 +335,46 @@ mod win_share {
 
         Ok(())
     }
+
+    /// همان پنلِ اشتراک، ولی برای «متن» (پیامِ بیلانسِ شخص) — تا این گزینه هم مثلِ بقیه
+    /// لیستِ برنامه‌ها را بیاورد و کاربر واتساپِ ویندوز را از همان پنل انتخاب کند،
+    /// نه اینکه مرورگر باز شود. باید روی «نخِ اصلیِ برنامه» صدا زده شود.
+    pub fn show_share_panel_text(hwnd_raw: isize, text: String, title: String) -> Result<(), String> {
+        let hwnd = HWND(hwnd_raw as *mut core::ffi::c_void);
+
+        let interop: IDataTransferManagerInterop =
+            factory::<DataTransferManager, IDataTransferManagerInterop>()
+                .map_err(|e| format!("factory: {}", e))?;
+
+        let dtm: DataTransferManager = unsafe { interop.GetForWindow(hwnd) }
+            .map_err(|e| format!("GetForWindow: {}", e))?;
+
+        let text_for_handler = text;
+        let title_for_handler = title;
+        let handler = TypedEventHandler::<DataTransferManager, DataRequestedEventArgs>::new(
+            move |_sender, args| {
+                let args = args.ok()?;
+                let request = args.Request()?;
+                let data = request.Data()?;
+                data.Properties()?
+                    .SetTitle(&HSTRING::from(title_for_handler.as_str()))?;
+                data.SetText(&HSTRING::from(text_for_handler.as_str()))?;
+                Ok(())
+            },
+        );
+
+        dtm.DataRequested(&handler)
+            .map_err(|e| format!("DataRequested: {}", e))?;
+
+        KEEP_ALIVE.with(|k| {
+            *k.borrow_mut() = Some(dtm);
+        });
+
+        unsafe { interop.ShowShareUIForWindow(hwnd) }
+            .map_err(|e| format!("ShowShareUIForWindow: {}", e))?;
+
+        Ok(())
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -504,6 +544,64 @@ fn try_native_share_panel(
     }
 }
 
+#[cfg(target_os = "windows")]
+fn try_native_share_panel_text(
+    app: &tauri::AppHandle,
+    hwnd_raw: isize,
+    text: &str,
+    title: &str,
+) -> Result<(), String> {
+    use std::sync::mpsc;
+    let (tx, rx) = mpsc::channel::<Result<(), String>>();
+    let s = text.to_string();
+    let t = title.to_string();
+    app.run_on_main_thread(move || {
+        let _ = tx.send(win_share::show_share_panel_text(hwnd_raw, s, t));
+    })
+    .map_err(|e| format!("run_on_main_thread: {}", e))?;
+
+    match rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        Ok(r) => r,
+        Err(e) => Err(format!("main-thread-timeout: {}", e)),
+    }
+}
+
+// ── پنلِ اشتراکِ سیستم برای «متن» ────────────────────────────────────────────────
+//  گزینهٔ «ارسال پیام» در بخشِ اشخاص از این دستور استفاده می‌کند تا رفتارش دقیقاً مثلِ
+//  بقیهٔ گزینه‌های اشتراک باشد: لیستِ برنامه‌ها می‌آید و انتخابِ واتساپ، واتساپِ ویندوز را
+//  با همان متن باز می‌کند. اگر پنل باز نشود، سمتِ جاوااسکریپت به whatsapp:// و سپس
+//  کلیپ‌بورد برمی‌گردد؛ پس هیچ‌وقت «هیچ اتفاقی نیفتاد» رخ نمی‌دهد.
+#[tauri::command]
+async fn hb_share_text_win(
+    app: tauri::AppHandle,
+    window: tauri::WebviewWindow,
+    text: String,
+    title: String,
+) -> ShareResult {
+    let _ = window.unminimize();
+    let _ = window.show();
+    let _ = window.set_focus();
+    std::thread::sleep(std::time::Duration::from_millis(120));
+
+    #[cfg(target_os = "windows")]
+    {
+        let hwnd_raw = match window.hwnd() {
+            Ok(h) => h.0 as isize,
+            Err(e) => return ShareResult { ok: false, diag: format!("hwnd: {}", e) },
+        };
+        return match try_native_share_panel_text(&app, hwnd_raw, &text, &title) {
+            Ok(()) => ShareResult { ok: true, diag: "native-share-panel-text".into() },
+            Err(e) => ShareResult { ok: false, diag: e },
+        };
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (&app, &text, &title);
+        ShareResult { ok: false, diag: "not-win32".into() }
+    }
+}
+
 // دستور به‌صورتِ async اعلام شده و کارِ مسدودکننده در یک نخِ جداگانه انجام می‌شود، تا
 // انتظارها هیچ‌وقت رابطِ کاربری را قفل نکنند.
 #[tauri::command]
@@ -580,7 +678,8 @@ fn main() {
             hb_set_clipboard_file,
             hb_open_uri,
             hb_app_version,
-            hb_share_file_win
+            hb_share_file_win,
+            hb_share_text_win
         ])
         .run(tauri::generate_context!())
         .expect("error while running Hesabdar");
