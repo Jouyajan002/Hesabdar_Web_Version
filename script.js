@@ -11017,6 +11017,100 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
 //  در صورتِ شکست: یک گزارشِ کاملِ مرحله‌به‌مرحله در کنسول چاپ و همان گزارش در پوشهٔ
 //  دانلود ذخیره می‌شود تا بتوانید فایل را بفرستید.
 // ══════════════════════════════════════════════════════════════════════════════
+// ── تشخیصِ نسخهٔ نصبی (Tauri) و فراخوانیِ مستقیمِ فرمان‌های آن ────────────────────
+//  ⚠ عمداً به tauri-bridge.js وابسته نیست. گزارشِ تشخیصیِ واقعی از دستگاهِ کاربر نشان داد
+//    که window.__TAURI__.core.invoke موجود بود ولی window.electronAPI هرگز ساخته نشد —
+//    یعنی پل اجرا نشده بود و در نتیجه همهٔ مسیرِ اشتراک از کار افتاده بود. پس منطقِ اشتراک
+//    باید خودش مستقیم به invoke دسترسی داشته باشد و پل فقط یک راحتیِ اضافه باشد.
+function __jouyaIsTauri() {
+    try {
+        if (window.__JOUYA_RUNTIME === 'tauri') return true;
+        if (window.__TAURI__ || window.__TAURI_INTERNALS__) return true;
+        var h = String((location && location.hostname) || '');
+        if (h === 'tauri.localhost' || h === 'ipc.localhost') return true;
+    } catch (e) {}
+    return false;
+}
+function __jouyaTauriInvoke(cmd, args) {
+    try {
+        if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function')
+            return Promise.resolve(window.__TAURI__.core.invoke(cmd, args || {}));
+        if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function')
+            return Promise.resolve(window.__TAURI_INTERNALS__.invoke(cmd, args || {}));
+    } catch (e) { return Promise.reject(e); }
+    return Promise.reject(new Error('tauri-invoke-unavailable'));
+}
+// ⚠ در WebView2 هرگز navigator.share را صدا نزنید.
+//  گزارشِ دستگاهِ کاربر ثابت کرد: navigator.share و canShare هر دو «موجود»اند و canShare
+//  برای فایل true برمی‌گرداند، ولی فراخوانی هیچ پنجره‌ای باز نمی‌کند و Promise آن هیچ‌وقت
+//  settle نمی‌شود. نتیجه: اولین کلیک بی‌صدا معلق می‌ماند و هر کلیکِ بعدی با خطای
+//  «InvalidStateError: An earlier share has not yet completed» رد می‌شود — یعنی قابلیت
+//  برای همیشه در آن نشست می‌سوزد. پس در Tauri این API کاملاً کنار گذاشته می‌شود.
+function __jouyaCanUseWebShare() {
+    try {
+        if (__jouyaIsTauri()) return false;
+        return typeof navigator.share === 'function';
+    } catch (e) { return false; }
+}
+function __jouyaBlobToBytes(blob) {
+    return new Promise(function (resolve, reject) {
+        try {
+            var fr = new FileReader();
+            fr.onload = function () {
+                try { resolve(Array.prototype.slice.call(new Uint8Array(fr.result))); }
+                catch (e) { reject(e); }
+            };
+            fr.onerror = function () { reject(fr.error || new Error('read-failed')); };
+            fr.readAsArrayBuffer(blob);
+        } catch (e) { reject(e); }
+    });
+}
+// ══ هستهٔ واحدِ «ارسالِ فایل در نسخهٔ نصبی» ══════════════════════════════════════
+//  تمامِ نقاطِ ارسال به واتساپ (اورلیِ پیش‌نمایش، نوارِ بالا، دکمهٔ «اشتراک‌گذاری دستگاه»،
+//  و فراخوانی‌های مستقیم) به همین یک تابع می‌رسند تا رفتار همه‌جا یکسان باشد:
+//    نوشتنِ PDF در پوشهٔ موقت → پنلِ اشتراکِ ویندوز (WinRT) → در صورتِ شکست: کپی در
+//    کلیپ‌بورد + بازکردنِ واتساپ + نشان‌دادنِ پوشه. هیچ جا navigator.share صدا نمی‌شود.
+//  به tauri-bridge.js وابسته نیست (invoke مستقیم)، پس حتی اگر پل اجرا نشده باشد کار می‌کند.
+function __jouyaNativeShareBlob(blob, shareName, title) {
+    if (!blob) { __jouyaDiagReport('PDF ساخته نشد (blob خالی)'); return true; }
+    __jouyaDiagAdd('PDF آماده', String(blob.size) + ' بایت');
+    var outPath = '';
+    __jouyaBlobToBytes(blob).then(function (bytes) {
+        __jouyaDiagAdd('نوشتنِ فایل', shareName + ' (' + bytes.length + ' بایت)');
+        return __jouyaTauriInvoke('hb_write_file', { dest: 'temp-unique', fileName: shareName, bytes: bytes });
+    }).then(function (p) {
+        outPath = String(p || '');
+        __jouyaDiagAdd('فایل نوشته شد', outPath);
+        return __jouyaTauriInvoke('hb_share_file_win', { filePath: outPath, title: String(title || 'گزارش') });
+    }).then(function (res) {
+        __jouyaDiagAdd('پنلِ اشتراک', JSON.stringify(res || null));
+        if (res && res.ok) return;                       // پنل باز شد → سکوت
+        // فالبک: کپیِ فایل در کلیپ‌بورد + بازکردنِ واتساپ + نشان‌دادنِ پوشه
+        __jouyaDiagAdd('فالبک', 'کلیپ‌بورد + بازکردنِ واتساپ');
+        return __jouyaTauriInvoke('hb_set_clipboard_file', { path: outPath }).catch(function () { return false; })
+            .then(function (clip) {
+                return __jouyaTauriInvoke('hb_open_uri', { uri: 'whatsapp://' }).catch(function () { return null; })
+                    .then(function () {
+                        __jouyaTauriInvoke('hb_reveal_in_dir', { path: outPath }).catch(function () {});
+                        if (typeof showMessage === 'function') showMessage('ارسال به واتساپ',
+                            (clip ? 'فایل در حافظه کپی شد و واتساپ باز شد. در چتِ مخاطب Ctrl+V را بزنید.'
+                                  : 'واتساپ باز شد. فایل را از این مسیر پیوست کنید:') + '\n' + outPath);
+                        __jouyaDiagAdd('فالبک انجام شد', 'clip=' + clip);
+                    });
+            });
+    }).catch(function (e) {
+        __jouyaDiagAdd('مسیر ۰ خطا', (e && e.message) || String(e));
+        __jouyaDiagReport('مسیرِ نصبی ناموفق: ' + ((e && e.message) || e));
+    });
+    return true;
+}
+if (typeof window !== 'undefined') {
+    window.__jouyaIsTauri = __jouyaIsTauri;
+    window.__jouyaTauriInvoke = __jouyaTauriInvoke;
+    window.__jouyaCanUseWebShare = __jouyaCanUseWebShare;
+    window.__jouyaNativeShareBlob = __jouyaNativeShareBlob;
+}
+
 function __jouyaDiagReset() {
     try { window.__JOUYA_SHARE_LOG = []; } catch (e) {}
 }
@@ -11130,6 +11224,25 @@ function __jouyaShareToWhatsApp(fullHtml, pdfName, blobReady) {
         : (String(pdfName || 'گزارش') + '.pdf');
     __jouyaDiagAdd('نامِ فایلِ ارسالی', shareName);
 
+    // ══ مسیرِ ۰ (نسخهٔ نصبی): پنلِ اشتراکِ ویندوز، با فراخوانیِ مستقیمِ فرمان‌های Tauri ══
+    //  این مسیر به پل وابسته نیست، پس حتی اگر tauri-bridge.js اجرا نشده باشد هم کار می‌کند.
+    if (__jouyaIsTauri()) {
+        __jouyaDiagAdd('مسیر ۰', 'نسخهٔ نصبی شناسایی شد — پنلِ اشتراکِ سیستم با invoke مستقیم');
+        var goNative = function (blob) {
+            __jouyaNativeShareBlob(blob, shareName, pdfName);
+        };
+        if (blobReady) { goNative(blobReady); return true; }
+        if (typeof window.__jouyaHtmlToPdfBlob !== 'function') {
+            __jouyaDiagReport('موتورِ ساختِ PDF بارگذاری نشده است');
+            return true;
+        }
+        window.__jouyaHtmlToPdfBlob(fullHtml).then(goNative).catch(function (e) {
+            __jouyaDiagAdd('ساختِ PDF ناموفق', (e && e.message) || String(e));
+            __jouyaDiagReport('ساختِ PDF ناموفق: ' + ((e && e.message) || e));
+        });
+        return true;
+    }
+
     // ── مسیرِ ۱: پلِ نصبی (Tauri/Electron) → پنلِ اشتراکِ ویندوز ──
     if (window.electronAPI && typeof window.electronAPI.sharePdfToWhatsApp === 'function') {
         __jouyaDiagAdd('مسیر ۱', 'electronAPI.sharePdfToWhatsApp موجود است — پنلِ اشتراکِ سیستم');
@@ -11172,9 +11285,13 @@ function __jouyaShareToWhatsApp(fullHtml, pdfName, blobReady) {
         catch (e) { __jouyaDiagAdd('ساختِ File ناموفق', (e && e.message) || String(e)); }
 
         var canFiles = false;
-        try { canFiles = !!(file && navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))); }
+        try {
+            canFiles = !!(file && __jouyaCanUseWebShare()
+                && (!navigator.canShare || navigator.canShare({ files: [file] })));
+        }
         catch (e) { __jouyaDiagAdd('canShare استثنا', (e && e.message) || String(e)); }
-        __jouyaDiagAdd('مسیر ۲', 'navigator.share=' + (typeof navigator.share) + ' | اشتراکِ فایل مجاز=' + canFiles);
+        __jouyaDiagAdd('مسیر ۲', 'navigator.share=' + (typeof navigator.share)
+            + ' | مجازِ استفاده=' + __jouyaCanUseWebShare() + ' | اشتراکِ فایل مجاز=' + canFiles);
 
         if (canFiles) {
             try {
@@ -11236,6 +11353,13 @@ function __jouyaShareToWhatsApp(fullHtml, pdfName, blobReady) {
 if (typeof window !== 'undefined') window.__jouyaShareToWhatsApp = __jouyaShareToWhatsApp;
 
 function __jouyaSharePdfToWhatsApp(html, name) {
+    // همهٔ نقاطِ ورودِ «ارسال به واتساپ» از یک مسیرِ واحد می‌گذرند (شاملِ دکمهٔ نوارِ بالای
+    // پیش‌نمایشِ بل و گزارش). در نسخهٔ نصبی این تابع به مسیرِ نیتیو می‌رود، نه navigator.share.
+    try {
+        if (typeof __jouyaIsTauri === 'function' && __jouyaIsTauri()) {
+            return __jouyaShareToWhatsApp(html, name, null);
+        }
+    } catch (e) {}
     try {
         if (window.electronAPI && typeof window.electronAPI.sharePdfToWhatsApp === 'function') {
             Promise.resolve(window.electronAPI.sharePdfToWhatsApp(html, name)).then(function (res) {
@@ -11477,6 +11601,18 @@ function __jouyaDownloadBlob(blob, filename) {
 // باید با یک Blobِ آماده فراخوانی شود (نه بعد از انتظارِ طولانی). اگر مرورگر از اشتراکِ فایل
 // پشتیبانی نکند، فایل با نامِ فارسی دانلود می‌شود.
 function __jouyaDoNativeShare(blob, persianName, titleName) {
+    // ── نسخهٔ نصبی (WebView2): navigator.share معلق می‌ماند، پس همان هستهٔ نیتیو ──
+    try {
+        if (typeof __jouyaIsTauri === 'function' && __jouyaIsTauri()) {
+            try { __jouyaDiagReset(); } catch (e) {}
+            __jouyaDiagAdd('کلیکِ «اشتراک‌گذاری دستگاه»', 'نام: ' + String(titleName || ''));
+            var natName = (typeof __jouyaShareFileName === 'function')
+                ? __jouyaShareFileName(titleName || persianName)
+                : String(persianName || 'گزارش.pdf');
+            __jouyaDiagAdd('نامِ فایلِ ارسالی', natName);
+            return __jouyaNativeShareBlob(blob, natName, titleName || persianName);
+        }
+    } catch (e) {}
     var file = null;
     try { file = new File([blob], persianName, { type: 'application/pdf' }); } catch (e) { file = null; }
     try {
@@ -11503,6 +11639,12 @@ function __jouyaDoNativeShare(blob, persianName, titleName) {
 // (مسیرِ اصلیِ موبایل، اورلیِ پیش‌نمایش است که PDF را از پیش می‌سازد؛ اینجا برای فراخوانی‌های
 //  مستقیم است و PDF را همان لحظه می‌سازد.)
 function __jouyaShareFileNative(html, name) {
+    // در نسخهٔ نصبی مسیرِ نیتیو استفاده می‌شود، نه Web Share (که در WebView2 معلق می‌ماند).
+    try {
+        if (typeof __jouyaIsTauri === 'function' && __jouyaIsTauri()) {
+            return __jouyaShareToWhatsApp(html, name, null);
+        }
+    } catch (e) {}
     var persianName = __jouyaShareFileName(name);
     if (typeof showToast === 'function') { try { showToast('در حال آماده‌سازی فایل…', 'info'); } catch (e) {} }
     __jouyaHtmlToPdfBlob(html).then(function (blob) {
@@ -11542,6 +11684,9 @@ function __jouyaUseInAppPreview() {
     try {
         if (typeof __ppOpenMobileOverlay !== 'function') return false;
         if (window.__JOUYA_RUNTIME === 'tauri') return true;
+        // نسخهٔ نصبی، مستقل از پل: پیش‌نمایش همیشه درون‌برنامه‌ای است تا دکمهٔ واتساپ
+        // در همان صفحه (و روی همان تابعِ نیتیو) اجرا شود، نه در پنجرهٔ جدا با window.opener.
+        if (typeof __jouyaIsTauri === 'function' && __jouyaIsTauri()) return true;
         var proto = (location && location.protocol) || '';
         var isElectron = !!window.electronAPI || /electron/i.test(navigator.userAgent || '') || proto === 'file:';
         if (isElectron) return false;
@@ -11624,7 +11769,9 @@ function __openPrintPreview(rawHtml, opts) {
         +   'html+=\'<div style="font-size:10.5px;color:#64748b;text-align:right;line-height:1.7;padding:2px 4px;">پس از ذخیرهٔ PDF، واتساپِ کامپیوتر باز می‌شود؛ مخاطب را انتخاب و فایلِ PDF را پیوست و ارسال کنید.</div>\';'
         +   'html+=\'<a href="mailto:?subject=\'+s+\'&body=\'+t+\'" style="text-decoration:none;color:#1a2533;padding:10px 12px;border-radius:8px;background:#eef2ff;font-weight:bold;display:flex;align-items:center;gap:8px;">' + icoMail + ' ارسال با ایمیل</a>\';'
         +   'm.innerHTML=html;'
-        +   'if(navigator.share){var b=document.createElement("button");b.setAttribute("style","cursor:pointer;border:none;padding:10px 12px;border-radius:8px;background:#ede9fe;color:#1a2533;font-weight:bold;font-family:inherit;text-align:right;");b.innerHTML=' + JSON.stringify((useFA ? '<i class="fas fa-share-nodes"></i> ' : '🔗 ') + 'اشتراک‌گذاری دستگاه') + ';b.onclick=function(){navigator.share({title:__ppTitle,text:__ppText}).catch(function(){});};m.appendChild(b);}'
+        // در نسخهٔ نصبی، «اشتراک‌گذاریِ دستگاه» با navigator.share نمایش داده نمی‌شود
+        // (در WebView2 معلق می‌ماند)؛ ارسالِ فایل از دکمهٔ «ارسال به واتساپ» انجام می‌گیرد.
+        +   'if(' + ((typeof __jouyaIsTauri === 'function' && __jouyaIsTauri()) ? 'false' : 'navigator.share') + '){var b=document.createElement("button");b.setAttribute("style","cursor:pointer;border:none;padding:10px 12px;border-radius:8px;background:#ede9fe;color:#1a2533;font-weight:bold;font-family:inherit;text-align:right;");b.innerHTML=' + JSON.stringify((useFA ? '<i class="fas fa-share-nodes"></i> ' : '🔗 ') + 'اشتراک‌گذاری دستگاه') + ';b.onclick=function(){navigator.share({title:__ppTitle,text:__ppText}).catch(function(){});};m.appendChild(b);}'
         +   'document.body.appendChild(m);'
         + '}'
         + '</scr' + 'ipt>';
@@ -19844,17 +19991,34 @@ function _sendPersonBalanceMessage(id) {
             (lines.length ? lines.join('\n') : 'حساب شما کاملاً تسویه است ✅') + '\n\n' +
             'در صورتِ هرگونه پرسش در خدمت هستیم. با تشکر از همکاری شما.';
 
+        var phone = String(person.phone || '').replace(/[^0-9]/g, '');
+        var waUrl = 'https://wa.me/' + (phone || '') + '?text=' + encodeURIComponent(msg);
+
+        // ── نسخهٔ نصبی: نه navigator.share و نه window.open ──
+        //  در WebView2 اولی بی‌صدا معلق می‌ماند (و قابلیت اشتراک را برای همان نشست می‌سوزاند)
+        //  و دومی پنجره‌ای باز نمی‌کند. لینکِ wa.me با فرمانِ سیستمی باز می‌شود؛ واتساپ همان
+        //  مخاطب را با متنِ آماده باز می‌کند.
+        if (typeof __jouyaIsTauri === 'function' && __jouyaIsTauri()) {
+            __jouyaTauriInvoke('hb_open_uri', { uri: waUrl }).catch(function () {
+                try {
+                    navigator.clipboard.writeText(msg);
+                    if (typeof showToast === 'function') showToast('پیام کپی شد؛ در واتساپ بچسبانید', 'success');
+                } catch (e2) {
+                    if (typeof showMessage === 'function') showMessage('پیام', msg);
+                }
+            });
+            return;
+        }
+
         // بازکردنِ شیت اشتراکِ نیتیو (موبایل → انتخابِ واتساپ → مخاطب). فالبک: واتساپ/کلیپ‌بورد.
         var shared = false;
         try {
-            if (navigator.share) {
+            if (typeof __jouyaCanUseWebShare === 'function' ? __jouyaCanUseWebShare() : !!navigator.share) {
                 navigator.share({ text: msg }).catch(function () {});
                 shared = true;
             }
         } catch (e) { shared = false; }
         if (!shared) {
-            var phone = String(person.phone || '').replace(/[^0-9]/g, '');
-            var waUrl = 'https://wa.me/' + (phone || '') + '?text=' + encodeURIComponent(msg);
             try { window.open(waUrl, '_blank'); shared = true; } catch (e) {}
         }
         if (!shared) {
