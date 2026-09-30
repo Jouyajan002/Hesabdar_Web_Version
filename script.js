@@ -11006,6 +11006,235 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
 // طریقِ window.opener صدا می‌زند. HTMLِ گزارش به Main فرستاده و آنجا به «فایلِ واقعیِ PDF» تبدیل،
 // در Clipboard گذاشته و واتساپِ دسکتاپ باز می‌شود تا کاربر با انتخابِ مخاطب و Ctrl+V خودِ فایل را
 // ارسال کند. تابعِ declaration است تا با وجودِ throwِ سطح‌بالا هم به‌صورتِ window.* در دسترس باشد.
+// ══════════════════════════════════════════════════════════════════════════════
+//  «ارسال به واتساپ» — مسیرِ واحد با گزارشِ تشخیصیِ کامل
+//  ---------------------------------------------------------------------------
+//  چرا اینجا و نه در tauri-bridge.js؟ چون یکی از احتمال‌های «هیچ اتفاقی نمی‌افتد»
+//  این است که خودِ پل بارگذاری نشده باشد؛ در آن حالت هر تشخیصی که داخلِ پل باشد هم
+//  اجرا نمی‌شود. این کد در script.js است، پس همیشه اجرا می‌شود.
+//
+//  رفتار: در صورتِ موفقیت هیچ پیام و هیچ فایلی تولید نمی‌شود (رابط کاربری دست‌نخورده).
+//  در صورتِ شکست: یک گزارشِ کاملِ مرحله‌به‌مرحله در کنسول چاپ و همان گزارش در پوشهٔ
+//  دانلود ذخیره می‌شود تا بتوانید فایل را بفرستید.
+// ══════════════════════════════════════════════════════════════════════════════
+function __jouyaDiagReset() {
+    try { window.__JOUYA_SHARE_LOG = []; } catch (e) {}
+}
+function __jouyaDiagAdd(step, detail) {
+    try {
+        if (!window.__JOUYA_SHARE_LOG) window.__JOUYA_SHARE_LOG = [];
+        var t = '';
+        try { t = new Date().toISOString().slice(11, 23); } catch (e) {}
+        window.__JOUYA_SHARE_LOG.push(t + '  ' + step + (detail === undefined ? '' : ('  →  ' + detail)));
+        try { console.log('[jouya-share] ' + step, detail === undefined ? '' : detail); } catch (e) {}
+    } catch (e) {}
+}
+// عکسِ محیط — همان چیزهایی که تعیین می‌کنند کدام مسیرِ اشتراک در دسترس است
+function __jouyaDiagEnv() {
+    var q = function (v) { try { return typeof v; } catch (e) { return 'throw'; } };
+    var lines = [];
+    var push = function (k, v) { lines.push('  ' + k + ' = ' + v); };
+    try {
+        push('runtime', String(window.__JOUYA_RUNTIME || 'web'));
+        push('location.protocol', String((location && location.protocol) || '?'));
+        push('location.href', String((location && location.href) || '?').slice(0, 160));
+        push('userAgent', String(navigator.userAgent || '?').slice(0, 200));
+        push('typeof window.__TAURI__', q(window.__TAURI__));
+        push('typeof __TAURI__.core', (window.__TAURI__ ? q(window.__TAURI__.core) : 'n/a'));
+        push('typeof __TAURI__.core.invoke', (window.__TAURI__ && window.__TAURI__.core ? q(window.__TAURI__.core.invoke) : 'n/a'));
+        push('typeof window.electronAPI', q(window.electronAPI));
+        push('electronAPI keys', window.electronAPI ? Object.keys(window.electronAPI).join(',') : 'n/a');
+        push('typeof electronAPI.sharePdfToWhatsApp', window.electronAPI ? q(window.electronAPI.sharePdfToWhatsApp) : 'n/a');
+        push('typeof navigator.share', q(navigator.share));
+        push('typeof navigator.canShare', q(navigator.canShare));
+        push('typeof window.jspdf', q(window.jspdf));
+        push('typeof window.html2canvas', q(window.html2canvas));
+        push('typeof __jouyaHtmlToPdfBlob', q(window.__jouyaHtmlToPdfBlob));
+        push('typeof __ppOpenMobileOverlay', q(window.__ppOpenMobileOverlay));
+        push('typeof __jouyaDownloadBlob', q(window.__jouyaDownloadBlob));
+        push('isDesktopShare', (typeof __jouyaIsDesktopShare === 'function') ? String(__jouyaIsDesktopShare()) : '?');
+        push('window size', String(window.innerWidth) + 'x' + String(window.innerHeight));
+    } catch (e) {
+        lines.push('  (env error: ' + (e && e.message) + ')');
+    }
+    return lines.join('\n');
+}
+// ساختِ متنِ گزارش + ذخیره در پوشهٔ دانلود + پیام به کاربر
+function __jouyaDiagReport(reason) {
+    var txt = '';
+    try {
+        txt = 'حسابدار — گزارشِ تشخیصیِ «ارسال به واتساپ»\n'
+            + '=================================================\n'
+            + 'زمان: ' + (new Date()).toString() + '\n'
+            + 'نتیجه: ناموفق — ' + String(reason || '?') + '\n\n'
+            + 'محیط:\n' + __jouyaDiagEnv() + '\n\n'
+            + 'مراحل:\n'
+            + ((window.__JOUYA_SHARE_LOG || []).map(function (l) { return '  ' + l; }).join('\n') || '  (خالی)')
+            + '\n';
+    } catch (e) { txt = 'diag build error: ' + (e && e.message); }
+
+    try { console.error('[jouya-share] گزارشِ تشخیصی:\n' + txt); } catch (e) {}
+
+    var fname = 'hesabdar-share-diagnostic';
+    try { fname += '-' + (new Date()).toISOString().replace(/[:.]/g, '-').slice(0, 19); } catch (e) {}
+    fname += '.txt';
+
+    var done = function (where) {
+        if (typeof showMessage === 'function') {
+            showMessage('ارسال به واتساپ — ناموفق',
+                'ارسالِ خودکار انجام نشد.\nعلت: ' + String(reason || '?') +
+                '\n\nگزارشِ کاملِ تشخیصی ذخیره شد:\n' + where +
+                '\n\nلطفاً همین فایل را بفرستید. فایلِ PDF را هم می‌توانید از «دانلود / چاپ PDF» بگیرید و دستی در واتساپ پیوست کنید.');
+        }
+    };
+
+    // ۱) نسخهٔ نصبی: نوشتنِ واقعیِ فایل در پوشهٔ دانلود از راهِ پلِ Tauri
+    try {
+        if (window.electronAPI && typeof window.electronAPI.saveTextToDownloads === 'function') {
+            Promise.resolve(window.electronAPI.saveTextToDownloads(fname, txt))
+                .then(function (p) { done(String(p || fname)); })
+                .catch(function (e) { done('(ذخیره ناموفق: ' + (e && e.message) + ') ' + fname); });
+            return txt;
+        }
+    } catch (e) {}
+
+    // ۲) وگرنه: دانلودِ مرورگری
+    try {
+        var blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+        var url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url; a.download = fname; a.style.display = 'none';
+        document.body.appendChild(a); a.click();
+        setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(url); } catch (e) {} }, 1500);
+        done('پوشهٔ دانلودها → ' + fname);
+    } catch (e) {
+        done('(ذخیرهٔ فایل ممکن نشد — متنِ گزارش در کنسول است)');
+    }
+    return txt;
+}
+if (typeof window !== 'undefined') {
+    window.__jouyaDiagReport = __jouyaDiagReport;
+    window.__jouyaDiagEnv = __jouyaDiagEnv;
+}
+
+// ── نقطهٔ ورودِ واحدِ دکمهٔ «ارسال به واتساپ» ─────────────────────────────────────
+// fullHtml: سندِ کاملِ HTML ؛ pdfName: نامِ فارسیِ سند (برچسبِ اشتراک)
+// blobReady: اگر PDF از قبل ساخته شده باشد (اورلی آن را پیش‌ساخت می‌کند) — برای iOS حیاتی است
+function __jouyaShareToWhatsApp(fullHtml, pdfName, blobReady) {
+    __jouyaDiagReset();
+    // (بلوکِ «محیط» یک‌بار در سربرگِ گزارش چاپ می‌شود؛ اینجا تکرار نمی‌شود.)
+    __jouyaDiagAdd('کلیکِ «ارسال به واتساپ»', 'نام: ' + String(pdfName || ''));
+
+    var shareName = (typeof __jouyaShareFileName === 'function')
+        ? __jouyaShareFileName(pdfName)
+        : (String(pdfName || 'گزارش') + '.pdf');
+    __jouyaDiagAdd('نامِ فایلِ ارسالی', shareName);
+
+    // ── مسیرِ ۱: پلِ نصبی (Tauri/Electron) → پنلِ اشتراکِ ویندوز ──
+    if (window.electronAPI && typeof window.electronAPI.sharePdfToWhatsApp === 'function') {
+        __jouyaDiagAdd('مسیر ۱', 'electronAPI.sharePdfToWhatsApp موجود است — پنلِ اشتراکِ سیستم');
+        var p;
+        try { p = Promise.resolve(window.electronAPI.sharePdfToWhatsApp(fullHtml, pdfName)); }
+        catch (e) {
+            __jouyaDiagAdd('مسیر ۱ استثنا', (e && e.message) || String(e));
+            __jouyaDiagReport('استثنا در فراخوانیِ پلِ نصبی: ' + ((e && e.message) || e));
+            return true;
+        }
+        p.then(function (res) {
+            __jouyaDiagAdd('مسیر ۱ نتیجه', JSON.stringify(res || null));
+            if (res && res.shareDiag) __jouyaDiagAdd('shareDiag', String(res.shareDiag));
+            if (res && res.ok) {
+                if (res.method === 'share') return;                 // پنل باز شد → سکوت (همان بازخوردِ کاربر)
+                if (res.clip) {
+                    if (typeof showMessage === 'function') showMessage('ارسال به واتساپ',
+                        'پنلِ اشتراکِ ویندوز در این سیستم باز نشد؛ فایل در حافظه کپی و واتساپ باز شد. در چتِ مخاطب Ctrl+V را بزنید.');
+                    return;
+                }
+                if (typeof showMessage === 'function') showMessage('ارسال به واتساپ',
+                    'فایلِ PDF ساخته شد و واتساپ باز شد.\nمسیرِ فایل: ' + String(res.path || ''));
+                return;
+            }
+            __jouyaDiagReport('پلِ نصبی ناموفق: ' + String((res && (res.error || res.diag)) || 'بدونِ توضیح'));
+        }).catch(function (e) {
+            __jouyaDiagAdd('مسیر ۱ رد شد', (e && e.message) || String(e));
+            __jouyaDiagReport('پلِ نصبی خطا داد: ' + ((e && e.message) || e));
+        });
+        return true;
+    }
+    __jouyaDiagAdd('مسیر ۱', 'در دسترس نیست (electronAPI یا sharePdfToWhatsApp موجود نیست)');
+
+    // ── مسیرِ ۲: اشتراکِ نیتیوِ مرورگر (همان چیزی که نسخهٔ وب استفاده می‌کند) ──
+    var shareFileThen = function (blob) {
+        if (!blob) { __jouyaDiagReport('PDF ساخته نشد (blob خالی)'); return; }
+        __jouyaDiagAdd('PDF آماده', String(blob.size) + ' بایت');
+        var file = null;
+        try { file = new File([blob], shareName, { type: 'application/pdf' }); }
+        catch (e) { __jouyaDiagAdd('ساختِ File ناموفق', (e && e.message) || String(e)); }
+
+        var canFiles = false;
+        try { canFiles = !!(file && navigator.share && (!navigator.canShare || navigator.canShare({ files: [file] }))); }
+        catch (e) { __jouyaDiagAdd('canShare استثنا', (e && e.message) || String(e)); }
+        __jouyaDiagAdd('مسیر ۲', 'navigator.share=' + (typeof navigator.share) + ' | اشتراکِ فایل مجاز=' + canFiles);
+
+        if (canFiles) {
+            try {
+                var sp = navigator.share({ files: [file], title: String(pdfName || 'گزارش') });
+                if (sp && sp.then) {
+                    sp.then(function () { __jouyaDiagAdd('مسیر ۲', 'موفق'); })
+                      .catch(function (err) {
+                          if (err && err.name === 'AbortError') { __jouyaDiagAdd('مسیر ۲', 'کاربر لغو کرد'); return; }
+                          __jouyaDiagAdd('مسیر ۲ خطا', (err && (err.name + ': ' + err.message)) || String(err));
+                          saveAndTell(blob);
+                      });
+                }
+                return;
+            } catch (e) {
+                __jouyaDiagAdd('مسیر ۲ استثنا', (e && e.message) || String(e));
+            }
+        }
+        // ── مسیرِ ۳: ذخیرهٔ واقعیِ فایل + راهنمایی ──
+        saveAndTell(blob);
+    };
+
+    var saveAndTell = function (blob) {
+        __jouyaDiagAdd('مسیر ۳', 'ذخیرهٔ فایل در پوشهٔ دانلود');
+        // فقط یک پیام: خودِ گزارشِ تشخیصی. (دو دیالوگِ پشتِ‌سرِ هم آزاردهنده است.)
+        var told = function (where) {
+            __jouyaDiagAdd('فایلِ PDF ذخیره شد', where);
+            __jouyaDiagReport('پنجرهٔ اشتراکِ سیستم باز نشد. فایلِ PDF ذخیره شد: ' + where);
+        };
+        try {
+            if (window.electronAPI && typeof window.electronAPI.saveToDownloads === 'function') {
+                Promise.resolve(window.electronAPI.saveToDownloads(shareName, blob))
+                    .then(function (p) { told(String(p || shareName)); })
+                    .catch(function (e) { __jouyaDiagAdd('ذخیره ناموفق', (e && e.message) || String(e)); told(shareName); });
+                return;
+            }
+        } catch (e) {}
+        var ok = false;
+        try { ok = (typeof __jouyaDownloadBlob === 'function') ? __jouyaDownloadBlob(blob, shareName) : false; } catch (e) {}
+        told(ok ? ('پوشهٔ دانلودها → ' + shareName) : ('(دانلود انجام نشد) ' + shareName));
+    };
+
+    if (blobReady) { shareFileThen(blobReady); return true; }
+
+    if (typeof window.__jouyaHtmlToPdfBlob !== 'function') {
+        __jouyaDiagReport('موتورِ ساختِ PDF بارگذاری نشده است (__jouyaHtmlToPdfBlob موجود نیست)');
+        return true;
+    }
+    __jouyaDiagAdd('ساختِ PDF', 'شروع');
+    try {
+        window.__jouyaHtmlToPdfBlob(fullHtml).then(shareFileThen).catch(function (e) {
+            __jouyaDiagAdd('ساختِ PDF ناموفق', (e && e.message) || String(e));
+            __jouyaDiagReport('ساختِ PDF ناموفق: ' + ((e && e.message) || e));
+        });
+    } catch (e) {
+        __jouyaDiagReport('استثنا در ساختِ PDF: ' + ((e && e.message) || e));
+    }
+    return true;
+}
+if (typeof window !== 'undefined') window.__jouyaShareToWhatsApp = __jouyaShareToWhatsApp;
+
 function __jouyaSharePdfToWhatsApp(html, name) {
     try {
         if (window.electronAPI && typeof window.electronAPI.sharePdfToWhatsApp === 'function') {
@@ -11655,12 +11884,14 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
             if (act === 'pdf') { closeShareMenu(); doPrint(); return; }
             if (act === 'wa') {
                 closeShareMenu();
-                // دسکتاپ: پنلِ اشتراکِ ویندوز از طریقِ electron. موبایل/مرورگر: شیت اشتراکِ نیتیو با فایلِ فارسی.
-                if (window.electronAPI && typeof window.electronAPI.sharePdfToWhatsApp === 'function') {
-                    var full = '<!DOCTYPE html>' + doc;
-                    try { window.__jouyaSharePdfToWhatsApp(full, pdfName); } catch (e) {}
-                } else {
-                    mobileShareFile();
+                // مسیرِ واحد با گزارشِ تشخیصی: پنلِ اشتراکِ سیستم (نسخهٔ نصبی) → اشتراکِ نیتیوِ
+                // مرورگر (همان مسیرِ نسخهٔ وب) → ذخیرهٔ فایل. در صورتِ شکست، گزارشِ کاملِ
+                // مرحله‌به‌مرحله در پوشهٔ دانلود ذخیره می‌شود؛ در صورتِ موفقیت هیچ پیامی نیست.
+                // _pdfBlob از پیش ساخته شده است (برای iOS حیاتی: همان لمسِ کاربر).
+                try {
+                    window.__jouyaShareToWhatsApp('<!DOCTYPE html>' + doc, pdfName, _pdfBlob || null);
+                } catch (e) {
+                    try { window.__jouyaDiagReport('استثنا در نقطهٔ ورود: ' + ((e && e.message) || e)); } catch (_) {}
                 }
                 return;
             }

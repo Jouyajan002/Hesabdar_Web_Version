@@ -18,11 +18,31 @@
     'use strict';
 
     // ── ۰) فقط داخلِ Tauri فعال شود ─────────────────────────────────────────────
-    var T = (typeof window !== 'undefined') ? window.__TAURI__ : null;
-    if (!T || !T.core || typeof T.core.invoke !== 'function') return;
+    //  دو راهِ رسیدن به invoke، و هر دو بررسی می‌شوند:
+    //   • window.__TAURI__.core.invoke      → فقط وقتی withGlobalTauri روشن باشد
+    //   • window.__TAURI_INTERNALS__.invoke → همیشه هست (خودِ Rust تزریق می‌کند)
+    //  اگر فقط به مسیرِ اول تکیه کنیم و withGlobalTauri به هر دلیلی اعمال نشود، کلِ این
+    //  پل بی‌صدا از کار می‌افتد و نتیجه‌اش همان «هیچ اتفاقی نمی‌افتد» است. پس مسیرِ دوم
+    //  به‌عنوان پشتیبان هم بررسی می‌شود.
+    if (typeof window === 'undefined') return;
     if (window.electronAPI) return;  // الکترون یا پلِ دیگری از قبل موجود است
 
-    var invoke = T.core.invoke;
+    var invoke = null;
+    var invokeSource = '';
+    try {
+        if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+            invoke = window.__TAURI__.core.invoke;
+            invokeSource = '__TAURI__.core.invoke';
+        } else if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
+            var _inv = window.__TAURI_INTERNALS__.invoke;
+            invoke = function (cmd, args) { return _inv(cmd, args); };
+            invokeSource = '__TAURI_INTERNALS__.invoke';
+        }
+    } catch (e) {}
+    if (!invoke) {
+        try { console.warn('[hesabdar] محیطِ Tauri نیست (نه __TAURI__ و نه __TAURI_INTERNALS__) — پل فعال نشد.'); } catch (e) {}
+        return;
+    }
     function call(cmd, args) {
         try { return Promise.resolve(invoke(cmd, args || {})); }
         catch (e) { return Promise.reject(e); }
@@ -177,6 +197,22 @@
             });
     }
 
+    // ── ذخیرهٔ متن (گزارشِ تشخیصی) در پوشهٔ دانلود ──────────────────────────────
+    function saveTextToDownloads(fileName, text) {
+        var s = String(text == null ? '' : text);
+        var bytes = [];
+        try {
+            if (typeof TextEncoder !== 'undefined') bytes = Array.from(new TextEncoder().encode(s));
+            else bytes = Array.from(unescape(encodeURIComponent(s))).map(function (c) { return c.charCodeAt(0); });
+        } catch (e) {
+            bytes = Array.from(s).map(function (c) { return c.charCodeAt(0) & 0xff; });
+        }
+        // BOM تا Notepad فارسی را درست نشان بدهد
+        bytes = [0xEF, 0xBB, 0xBF].concat(bytes);
+        return call('hb_write_file', { dest: 'downloads', fileName: String(fileName || 'diagnostic.txt'), bytes: bytes })
+            .then(function (p) { call('hb_reveal_in_dir', { path: p }).catch(function () {}); return p; });
+    }
+
     // ── ۵) ذخیرهٔ یک فایلِ دلخواه در پوشهٔ دانلود (کمکی؛ برای استفادهٔ آینده) ────
     function saveToDownloads(fileName, bytesOrBlob) {
         var step = (bytesOrBlob && typeof bytesOrBlob.arrayBuffer === 'function')
@@ -206,6 +242,8 @@
         sharePdfToWhatsApp: sharePdfToWhatsApp,
         // افزودنی‌های Tauri (اختیاری، برنامه به آن‌ها وابسته نیست)
         saveToDownloads: saveToDownloads,
+        saveTextToDownloads: saveTextToDownloads,
+        __invokeSource: invokeSource,
         revealInDir: function (p) { return call('hb_reveal_in_dir', { path: resolveDownload(p) }); },
         openExternal: function (u) { return call('hb_open_uri', { uri: String(u || '') }); },
         getAppVersion: function () { return call('hb_app_version'); },
@@ -264,5 +302,8 @@
         }, true);
     } catch (e) {}
 
-    try { console.log('[hesabdar] نسخهٔ دسکتاپِ Tauri آماده است.'); } catch (e) {}
+    try {
+        console.log('[hesabdar] پلِ نسخهٔ نصبی فعال شد — invoke از: ' + invokeSource);
+        console.log('[hesabdar] electronAPI:', Object.keys(window.electronAPI).join(', '));
+    } catch (e) {}
 })();
