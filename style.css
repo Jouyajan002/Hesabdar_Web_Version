@@ -9132,3 +9132,346 @@ body.dark-mode .person-row-menu hr,
 body.dark-mode .clog-action-bar hr {
     border-color: #334155 !important;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   داشبوردِ جدید (nd-*)
+   ---------------------------------------------------------------------------
+   فقط چیدمان و ظاهر. هیچ قاعده‌ای بیرون از پیشوندِ nd- (و چند قاعدهٔ صریحاً
+   محدودشده به داخلِ همین داشبورد) تعریف نشده، پس بقیهٔ صفحه‌ها دست‌نخورده‌اند.
+   رنگ‌ها از متغیر خوانده می‌شوند تا حالتِ تاریک با یک بلوک پوشش داده شود.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root {
+    --nd-bg:        #eef2f7;
+    --nd-card:      #ffffff;
+    --nd-card-head: #e2e8f0;
+    --nd-border:    #dbe3ee;
+    --nd-text:      #1b2a4a;
+    --nd-text-soft: #64748b;
+    --nd-shadow:    0 2px 8px rgba(15, 23, 42, .06);
+    --nd-radius:    12px;
+    --nd-donut-empty: #eef2f7;
+}
+body.dark-mode {
+    --nd-bg:        #0f172a;
+    --nd-card:      #1e293b;
+    --nd-card-head: #273549;
+    --nd-border:    #334155;
+    --nd-text:      #e2e8f0;
+    --nd-text-soft: #94a3b8;
+    --nd-shadow:    0 2px 10px rgba(0, 0, 0, .45);
+    --nd-donut-empty: #334155;
+}
+
+/* ── شبکهٔ اصلی ─────────────────────────────────────────────────────────────── */
+#dashboard .nd-grid {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    gap: 10px;
+    direction: rtl;
+    padding: 0 10px 14px 10px;
+    box-sizing: border-box;
+}
+#dashboard .nd-right { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+#dashboard .nd-left  { flex: 0 0 31%; max-width: 31%; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+#dashboard .nd-headrow { display: flex; flex-direction: row; gap: 10px; align-items: stretch; }
+#dashboard .nd-cols { display: flex; flex-direction: row; gap: 10px; align-items: stretch; }
+#dashboard .nd-colA { flex: 0 0 39%; max-width: 39%; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+#dashboard .nd-colB { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+
+/* ── کارتِ پایه ─────────────────────────────────────────────────────────────── */
+#dashboard .nd-card {
+    background: var(--nd-card);
+    border: 1px solid var(--nd-border);
+    border-radius: var(--nd-radius);
+    box-shadow: var(--nd-shadow);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-width: 0;
+}
+#dashboard .nd-card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; padding: 9px 14px;
+    background: var(--nd-card-head);
+    border-bottom: 1px solid var(--nd-border);
+    flex: 0 0 auto;
+}
+#dashboard .nd-card-title { font-size: .92rem; font-weight: 800; color: var(--nd-text); }
+#dashboard .nd-card-act { cursor: pointer; color: var(--nd-text-soft); font-size: .85rem; }
+#dashboard .nd-card-act:hover { color: var(--nd-text); }
+#dashboard .nd-card-body { padding: 10px 12px; flex: 1 1 auto; min-height: 0; color: var(--nd-text); }
+
+/* ── برند: نام + شعار + لوگو ────────────────────────────────────────────────── */
+#dashboard .nd-brand {
+    flex: 1 1 auto; min-width: 0;
+    display: flex; flex-direction: row; align-items: center; justify-content: flex-start;
+    gap: 12px; padding: 6px 4px;
+}
+/* نام و شعار تمامِ فضای باقی‌مانده تا جعبهٔ جستجو را می‌گیرند و راست‌چین می‌مانند */
+#dashboard .nd-brand .nd-brand-text { flex: 1 1 auto; min-width: 0; text-align: right; }
+#dashboard .nd-brand .dsi-name {
+    font-size: 1.55rem; font-weight: 900; color: var(--nd-text);
+    line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+#dashboard .nd-brand .nd-brand-slogan {
+    font-size: .74rem; font-weight: 600; color: var(--nd-text-soft);
+    margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* لوگو بدونِ قاب و پس‌زمینه — خودِ تصویر شفاف و واضح دیده شود */
+#dashboard .nd-brand .dsi-logo-wrap {
+    flex: 0 0 auto; width: 76px; height: 76px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 0; background: transparent; overflow: visible;
+}
+#dashboard .nd-brand .dsi-logo-img { width: 100%; height: 100%; object-fit: contain; }
+#dashboard .nd-brand .dsi-default-icon { font-size: 1.9rem; color: var(--nd-text-soft); }
+
+/* ── جستجوی سراسری ─────────────────────────────────────────────────────────── */
+#dashboard .nd-search {
+    flex: 0 0 34%; max-width: 34%; min-width: 0;
+    display: flex; flex-direction: column; justify-content: center; gap: 6px;
+}
+#dashboard .nd-search-hint { font-size: .72rem; color: var(--nd-text-soft); text-align: center; }
+#dashboard .nd-search-wrap { position: relative; }
+#dashboard .nd-search-input {
+    width: 100%; box-sizing: border-box;
+    padding: 9px 14px 9px 40px;
+    border: 1px solid var(--nd-border); border-radius: 9px;
+    background: var(--nd-card); color: var(--nd-text);
+    font-family: inherit; font-size: .84rem; outline: none;
+}
+#dashboard .nd-search-input::placeholder { color: var(--nd-text-soft); }
+#dashboard .nd-search-input:focus { border-color: #6366f1; box-shadow: 0 0 0 3px rgba(99, 102, 241, .14); }
+#dashboard .nd-search-icon {
+    position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    color: var(--nd-text-soft); font-size: .95rem; pointer-events: none;
+}
+/* دراپ‌داونِ نتایج — همان ظاهرِ جستجوی اجناسِ فورمِ فروش فوری */
+#dashboard .nd-search-results {
+    position: absolute; top: 100%; right: 0; left: 0; z-index: 99999;
+    display: none; margin-top: 4px; max-height: 320px; overflow-y: auto;
+    background: var(--nd-card); border: 1px solid var(--nd-border);
+    border-radius: 10px; box-shadow: 0 8px 24px rgba(15, 23, 42, .14);
+    animation: productSearchDropFade .15s ease-out;
+}
+#dashboard .nd-sr-item {
+    display: flex; align-items: center; gap: 9px;
+    padding: 8px 11px; cursor: pointer; font-size: .82rem;
+    border-bottom: 1px solid var(--nd-border); color: var(--nd-text);
+}
+#dashboard .nd-sr-item:last-child { border-bottom: none; }
+#dashboard .nd-sr-item:hover, #dashboard .nd-sr-item.active { background: var(--nd-card-head); }
+#dashboard .nd-sr-ico { flex: 0 0 auto; width: 22px; text-align: center; color: var(--nd-text-soft); }
+#dashboard .nd-sr-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+#dashboard .nd-sr-name { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#dashboard .nd-sr-sub { color: var(--nd-text-soft); font-size: .7rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#dashboard .nd-sr-tag {
+    flex: 0 0 auto; font-size: .64rem; font-weight: 800; padding: 2px 7px;
+    border-radius: 20px; background: var(--nd-card-head); color: var(--nd-text-soft);
+}
+#dashboard .nd-sr-empty { padding: 12px; text-align: center; font-size: .8rem; color: var(--nd-text-soft); }
+
+/* ── دسترسی سریع / روزنامچه ────────────────────────────────────────────────── */
+#dashboard .nd-qa-row { display: flex; flex-direction: row; gap: 8px; align-items: stretch; }
+#dashboard .nd-qa {
+    flex: 1 1 0; min-width: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
+    padding: 9px 4px;
+    background: var(--nd-card);
+    border: 1px solid var(--nd-border);
+    border-right: 4px solid var(--nd-qa-c, #1e3a5f);
+    border-left: 4px solid var(--nd-qa-c, #1e3a5f);
+    border-radius: 8px;
+    color: var(--nd-text); font-family: inherit; cursor: pointer;
+    transition: transform .12s, box-shadow .12s;
+}
+#dashboard .nd-qa:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15, 23, 42, .12); }
+#dashboard .nd-qa i { font-size: 1.18rem; color: var(--nd-text); }
+#dashboard .nd-qa span { font-size: .64rem; font-weight: 800; white-space: nowrap; }
+#dashboard .nd-qa-navy  { --nd-qa-c: #1e3a5f; }
+#dashboard .nd-qa-blue  { --nd-qa-c: #2563eb; }
+#dashboard .nd-qa-green { --nd-qa-c: #16a34a; }
+#dashboard .nd-qa-amber { --nd-qa-c: #f59e0b; }
+#dashboard .nd-qa-red   { --nd-qa-c: #dc2626; }
+#dashboard .nd-qa-slate { --nd-qa-c: #64748b; }
+
+/* ── نرخ ارز (کارتِ ماژولِ ارز داخلِ این ظرف) ───────────────────────────────── */
+#dashboard .nd-fx-body { padding: 6px 8px; }
+#dashboard .nd-fx .dash-info-col { display: block; }
+/* کارتِ تزریق‌شده بدونِ قابِ دوم و بدونِ سرصفحهٔ تکراری */
+#dashboard .nd-fx #dash-card-fx {
+    background: transparent !important; border: none !important;
+    box-shadow: none !important; margin: 0 !important; padding: 0 !important;
+}
+#dashboard .nd-fx #dash-card-fx > .dash-card-head { display: none !important; }
+#dashboard .nd-fx #dash-card-fx > .dash-card-body { padding: 0 !important; }
+#dashboard .nd-fx .csx-info-spacer { display: none !important; }
+
+/* ── وضعیت مالی ────────────────────────────────────────────────────────────── */
+#dashboard .nd-fin-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 2px; border-bottom: 1px dashed var(--nd-border);
+    flex-wrap: wrap;
+}
+#dashboard .nd-fin-row:last-child { border-bottom: none; }
+#dashboard .nd-fin-label {
+    flex: 0 0 auto; font-size: .82rem; font-weight: 800; color: var(--nd-text); min-width: 88px;
+}
+#dashboard .nd-fin-vals { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+#dashboard .nd-money {
+    display: inline-flex; align-items: baseline; gap: 4px;
+    padding: 3px 8px; border-radius: 7px;
+    background: var(--nd-card-head); font-size: .76rem; white-space: nowrap;
+}
+#dashboard .nd-money b { font-weight: 800; color: var(--nd-text); }
+#dashboard .nd-money i { font-style: normal; font-size: .66rem; color: var(--nd-text-soft); }
+
+/* ── نمودار فروش هفتگی: بدونِ پس‌زمینهٔ جداگانه ─────────────────────────────── */
+#dashboard .nd-chart .dashboard-charts {
+    background: transparent !important; box-shadow: none !important;
+    border: none !important; padding: 0 !important; margin: 0 !important;
+    display: block !important;
+}
+#dashboard .nd-chart .weekly-chart-area { width: 100% !important; }
+#dashboard .nd-chart #weekly-sales-chart { width: 100% !important; height: 150px !important; max-height: 150px !important; }
+#dashboard .nd-chart .weekly-chart-legend,
+#dashboard .nd-chart .weekly-chart-footer { font-size: .7rem; }
+
+/* ── فروشات امروز بر اساس کتگوری ───────────────────────────────────────────── */
+#dashboard .nd-cats-inner { display: flex; flex-direction: row; align-items: center; gap: 14px; }
+#dashboard .nd-donut-wrap { position: relative; flex: 0 0 auto; width: 150px; height: 150px; }
+#dashboard .nd-donut { width: 100%; height: 100%; display: block; }
+#dashboard .nd-donut-center {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; pointer-events: none;
+}
+#dashboard .nd-donut-val { font-size: 1.15rem; font-weight: 900; color: var(--nd-text); line-height: 1.1; }
+#dashboard .nd-donut-cur { font-size: .66rem; font-weight: 700; color: var(--nd-text-soft); }
+#dashboard .nd-cats-legend { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+#dashboard .nd-cat-row { display: flex; align-items: center; gap: 8px; font-size: .8rem; }
+#dashboard .nd-cat-dot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; }
+#dashboard .nd-cat-name { flex: 1 1 auto; min-width: 0; color: var(--nd-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#dashboard .nd-cat-pct { flex: 0 0 auto; font-weight: 800; color: var(--nd-text); }
+#dashboard .nd-cats-empty { font-size: .8rem; color: var(--nd-text-soft); text-align: center; padding: 14px 0; }
+
+/* ── آخرین معامله ──────────────────────────────────────────────────────────── */
+#dashboard .nd-seeall {
+    background: transparent; border: none; cursor: pointer; font-family: inherit;
+    font-size: .74rem; font-weight: 700; color: var(--nd-text-soft); padding: 2px 4px;
+}
+#dashboard .nd-seeall:hover { color: #6366f1; text-decoration: underline; }
+#dashboard .nd-recent { flex: 1 1 auto; min-height: 0; }
+#dashboard .nd-recent .nd-card-body { overflow: auto; }
+#dashboard .nd-recent-table {
+    width: 100% !important; min-width: 0 !important; max-width: 100% !important;
+    border-collapse: collapse; font-size: .74rem; table-layout: fixed;
+}
+#dashboard .nd-recent-table th:nth-child(1), #dashboard .nd-recent-table td:nth-child(1) { width: 24%; }
+#dashboard .nd-recent-table th:nth-child(2), #dashboard .nd-recent-table td:nth-child(2) { width: 32%; }
+#dashboard .nd-recent-table th:nth-child(3), #dashboard .nd-recent-table td:nth-child(3) { width: 26%; }
+#dashboard .nd-recent-table th:nth-child(4), #dashboard .nd-recent-table td:nth-child(4) { width: 18%; }
+#dashboard .nd-recent-table th {
+    background: var(--nd-card-head); color: var(--nd-text-soft);
+    font-weight: 800; padding: 6px 6px; text-align: center; white-space: nowrap;
+    position: sticky; top: 0; z-index: 1;
+}
+#dashboard .nd-recent-table td {
+    padding: 7px 4px; text-align: center; color: var(--nd-text);
+    border-bottom: 1px solid var(--nd-border); white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+}
+#dashboard .nd-recent-table tbody tr { cursor: pointer; }
+#dashboard .nd-recent-table tbody tr:hover td { background: var(--nd-card-head); }
+#dashboard .nd-tx-type { font-weight: 800; }
+#dashboard .nd-tx-sale  { color: #16a34a; }
+#dashboard .nd-tx-buy   { color: #2563eb; }
+#dashboard .nd-tx-ret   { color: #dc2626; }
+#dashboard .nd-tx-other { color: var(--nd-text-soft); }
+#dashboard .nd-recent-empty { color: var(--nd-text-soft); padding: 18px 0 !important; }
+
+/* ── لیست‌ها ───────────────────────────────────────────────────────────────── */
+#dashboard .nd-list-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+#dashboard .nd-lbtn {
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+    min-height: 44px; padding: 8px 10px;
+    background: var(--nd-card-head);
+    border: none; border-right: 5px solid var(--nd-lb-c, #1e3a5f);
+    border-radius: 9px;
+    color: var(--nd-text); font-family: inherit; font-size: .76rem; font-weight: 800;
+    cursor: pointer; text-align: center; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+    transition: filter .12s, transform .12s;
+}
+#dashboard .nd-lbtn:hover { filter: brightness(.97); transform: translateY(-1px); }
+#dashboard .nd-lbtn i { font-size: .95rem; flex: 0 0 auto; }
+#dashboard .nd-lb-navy  { --nd-lb-c: #1e3a5f; }
+#dashboard .nd-lb-blue  { --nd-lb-c: #2563eb; }
+#dashboard .nd-lb-green { --nd-lb-c: #16a34a; }
+#dashboard .nd-lb-amber { --nd-lb-c: #f59e0b; }
+#dashboard .nd-lb-red   { --nd-lb-c: #dc2626; }
+#dashboard .nd-lb-slate { --nd-lb-c: #64748b; }
+
+/* ── هدر: آیکن‌های تازه ─────────────────────────────────────────────────────── */
+.dash-topbar .dash-topbar-left { display: inline-flex; align-items: center; gap: 2px; }
+/* تاریخ/ساعت به گروهِ سمتِ چپ (آیکنِ پشتیبان‌گیری) می‌چسبد، نه وسطِ نوار */
+@media (min-width: 769px) {
+    .dash-topbar .dash-topbar-datetime { margin-right: auto !important; margin-left: 6px !important; }
+}
+.dash-topbar .nd-topbar-profile { font-size: 1.35rem; }
+.dash-topbar .nd-topbar-backup { font-size: 1.2rem; }
+
+/* پاپ‌آپِ پروفایل */
+.nd-profile-pop {
+    position: fixed; z-index: 2147483200; min-width: 250px; max-width: 320px;
+    background: var(--nd-card); color: var(--nd-text);
+    border: 1px solid var(--nd-border); border-radius: 12px;
+    box-shadow: 0 14px 40px rgba(2, 6, 23, .3);
+    padding: 10px; direction: rtl;
+    font-family: 'Vazirmatn', Tahoma, sans-serif;
+}
+.nd-profile-pop .nd-pp-head {
+    display: flex; align-items: center; gap: 10px;
+    padding-bottom: 9px; margin-bottom: 7px; border-bottom: 1px solid var(--nd-border);
+}
+.nd-profile-pop .nd-pp-head > i { font-size: 2rem; color: var(--nd-text-soft); }
+.nd-profile-pop .nd-pp-name { font-size: .92rem; font-weight: 800; }
+.nd-profile-pop .nd-pp-store { font-size: .74rem; color: var(--nd-text-soft); }
+.nd-profile-pop .nd-pp-row { display: flex; align-items: center; gap: 8px; padding: 5px 2px; font-size: .78rem; }
+.nd-profile-pop .nd-pp-row > i { width: 16px; text-align: center; color: var(--nd-text-soft); }
+.nd-profile-pop .nd-pp-lb { color: var(--nd-text-soft); min-width: 42px; }
+.nd-profile-pop .nd-pp-vl { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nd-profile-pop .nd-pp-btn {
+    width: 100%; margin-top: 8px; padding: 8px; border: none; border-radius: 9px;
+    background: #1e3a5f; color: #fff; font-family: inherit; font-size: .78rem;
+    font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 7px;
+}
+
+/* پنجرهٔ پشتیبان‌گیریِ سریع */
+.nd-modal-overlay {
+    position: fixed; inset: 0; z-index: 2147483100;
+    background: rgba(2, 6, 23, .55); display: flex; align-items: center; justify-content: center;
+    padding: 16px; direction: rtl; font-family: 'Vazirmatn', Tahoma, sans-serif;
+}
+.nd-modal {
+    width: 100%; max-width: 480px; max-height: 86vh; display: flex; flex-direction: column;
+    background: var(--nd-card); color: var(--nd-text);
+    border: 1px solid var(--nd-border); border-radius: 14px; overflow: hidden;
+    box-shadow: 0 20px 50px rgba(2, 6, 23, .4);
+}
+.nd-modal-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 11px 14px; background: #1e3a5f; color: #fff; font-weight: 800; font-size: .92rem;
+}
+.nd-modal-x { background: rgba(255,255,255,.16); border: none; color: #fff; cursor: pointer;
+    width: 30px; height: 30px; border-radius: 8px; font-size: .9rem; }
+.nd-modal-body { padding: 12px; overflow: auto; }
+
+/* وضعیتِ بررسیِ بروزرسانی در سایدبار */
+.nd-upd-status { font-size: .82rem; line-height: 1.9; border-radius: 9px; padding: 9px 11px; }
+.nd-upd-status.ok   { background: rgba(22,163,74,.12);  color: #15803d; }
+.nd-upd-status.warn { background: rgba(245,158,11,.14); color: #b45309; }
+.nd-upd-status.err  { background: rgba(220,38,38,.12);  color: #b91c1c; }
+body.dark-mode .nd-upd-status.ok   { color: #86efac; }
+body.dark-mode .nd-upd-status.warn { color: #fcd34d; }
+body.dark-mode .nd-upd-status.err  { color: #fca5a5; }

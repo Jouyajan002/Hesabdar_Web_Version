@@ -19,10 +19,10 @@
     // =========================================================================
     const AUTH_CONFIG = {
         LICENSE_URL: 'https://raw.githubusercontent.com/Jouyajan002/rep-system/main/licenses.json',
-        FALLBACK_CODES: [
-            'JOUYA-DEMO-2026-TEST',
-            'JOUYA-FREE-TRIAL-001'
-        ],
+        // ⚠ کدهای فالبکِ عمومی حذف شدند (لو رفته بودند). اعتبارسنجیِ لایسنس فقط از
+        //    سرور (Supabase check_license) یا GitHub انجام می‌شود. آرایه خالی می‌ماند تا
+        //    هیچ کدِ ثابتی در کلاینت پذیرفته نشود. نسخهٔ آزمایشی از demo-mode.js می‌آید.
+        FALLBACK_CODES: [],
         AUTO_BACKUP_INTERVAL: 3 * 60 * 60 * 1000,
         KEYS: {
             ACCOUNT: 'jouya_user_account',

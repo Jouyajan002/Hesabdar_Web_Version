@@ -298,6 +298,26 @@
         hasLiveAuth: function () { return !!(SESSION && SESSION.access_token && (!SESSION.expires_at || SESSION.expires_at > Date.now())); },
         headers: function (extra) {
             var h = { 'apikey': this.anon, 'Authorization': 'Bearer ' + this.token(), 'Content-Type': 'application/json' };
+            // هدرهای تأییدِ دستگاه (مرحلهٔ دوم). اگر قفلِ دستگاه در سرور خاموش باشد (پیش‌فرض)،
+            // این هدرها هیچ اثری ندارند. اگر روشن باشد، سرور با آن‌ها تصمیم می‌گیرد:
+            //   • x-jouya-device  : شناسهٔ همین دستگاه (برای بررسیِ approved بودن در device_requests)
+            //   • x-jouya-native  : فقط روی اندرویدِ اپ و Tauri فرستاده می‌شود تا نسخه‌های نیتیو
+            //                       از قفلِ دستگاه معاف بمانند (طبقِ خواستهٔ شما).
+            try {
+                var dk = null; try { dk = localStorage.getItem('jouya_device_id'); } catch (e) {}
+                if (dk) h['x-jouya-device'] = dk;
+                var isNative = false;
+                try {
+                    if (window.__JOUYA_RUNTIME === 'tauri' || window.__TAURI__ || window.__TAURI_INTERNALS__) isNative = true;
+                    else if (window.Capacitor) {
+                        var p = (typeof window.Capacitor.getPlatform === 'function')
+                            ? window.Capacitor.getPlatform() : (window.Capacitor.platform || '');
+                        if (p && p !== 'web') isNative = true;
+                        if (window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) isNative = true;
+                    }
+                } catch (e) {}
+                if (isNative) h['x-jouya-native'] = '1';
+            } catch (e) {}
             if (extra) for (var k in extra) h[k] = extra[k];
             return h;
         },

@@ -238,6 +238,11 @@
                 <span class="ssb-item-label">تنظیمات اطلاعات</span>
                 <i class="fas fa-chevron-left ssb-arrow"></i>
             </li>
+            <li id="ssb-item-update" onclick="ssbOpenSub('update')" style="display:none;">
+                <span class="ssb-item-icon"><i class="fas fa-cloud-arrow-down"></i></span>
+                <span class="ssb-item-label">بروزرسانی</span>
+                <i class="fas fa-chevron-left ssb-arrow"></i>
+            </li>
             <li onclick="toggleDarkMode(); ssbUpdateDarkLabel()">
                 <span class="ssb-item-icon"><i class="fas fa-moon"></i></span>
                 <span class="ssb-item-label" id="ssb-dark-label">حالت تاریک</span>
@@ -560,171 +565,289 @@
                             <button class="dash-topbar-menu" type="button" title="منو" onclick="openSidebar()">
                                 <i class="fas fa-bars"></i>
                             </button>
-                            <span class="dash-topbar-datetime" id="dash-topbar-datetime"></span>
+                            <button class="dash-topbar-menu nd-topbar-profile" id="nd-profile-btn" type="button" title="پروفایل کاربر" onclick="ndToggleProfile(event)">
+                                <i class="fas fa-circle-user"></i>
+                            </button>
                         </div>
-                        <button class="dash-topbar-bell" type="button" title="اعلانات" onclick="openSidebar(); if (typeof ssbOpenSub === 'function') { ssbOpenSub('notes'); }">
-                            <i class="fas fa-bell"></i>
-                        </button>
+                        <span class="dash-topbar-datetime" id="dash-topbar-datetime"></span>
+                        <div class="dash-topbar-left">
+                            <button class="dash-topbar-bell nd-topbar-backup" type="button" title="پشتیبان‌گیری گوگل درایو" onclick="ndOpenBackupQuick()">
+                                <i class="fas fa-cloud-arrow-up"></i>
+                            </button>
+                            <button class="dash-topbar-bell" type="button" title="اعلانات" onclick="openSidebar(); if (typeof ssbOpenSub === 'function') { ssbOpenSub('notes'); }">
+                                <i class="fas fa-bell"></i>
+                            </button>
+                        </div>
                     </div>
-                    <div class="dashboard-grid dash-3col">
 
-                        <!-- ستون راست: تب‌های «بیلانس‌ها | حساب‌ها» + کارتِ مفاد خالص -->
-                        <div class="dash-info-col" id="dashboard-info-cards">
-                            <!-- تب‌های کنارِ هم -->
-                            <div class="dash-info-tabs">
-                                <button type="button" class="dash-info-tab active" data-ditab="balance" onclick="switchDashInfoTab('balance')">بیلانس‌ها</button>
-                                <button type="button" class="dash-info-tab" data-ditab="accounts" onclick="switchDashInfoTab('accounts')">حساب‌ها</button>
-                            </div>
+                    <!-- ══════════ داشبورد ══════════ -->
+                    <div class="nd-grid" id="nd-grid">
 
-                            <!-- محتوای تب «بیلانس‌ها» -->
-                            <div class="dash-info-tab-pane" id="dash-info-pane-balance">
-                                <div class="dash-card" id="dash-card-balance">
-                                    <div class="dash-card-body">
-                                        <div class="dash-bal-row dash-bal-debt">
-                                            <div class="dash-bal-label"><i class="fas fa-arrow-down"></i> طلب</div>
-                                            <div class="dash-bal-vals" id="dash-bal-debt-vals"></div>
-                                        </div>
-                                        <div class="dash-bal-row dash-bal-credit">
-                                            <div class="dash-bal-label"><i class="fas fa-arrow-up"></i> باقیداری</div>
-                                            <div class="dash-bal-vals" id="dash-bal-credit-vals"></div>
-                                        </div>
-                                        <div class="dash-bal-row dash-bal-net">
-                                            <div class="dash-bal-label"><i class="fas fa-scale-balanced"></i> خلاصه بلانس</div>
-                                            <div class="dash-bal-vals" id="dash-bal-net-vals"></div>
-                                        </div>
-                                        <div id="dash-bal-foreign"></div>
+                        <!-- ناحیهٔ راست/میانی -->
+                        <div class="nd-right">
+
+                            <!-- ردیفِ بالا: برند + جستجوی سراسری -->
+                            <div class="nd-headrow">
+                                <!-- برند: لوگو + نام فروشگاه + شعار -->
+                                <div class="nd-brand" id="dashboard-store-info-panel">
+                                    <div class="dsi-logo-wrap"><i class="fas fa-store dsi-default-icon"></i></div>
+                                </div>
+
+                                <!-- جستجوی سراسری روی تمام بخش‌ها -->
+                                <div class="nd-search">
+                                    <div class="nd-search-hint">حسابدار آسان، سریع و خیال راحت برای شماست.</div>
+                                    <div class="nd-search-wrap product-search-wrapper">
+                                        <input type="text" id="nd-global-search" class="nd-search-input"
+                                               placeholder="جستجو روی تمام بخش ها" autocomplete="off"
+                                               onkeyup="ndGlobalSearch(this, event)"
+                                               onkeydown="ndGlobalSearchKey(event, this)"
+                                               onfocus="ndGlobalSearch(this, event)">
+                                        <span class="nd-search-icon"><i class="fas fa-magnifying-glass"></i></span>
+                                        <div class="nd-search-results product-search-results" id="nd-global-search-results"></div>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- محتوای تب «حساب‌ها» -->
-                            <div class="dash-info-tab-pane" id="dash-info-pane-accounts" style="display:none;">
-                                <div class="dash-card" id="dash-card-cashbox">
-                                    <div class="dash-card-body">
-                                        <div class="dash-stat dash-stat-green">
-                                            <span class="dash-stat-val" id="dash-cashbox-afn">۰</span>
-                                            <span class="dash-stat-cur" id="dash-cashbox-afn-lbl">افغانی</span>
-                                        </div>
-                                        <div class="dash-stat dash-stat-green">
-                                            <span class="dash-stat-val" id="dash-cashbox-usd">۰</span>
-                                            <span class="dash-stat-cur" id="dash-cashbox-usd-lbl">دالر</span>
-                                        </div>
-                                        <div id="dash-cashbox-foreign"></div>
+                            <!-- دسترسی سریع / روزنامچه -->
+                            <div class="nd-card nd-quick">
+                                <div class="nd-card-head"><span class="nd-card-title">دسترسی سریع/روزنامچه</span></div>
+                                <div class="nd-card-body">
+                                    <div class="nd-qa-row">
+                                        <button type="button" class="nd-qa nd-qa-navy" onclick="showSalesForm()" title="فروش جدید">
+                                            <i class="fas fa-bag-shopping"></i><span>فروش جدید</span>
+                                        </button>
+                                        <button type="button" class="nd-qa nd-qa-blue" onclick="showPurchaseForm()" title="خرید جدید">
+                                            <i class="fas fa-cart-shopping"></i><span>خرید جدید</span>
+                                        </button>
+                                        <button type="button" class="nd-qa nd-qa-green" onclick="showReceiptForm()" title="دریافتی جدید">
+                                            <i class="fas fa-download"></i><span>دریافتی جدید</span>
+                                        </button>
+                                        <button type="button" class="nd-qa nd-qa-amber" onclick="showPaymentForm()" title="پرداختی جدید">
+                                            <i class="fas fa-upload"></i><span>پرداختی جدید</span>
+                                        </button>
+                                        <button type="button" class="nd-qa nd-qa-red" onclick="showSaleReturnForm()" title="برگشت از فروش">
+                                            <i class="fas fa-arrow-left-long"></i><span>برگشت از فروش</span>
+                                        </button>
+                                        <button type="button" class="nd-qa nd-qa-red" onclick="showPurchaseReturnForm()" title="برگشت از خرید">
+                                            <i class="fas fa-arrow-right-long"></i><span>برگشت از خرید</span>
+                                        </button>
+                                        <button type="button" class="nd-qa nd-qa-slate" onclick="showProformaOrderForm()" title="سفارش جدید">
+                                            <i class="fas fa-file-import"></i><span>سفارش جدید</span>
+                                        </button>
+                                        <button type="button" class="nd-qa nd-qa-slate" onclick="showExpenseForm()" title="مصرف جدید">
+                                            <i class="fas fa-file-import"></i><span>مصرف جدید</span>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- کارت مفاد خالص امروز (همیشه نمایش) -->
-                            <div class="dash-card dash-card-collapsible" id="dash-card-profit">
-                                <div class="dash-card-head" onclick="toggleDashCard('dash-card-profit')">
-                                    <span class="dash-card-title"><i class="fas fa-chart-bar"></i> مفاد خالص امروز</span>
-                                    <i class="fas fa-chevron-down dash-card-chevron"></i>
+                            <!-- دو ستونِ پایین: (راست) نرخ ارز + وضعیت مالی | (چپ) نمودار + کتگوری -->
+                            <div class="nd-cols">
+
+                                <!-- ستونِ راست -->
+                                <div class="nd-colA">
+                                    <!-- نرخ ارز — کارتِ ماژولِ ارز داخلِ همین ظرف تزریق می‌شود -->
+                                    <div class="nd-card nd-fx">
+                                        <div class="nd-card-head"><span class="nd-card-title">نرخ ارز</span>
+                                            <i class="fas fa-pen nd-card-act" title="مدیریت ارزها و نرخ‌ها"
+                                               onclick="if(window.CurrencySystem&&CurrencySystem.openModal)CurrencySystem.openModal();"></i>
+                                        </div>
+                                        <div class="nd-card-body nd-fx-body">
+                                            <div class="dash-info-col" id="dashboard-info-cards"></div>
+                                        </div>
+                                    </div>
+
+                                    <!-- وضعیت مالی -->
+                                    <div class="nd-card nd-fin">
+                                        <div class="nd-card-head"><span class="nd-card-title">وضعیت مالی</span></div>
+                                        <div class="nd-card-body">
+                                            <div class="nd-fin-row">
+                                                <div class="nd-fin-label">موجودی حساب ها</div>
+                                                <div class="nd-fin-vals" id="nd-fin-cash"></div>
+                                            </div>
+                                            <div class="nd-fin-row">
+                                                <div class="nd-fin-label">طلب‌ها</div>
+                                                <div class="nd-fin-vals" id="nd-fin-debt"></div>
+                                            </div>
+                                            <div class="nd-fin-row">
+                                                <div class="nd-fin-label">باقیداری</div>
+                                                <div class="nd-fin-vals" id="nd-fin-credit"></div>
+                                            </div>
+                                            <div class="nd-fin-row">
+                                                <div class="nd-fin-label">مجموع مفاد خالص</div>
+                                                <div class="nd-fin-vals" id="nd-fin-net"></div>
+                                            </div>
+                                            <div class="nd-fin-row">
+                                                <div class="nd-fin-label">سرمایه خالص</div>
+                                                <div class="nd-fin-vals" id="nd-fin-equity"></div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
+
+                                <!-- ستونِ چپ -->
+                                <div class="nd-colB">
+                                    <!-- نمودار فروش هفتگی -->
+                                    <div class="nd-card nd-chart">
+                                        <div class="nd-card-head"><span class="nd-card-title">نمودار فروش هفتگی</span></div>
+                                        <div class="nd-card-body">
+                                            <div class="dashboard-charts">
+                                                <div class="weekly-chart-area">
+                                                    <div class="weekly-chart-top-row">
+                                                        <div class="weekly-period-btns">
+                                                            <button class="wk-btn active" onclick="switchWeeklyChart('week')" id="wk-btn-week">هفته جاری</button>
+                                                            <button class="wk-btn" onclick="switchWeeklyChart('month')" id="wk-btn-month">ماهانه</button>
+                                                            <button class="wk-btn" onclick="switchWeeklyChart('year')" id="wk-btn-year">سالانه</button>
+                                                        </div>
+                                                    </div>
+                                                    <canvas id="weekly-sales-chart"></canvas>
+                                                    <div class="weekly-chart-legend">
+                                                        <span class="wk-legend-item"><span class="wk-dot wk-dot-current"></span> هفته جاری</span>
+                                                        <span class="wk-legend-item"><span class="wk-dot wk-dot-prev"></span> هفته قبلی</span>
+                                                    </div>
+                                                    <div class="weekly-chart-footer">
+                                                        <div class="wk-footer-item">
+                                                            <span class="wk-footer-label">فروش امروز</span>
+                                                            <span class="wk-footer-val" id="wk-today-val">۰ افغانی</span>
+                                                            <span class="wk-footer-val wk-footer-val-usd" id="wk-today-val-usd">۰ دالر</span>
+                                                        </div>
+                                                        <div class="wk-footer-item">
+                                                            <span class="wk-footer-label">فروش دیروز</span>
+                                                            <span class="wk-footer-val" id="wk-yesterday-val">۰ افغانی</span>
+                                                            <span class="wk-footer-val wk-footer-val-usd" id="wk-yesterday-val-usd">۰ دالر</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- فروشات امروز بر اساس کتگوری -->
+                                    <div class="nd-card nd-cats">
+                                        <div class="nd-card-head"><span class="nd-card-title">فروشات امروز بر اساس کتگوری</span></div>
+                                        <div class="nd-card-body">
+                                            <div class="nd-cats-inner">
+                                                <div class="nd-donut-wrap">
+                                                    <svg class="nd-donut" viewBox="0 0 120 120" id="nd-cats-donut" aria-hidden="true"></svg>
+                                                    <div class="nd-donut-center">
+                                                        <div class="nd-donut-val" id="nd-cats-total">0</div>
+                                                        <div class="nd-donut-cur" id="nd-cats-cur">AFN</div>
+                                                    </div>
+                                                </div>
+                                                <div class="nd-cats-legend" id="nd-cats-legend"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <!-- ناحیهٔ چپ: آخرین معامله + لیست‌ها -->
+                        <div class="nd-left">
+
+                            <!-- آخرین معامله -->
+                            <div class="nd-card nd-recent">
+                                <div class="nd-card-head">
+                                    <span class="nd-card-title">آخرین معامله</span>
+                                    <button type="button" class="nd-seeall" onclick="showSection('transactions-list')">مشاهده همه</button>
+                                </div>
+                                <div class="nd-card-body">
+                                    <table class="nd-recent-table">
+                                        <thead>
+                                            <tr><th>نوع معامله</th><th>طرف حساب</th><th>مبلغ</th><th>وضعیت</th></tr>
+                                        </thead>
+                                        <tbody id="nd-recent-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <!-- لیست‌ها -->
+                            <div class="nd-card nd-lists">
+                                <div class="nd-card-head"><span class="nd-card-title">لیست ها</span></div>
+                                <div class="nd-card-body">
+                                    <div class="nd-list-grid">
+                                        <button class="nd-lbtn nd-lb-navy"  onclick="showSection('sales-list')"><i class="fas fa-bag-shopping"></i> لیست های فروش</button>
+                                        <button class="nd-lbtn nd-lb-blue"  onclick="showSection('purchases-list')"><i class="fas fa-cart-shopping"></i> لیست های خرید</button>
+                                        <button class="nd-lbtn nd-lb-green" onclick="showSection('receipts-list')"><i class="fas fa-download"></i> لیست های دریافتی</button>
+                                        <button class="nd-lbtn nd-lb-amber" onclick="showSection('payments-list')"><i class="fas fa-upload"></i> لیست های پرداختی</button>
+                                        <button class="nd-lbtn nd-lb-red"   onclick="showSection('sales-returns-list')"><i class="fas fa-arrow-left-long"></i> لیست برگشت از فروش</button>
+                                        <button class="nd-lbtn nd-lb-red"   onclick="showSection('purchase-returns-list')"><i class="fas fa-arrow-right-long"></i> لیست برگشت از خرید</button>
+                                        <button class="nd-lbtn nd-lb-slate" onclick="showSection('changelog-list')"><i class="fas fa-rotate"></i> لیست آخرین تغییرات</button>
+                                        <button class="nd-lbtn nd-lb-slate" onclick="showSection('proforma-list')"><i class="fas fa-list-ul"></i> لیست سفارشات</button>
+                                        <button class="nd-lbtn nd-lb-navy"  onclick="showSection('delivery-list')"><i class="fas fa-clipboard-check"></i> لیست تسلیم دهی</button>
+                                        <button class="nd-lbtn nd-lb-slate" onclick="showSection('services-list')"><i class="fas fa-gear"></i> لیست خدمات</button>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                    </div>
+
+                    <!-- ══════════════════════════════════════════════════════════════════════
+                         عناصرِ قدیمیِ داشبورد — عمداً نگه داشته شده‌اند و فقط پنهان‌اند.
+                         همهٔ محاسبه‌های موجود (بیلانس/حساب‌ها/مفاد خالص) بدونِ هیچ تغییری روی
+                         همین idها می‌نویسند و کارت‌های جدیدِ «وضعیت مالی» مقدارشان را از همین‌جا
+                         می‌خوانند؛ پس هیچ منطق یا محاسبه‌ای دست‌کاری نشده است.
+                         ══════════════════════════════════════════════════════════════════════ -->
+                    <div id="nd-legacy-cards" style="display:none;" aria-hidden="true">
+                        <div class="dash-info-tabs">
+                            <button type="button" class="dash-info-tab active" data-ditab="balance" onclick="switchDashInfoTab('balance')">بیلانس‌ها</button>
+                            <button type="button" class="dash-info-tab" data-ditab="accounts" onclick="switchDashInfoTab('accounts')">حساب‌ها</button>
+                        </div>
+                        <div class="dash-info-tab-pane" id="dash-info-pane-balance">
+                            <div class="dash-card" id="dash-card-balance">
+                                <div class="dash-card-body">
+                                    <div class="dash-bal-row dash-bal-debt">
+                                        <div class="dash-bal-label"><i class="fas fa-arrow-down"></i> طلب</div>
+                                        <div class="dash-bal-vals" id="dash-bal-debt-vals"></div>
+                                    </div>
+                                    <div class="dash-bal-row dash-bal-credit">
+                                        <div class="dash-bal-label"><i class="fas fa-arrow-up"></i> باقیداری</div>
+                                        <div class="dash-bal-vals" id="dash-bal-credit-vals"></div>
+                                    </div>
+                                    <div class="dash-bal-row dash-bal-net">
+                                        <div class="dash-bal-label"><i class="fas fa-scale-balanced"></i> خلاصه بلانس</div>
+                                        <div class="dash-bal-vals" id="dash-bal-net-vals"></div>
+                                    </div>
+                                    <div id="dash-bal-foreign"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="dash-info-tab-pane" id="dash-info-pane-accounts" style="display:none;">
+                            <div class="dash-card" id="dash-card-cashbox">
                                 <div class="dash-card-body">
                                     <div class="dash-stat dash-stat-green">
-                                        <span class="dash-stat-val" id="dash-profit-afn">۰</span>
-                                        <span class="dash-stat-cur" id="dash-profit-afn-lbl">افغانی</span>
+                                        <span class="dash-stat-val" id="dash-cashbox-afn">۰</span>
+                                        <span class="dash-stat-cur" id="dash-cashbox-afn-lbl">افغانی</span>
                                     </div>
                                     <div class="dash-stat dash-stat-green">
-                                        <span class="dash-stat-val" id="dash-profit-usd">۰</span>
-                                        <span class="dash-stat-cur" id="dash-profit-usd-lbl">دالر</span>
+                                        <span class="dash-stat-val" id="dash-cashbox-usd">۰</span>
+                                        <span class="dash-stat-cur" id="dash-cashbox-usd-lbl">دالر</span>
                                     </div>
-                                    <div id="dash-profit-foreign"></div>
+                                    <div id="dash-cashbox-foreign"></div>
                                 </div>
                             </div>
                         </div>
-
-                        <!-- ستون وسط: برند + نمودار + دکمه‌های اکشن سریع -->
-                        <div class="dash-center-col">
-                            <!-- برند: نام فروشگاه + لوگو -->
-                            <div class="dash-brand" id="dashboard-store-info-panel">
-                                <div class="dsi-logo-wrap"><i class="fas fa-store dsi-default-icon"></i></div>
+                        <div class="dash-card dash-card-collapsible" id="dash-card-profit">
+                            <div class="dash-card-head" onclick="toggleDashCard('dash-card-profit')">
+                                <span class="dash-card-title"><i class="fas fa-chart-bar"></i> مفاد خالص امروز</span>
+                                <i class="fas fa-chevron-down dash-card-chevron"></i>
                             </div>
-
-                            <!-- نمودار فروش هفتگی -->
-                            <div class="dashboard-charts">
-                                <div class="weekly-chart-title">نمودار<br>فروش<br>هفتگی</div>
-                                <div class="weekly-chart-area">
-                                    <div class="weekly-chart-top-row">
-                                        <div class="weekly-period-btns">
-                                            <button class="wk-btn active" onclick="switchWeeklyChart('week')" id="wk-btn-week">هفته جاری</button>
-                                            <button class="wk-btn" onclick="switchWeeklyChart('month')" id="wk-btn-month">ماهانه</button>
-                                            <button class="wk-btn" onclick="switchWeeklyChart('year')" id="wk-btn-year">سالانه</button>
-                                        </div>
-                                    </div>
-                                    <canvas id="weekly-sales-chart"></canvas>
-                                    <div class="weekly-chart-legend">
-                                        <span class="wk-legend-item"><span class="wk-dot wk-dot-current"></span> هفته جاری</span>
-                                        <span class="wk-legend-item"><span class="wk-dot wk-dot-prev"></span> هفته قبلی</span>
-                                    </div>
-                                    <div class="weekly-chart-footer">
-                                        <div class="wk-footer-item">
-                                            <span class="wk-footer-label">فروش امروز</span>
-                                            <span class="wk-footer-val" id="wk-today-val">۰ افغانی</span>
-                                            <span class="wk-footer-val wk-footer-val-usd" id="wk-today-val-usd">۰ دالر</span>
-                                        </div>
-                                        <div class="wk-footer-item">
-                                            <span class="wk-footer-label">فروش دیروز</span>
-                                            <span class="wk-footer-val" id="wk-yesterday-val">۰ افغانی</span>
-                                            <span class="wk-footer-val wk-footer-val-usd" id="wk-yesterday-val-usd">۰ دالر</span>
-                                        </div>
-                                    </div>
+                            <div class="dash-card-body">
+                                <div class="dash-stat dash-stat-green">
+                                    <span class="dash-stat-val" id="dash-profit-afn">۰</span>
+                                    <span class="dash-stat-cur" id="dash-profit-afn-lbl">افغانی</span>
                                 </div>
-                            </div>
-
-                            <!-- دکمه‌های اکشن سریع (مطابق تصویر) -->
-                            <div class="dash-quick-actions">
-                                <button class="dash-qa-btn dash-qa-sales" onclick="showSalesForm()"><i class="fas fa-shopping-bag"></i> فروش جدید دارید؟</button>
-                                <button class="dash-qa-btn dash-qa-purchase" onclick="showPurchaseForm()"><i class="fas fa-shopping-cart"></i> خرید جدید دارید؟</button>
-                                <button class="dash-qa-btn dash-qa-receipt" onclick="showReceiptForm()"><i class="fas fa-credit-card"></i> دریافتی جدید دارید؟</button>
-                                <button class="dash-qa-btn dash-qa-payment" onclick="showPaymentForm()"><i class="fas fa-credit-card"></i> پرداختی جدید دارید؟</button>
-                                <button class="dash-qa-btn dash-qa-sreturn" onclick="showSaleReturnForm()"><i class="fas fa-arrow-left"></i> برگشت از فروش دارید؟</button>
-                                <button class="dash-qa-btn dash-qa-preturn" onclick="showPurchaseReturnForm()"><i class="fas fa-arrow-right"></i> برگشت از خرید دارید؟</button>
-                                <button class="dash-qa-btn dash-qa-order" onclick="showProformaOrderForm()"><i class="fas fa-clipboard-list"></i> سفارش جدید دارید؟</button>
-                                <button class="dash-qa-btn dash-qa-expense" onclick="showExpenseForm()"><i class="fas fa-money-bill-transfer"></i> مصرف یا برداشت دارید؟</button>
+                                <div class="dash-stat dash-stat-green">
+                                    <span class="dash-stat-val" id="dash-profit-usd">۰</span>
+                                    <span class="dash-stat-cur" id="dash-profit-usd-lbl">دالر</span>
+                                </div>
+                                <div id="dash-profit-foreign"></div>
                             </div>
                         </div>
-
-                        <!-- ستون چپ: ناوبری لیست‌ها (مطابق تصویر) -->
-                        <div class="dashboard-quick-lists dash-nav-col">
-<div class="quick-list-buttons">
-    <button class="btn-quick-list btn-ql-sales" onclick="showSection('sales-list')">
-        <i class="fas fa-cart-plus"></i> لیست های فروش
-    </button>
-    <button class="btn-quick-list btn-ql-purchase" onclick="showSection('purchases-list')">
-        <i class="fas fa-shopping-basket"></i> لیست های خرید
-    </button>
-    <button class="btn-quick-list btn-ql-receipt" onclick="showSection('receipts-list')">
-        <i class="fas fa-hand-holding-usd"></i> لیست های دریافتی
-    </button>
-    <button class="btn-quick-list btn-ql-payment" onclick="showSection('payments-list')">
-        <i class="fas fa-money-check-alt"></i> لیست های پرداختی
-    </button>
-    <button class="btn-quick-list btn-ql-sales-return" onclick="showSection('sales-returns-list')">
-        <i class="fas fa-undo"></i> لیست برگشت از فروش
-    </button>
-    <button class="btn-quick-list btn-ql-purchase-return" onclick="showSection('purchase-returns-list')">
-        <i class="fas fa-undo"></i> لیست برگشت از خرید
-    </button>
-    <button class="btn-quick-list btn-ql-proforma" onclick="showSection('proforma-list')">
-        <i class="fas fa-file-invoice-dollar"></i> لیست های سفارش
-    </button>
-    <button class="btn-quick-list btn-ql-report" onclick="showSection('transactions-list')">
-        <i class="fas fa-file-alt"></i> لیست کامل معاملات
-    </button>
-    <button class="btn-quick-list btn-ql-changelog" onclick="showSection('changelog-list')">
-        <i class="fas fa-history"></i> لیست آخرین تغییرات
-    </button>
-    <button class="btn-quick-list btn-ql-services" onclick="showSection('services-list')">
-        <i class="fas fa-cog"></i> لیست خدمات
-    </button>
-    <button class="btn-quick-list btn-ql-delivery" onclick="showSection('delivery-list')">
-        <i class="fas fa-clipboard-check"></i> لیست تسلیم دهی
-    </button>
-</div>
-                        </div>
-
                     </div>
+
                     <!-- المان‌های آمار داشبورد (مورد نیاز script.js) -->
                     <div id="dashboard-summary" style="display:none;">
                         <span id="today-income"></span>
@@ -4987,6 +5110,7 @@
     <script src="sync-config.js" onerror="console.warn('sync-config.js not found')"></script>
     <script src="sync-layer.js" onerror="console.warn('sync-layer.js not found')"></script>
 <script src="auth-cloud.js" onerror="console.warn('auth-cloud.js not found')"></script>
+<script src="device-guard.js" onerror="console.warn('device-guard.js not found')"></script>
 <script src="demo-mode.js" onerror="console.warn('demo-mode.js not found')"></script>
 <!-- فاز ۵: موتورِ مقیاسِ خودکارِ منعطفِ موبایل (فقط روی موبایل فعال؛ دسکتاپ دست‌نخورده) -->
 <script src="mobile-fit.js" onerror="console.warn('mobile-fit.js not found')"></script>

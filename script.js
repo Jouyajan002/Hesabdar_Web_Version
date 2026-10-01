@@ -1922,6 +1922,9 @@ function updateDashboardCards() {
         }
         _renderStatCard('cashbox', _cashM);
     } catch (e) { console.warn('dash cashbox calc:', e); }
+
+    // داشبوردِ جدید: کارت‌های نمایشی از همین مقادیرِ محاسبه‌شده پر می‌شوند
+    try { if (typeof ndRenderDashboard === 'function') ndRenderDashboard(); } catch (e) { console.warn('nd render:', e); }
 }
 
 // باز/بسته کردن کارت‌های جمع‌شوندهٔ داشبورد (کلیک روی عنوان)
@@ -1955,9 +1958,14 @@ function _renderDashboardStoreInfo() {
     var logoHtml = logoSrc
         ? '<img src="' + logoSrc + '" alt="لوگو" class="dsi-logo-img">'
         : '<i class="fas fa-store dsi-default-icon"></i>';
+    // داشبوردِ جدید: نام + شعار در یک ستون و لوگو دقیقاً کنارِ نام
+    if (el.classList && el.classList.contains('nd-brand') && typeof ndRenderBrand === 'function') {
+        ndRenderBrand();
+    } else {
     el.innerHTML =
         '<div class="dsi-logo-wrap">' + logoHtml + '</div>' +
         (name ? '<div class="dsi-name">' + name + '</div>' : '');
+    }
     var settingsBrand = document.getElementById('settings-store-brand-header');
     if (settingsBrand) {
         var sLogoHtml = logoSrc
@@ -25057,6 +25065,7 @@ function ssbGetTitle(key) {
         dbinit:   '<i class="fas fa-tools"></i> تصحیح دیتابیس',
         delete:   '<i class="fas fa-trash-alt"></i> حذف داده‌ها',
         datasettings: '<i class="fas fa-cogs"></i> تنظیمات اطلاعات',
+        update:   '<i class="fas fa-cloud-arrow-down"></i> بروزرسانی',
     };
     return titles[key] || '<i class="fas fa-cog"></i> تنظیمات';
 }
@@ -25065,12 +25074,17 @@ function ssbGetTitle(key) {
 function ssbLoadSubContent(key) {
     switch (key) {
 
+        case 'update':
+            return (typeof ndUpdPanelHtml === 'function') ? ndUpdPanelHtml() : '';
+
         case 'store':
             return `
             <div class="ssb-card">
                 <h4><i class="fas fa-store"></i> اطلاعات فروشگاه</h4>
                 <label>نام فروشگاه</label>
                 <input type="text" id="ssb-store-name" placeholder="نام فروشگاه">
+                <label>شعار فروشگاه</label>
+                <input type="text" id="ssb-store-slogan" placeholder="شعار فروشگاه (اختیاری)">
                 <label>نام صاحب</label>
                 <input type="text" id="ssb-store-owner" placeholder="نام صاحب فروشگاه">
                 <label>شماره تماس</label>
@@ -25446,6 +25460,17 @@ function ssbLoadSubContent(key) {
 /** پر کردن فرم‌ها از مقادیر db */
 function ssbPopulateForm(key) {
     try {
+        if (key === 'update') {
+            try {
+                if (typeof ndUpdCurrentVersion === 'function') {
+                    ndUpdCurrentVersion().then(function (v) {
+                        var e = document.getElementById('nd-upd-current');
+                        if (e) e.textContent = v;
+                    });
+                }
+            } catch (e) {}
+            return;
+        }
         const settings = db.getSettings ? db.getSettings() : {};
         if (key === 'store') {
             const n = document.getElementById('ssb-store-name');
@@ -25453,7 +25478,9 @@ function ssbPopulateForm(key) {
             const p = document.getElementById('ssb-store-phone');
             const e = document.getElementById('ssb-store-email');
             const a = document.getElementById('ssb-store-address');
+            const sg = document.getElementById('ssb-store-slogan');
             if (n) n.value = settings.storeName || '';
+            if (sg) sg.value = settings.storeSlogan || '';
             if (o) o.value = settings.storeOwner || '';
             if (p) p.value = settings.storePhone || '';
             if (e) e.value = settings.storeEmail || '';
@@ -25756,7 +25783,8 @@ function ssbSaveStore() {
     const phone   = document.getElementById('ssb-store-phone')?.value.trim() || '';
     const email   = document.getElementById('ssb-store-email')?.value.trim() || '';
     const address = document.getElementById('ssb-store-address')?.value.trim() || '';
-    var _payload = { storeName: name, storeOwner: owner, storePhone: phone, storeEmail: email, storeAddress: address };
+    const slogan  = document.getElementById('ssb-store-slogan')?.value.trim() || '';
+    var _payload = { storeName: name, storeOwner: owner, storePhone: phone, storeEmail: email, storeAddress: address, storeSlogan: slogan };
     if (window.__ssbNewLogo) { _payload.storeLogo = window.__ssbNewLogo; }
     ssbSaveSettings(_payload);
     window.__ssbNewLogo = null;
@@ -25997,9 +26025,11 @@ function _enforceAppLock() {
 }
 
 // ===== رمزِ اصلیِ مدیر (Master) =====
-// این رمز فقط در اختیارِ شما (توسعه‌دهنده/مالک) است و اگر کاربر رمز و همهٔ کدهای بازیابی را
-// فراموش کند، شما می‌توانید با آن قفل را باز کنید. برای تغییر، فقط همین رشته را عوض کنید.
-var _LOCK_MASTER_PLAIN = 'Hesabdar@Master-1404';
+// ⚠ هشدارِ امنیتی: این رشته در فایلِ کلاینت است و هر کسی که فایل‌ها را داشته باشد می‌تواند
+//    آن را بخواند. رمزِ قبلی لو رفته بود و اینجا با یک رمزِ تازه جای‌گزین شد.
+//    **پیش از هر بیلدِ تازه، این رشته را به یک عبارتِ خصوصیِ خودتان تغییر بدهید.**
+//    (این فقط قفلِ نمایشیِ محلیِ دستگاه را باز می‌کند؛ محافظتِ واقعی سمتِ سرور است.)
+var _LOCK_MASTER_PLAIN = 'HSD-mC8s9iPfZ5t-2026';
 function _lockMasterHash() { try { return _hashLockPass(_LOCK_MASTER_PLAIN); } catch (_) { return '__nomaster__'; } }
 
 // ===== کدهای بازیابی (هش‌شده در localStorage؛ متنِ خام هرگز ذخیره نمی‌شود) =====
@@ -35489,7 +35519,13 @@ function billEnableEdit(which) {
             var ss = d.getSeconds() < 10 ? '0' + d.getSeconds() : '' + d.getSeconds();
             var timePart = h12 + ':' + mm + ':' + ss + ' ' + ampm;
 
-            var out = wd + '  ' + datePart + '  ' + timePart;
+            // تاریخِ میلادی هم کنارِ تاریخِ شمسی — هر دو از همان ساعتِ افغانستان
+            var gPart = '';
+            try {
+                gPart = d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
+            } catch (e) { gPart = ''; }
+
+            var out = wd + '  ' + datePart + (gPart ? ('  -  ' + gPart) : '') + '  -  ' + timePart;
 
             // هماهنگی با سیستم اعداد فعلی برنامه
             try {
@@ -37406,4 +37442,1021 @@ function _receiptResetDestTabs() {
 if (typeof window !== 'undefined') {
     window._receiptSwitchTab = _receiptSwitchTab; window._receiptSearchDestPerson = _receiptSearchDestPerson;
     window._receiptInitExpenseCategory = _receiptInitExpenseCategory; window._receiptResetDestTabs = _receiptResetDestTabs;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   داشبوردِ جدید — توابعِ نمایشی
+   ---------------------------------------------------------------------------
+   همهٔ اعداد از همان منابع و همان محاسبه‌هایی می‌آیند که از قبل در برنامه وجود دارد؛
+   اینجا فقط «خوانده و نمایش داده» می‌شوند. هیچ منطقِ مالی بازنویسی نشده است:
+     • طلب‌ها / باقیداری  ← از خروجیِ آمادهٔ updateDashboardCards (همان عناصرِ قبلی)
+     • موجودِ حساب        ← db.getCashboxTotalsByCurrency() (همان منبعِ کارتِ حساب‌ها)
+     • موجودیِ گدام        ← db.getProducts() (تعداد × قیمتِ خرید)
+     • فروشاتِ کتگوری      ← معاملاتِ «فروش»ِ امروز، به ارزِ پایهٔ سیستم
+   همهٔ این‌ها «تابع» هستند (نه دستورِ سطحِ بالا) و از قلّابِ موجودِ داشبورد صدا می‌شوند.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+// ── ابزارهای کوچکِ مشترک ─────────────────────────────────────────────────────
+function ndEsc(s) {
+    return String(s == null ? '' : s)
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function ndNum(n) {
+    try { if (typeof formatNumber === 'function') return formatNumber(n || 0); } catch (e) {}
+    return String(Math.round((parseFloat(n) || 0) * 100) / 100);
+}
+function ndBaseCode() {
+    try {
+        if (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) return CurrencySystem.getBaseCode();
+        if (typeof _baseCur === 'function') return _baseCur();
+    } catch (e) {}
+    return 'AFN';
+}
+function ndCurLabel(code) {
+    try { if (typeof getCurrencyLabel === 'function') return getCurrencyLabel(code); } catch (e) {}
+    return code || '';
+}
+// تبدیلِ مبلغ به ارزِ پایه با همان موتورِ ارزِ برنامه
+function ndToBase(amount, doc, cur) {
+    var a = parseFloat(amount) || 0;
+    var base = ndBaseCode();
+    var c = cur || (doc && doc.currency) || base;
+    if (!a || c === base) return a;
+    try {
+        var CSx = (typeof CurrencySystem !== 'undefined') ? CurrencySystem : null;
+        if (CSx && CSx.rateFromDoc && doc) { var r = CSx.rateFromDoc(doc, c); if (r != null && r > 0) return a * r; }
+        if (CSx && CSx.baseRate)           { var lr = CSx.baseRate(c, 'rate'); if (lr != null && lr > 0) return a * lr; }
+        if (CSx && CSx.convert)            { var cv = CSx.convert(a, c, base, 'rate'); if (cv != null) return cv; }
+    } catch (e) {}
+    return a;
+}
+// نمایشِ یک نگاشتِ {ارز: مبلغ} به صورتِ چند «چیپ» در یک سطر
+function ndMoneyChips(map) {
+    var base = ndBaseCode();
+    var codes = Object.keys(map || {}).filter(function (c) { return Math.abs(parseFloat(map[c]) || 0) > 0.0001; });
+    codes.sort(function (x, y) { if (x === base) return -1; if (y === base) return 1; return String(x).localeCompare(String(y)); });
+    if (!codes.length) codes = [base];
+    return codes.map(function (c) {
+        return '<span class="nd-money"><b>' + ndNum(parseFloat(map[c]) || 0) + '</b><i>' + ndEsc(ndCurLabel(c)) + '</i></span>';
+    }).join('');
+}
+
+// ── برند: لوگو + نام + شعار ──────────────────────────────────────────────────
+function ndRenderBrand() {
+    var el = document.getElementById('dashboard-store-info-panel');
+    if (!el || !window.db || typeof db.getSettings !== 'function') return;
+    var s = db.getSettings() || {};
+    var logo = s.storeLogo || '';
+    var logoHtml = logo
+        ? '<img src="' + logo + '" alt="لوگو" class="dsi-logo-img">'
+        : '<i class="fas fa-store dsi-default-icon"></i>';
+    // اول لوگو (سمتِ راست) و بعد نام و شعار — مطابقِ چیدمانِ خواسته‌شده
+    el.innerHTML =
+        '<div class="dsi-logo-wrap">' + logoHtml + '</div>' +
+        '<div class="nd-brand-text">' +
+            '<div class="dsi-name">' + ndEsc(s.storeName || '') + '</div>' +
+            (s.storeSlogan ? '<div class="nd-brand-slogan">' + ndEsc(s.storeSlogan) + '</div>' : '') +
+        '</div>';
+    ndFitBrandText();
+}
+
+// اندازهٔ فونتِ نام و شعار «اندازه‌گیریِ واقعی» می‌شود، نه حدسی از روی تعدادِ حرف:
+// متن تا جایی بزرگ می‌شود که عرضِ فضای باقی‌مانده (تا کنارِ جعبهٔ جستجو) را پر کند، و
+// اگر بلند بود تا جای لازم کوچک می‌شود. شعار همیشه به همان نسبتِ فعلیِ خود نسبت به نام
+// می‌ماند، پس چیدمان به هم نمی‌خورد. یکسان در هر سه نسخه.
+// عرضِ «واقعیِ متن» اندازه‌گیری می‌شود، نه عرضِ جعبه؛ برای همین عنصر موقتاً
+// inline-block می‌شود. با این کار متن هم می‌تواند بزرگ شود (تا فضا را پر کند)
+// و هم کوچک (اگر جا نشد).
+function ndFitOneLine(el, avail, minRem, maxRem) {
+    if (!el || !avail || avail < 20) return 0;
+    var txt = (el.textContent || '').trim();
+    if (!txt) { el.style.fontSize = ''; return 0; }
+    var pd = el.style.display, pw = el.style.width;
+    el.style.display = 'inline-block';
+    el.style.width = 'auto';
+    el.style.fontSize = maxRem + 'rem';
+    var w = el.getBoundingClientRect().width || 0;
+    var fs = maxRem;
+    if (w > 0) {
+        fs = maxRem * (avail / w);
+        fs = Math.max(minRem, Math.min(maxRem, fs));
+        el.style.fontSize = fs.toFixed(2) + 'rem';
+        // اصلاحِ دوم برای دقت (گردکردن و فاصلهٔ حروف)
+        var w2 = el.getBoundingClientRect().width || 0;
+        if (w2 > avail && fs > minRem) {
+            fs = Math.max(minRem, fs * (avail / w2));
+            el.style.fontSize = fs.toFixed(2) + 'rem';
+        }
+    }
+    el.style.display = pd;
+    el.style.width = pw;
+    return fs;
+}
+function ndFitBrandText() {
+    try {
+        var el = document.getElementById('dashboard-store-info-panel');
+        if (!el) return;
+        var box = el.querySelector('.nd-brand-text');
+        var nameEl = el.querySelector('.dsi-name');
+        var sloEl  = el.querySelector('.nd-brand-slogan');
+        if (!box) return;
+        var avail = box.clientWidth || 0;
+        if (!avail) { setTimeout(ndFitBrandText, 120); return; }   // هنوز چیدمان ننشسته
+        avail = Math.max(40, avail - 2);
+        var mobile = (window.innerWidth || 0) <= 768;
+        var NAME_MIN = mobile ? 0.62 : 0.95;
+        // سقفِ بزرگ‌شدن: هم به عرضِ آزاد و هم به بلندیِ ردیفِ برند نگاه می‌کند تا نامِ
+        // کوتاه تا نزدیکِ جعبهٔ جستجو بزرگ شود، ولی چیدمان بلندتر از لوگو نشود.
+        var vh = window.innerHeight || 900;
+        var NAME_MAX = mobile ? 1.45 : (vh <= 820 ? 2.40 : (vh <= 950 ? 3.00 : 3.60));
+        var RATIO    = 0.46;        // نسبتِ شعار به نام — همان تناسبِ فعلی
+        var fs = ndFitOneLine(nameEl, avail, NAME_MIN, NAME_MAX);
+        if (sloEl) {
+            var target = Math.max(mobile ? 0.44 : 0.58, fs * RATIO);
+            ndFitOneLine(sloEl, avail, mobile ? 0.40 : 0.52, target);
+        }
+    } catch (e) {}
+}
+
+// ── وضعیت مالی ───────────────────────────────────────────────────────────────
+function ndRenderFinancial() {
+    var put = function (id, html) { var e = document.getElementById(id); if (e) e.innerHTML = html; };
+    var read = function (id) { var e = document.getElementById(id); return e ? e.innerHTML : ''; };
+
+    // طلب‌ها و باقیداری: دقیقاً همان مقادیرِ محاسبه‌شدهٔ کارتِ بیلانس‌ها
+    var debt = read('dash-bal-debt-vals');
+    var credit = read('dash-bal-credit-vals');
+    var reshape = function (html) {
+        if (!html) return '<span class="nd-money nd-money-zero"><b>0</b><i>' + ndEsc(ndCurLabel(ndBaseCode())) + '</i></span>';
+        // خروجیِ قبلی «<span>عدد</span> نامِ‌ارز &nbsp;•&nbsp; …» است → به چیپ تبدیل می‌شود
+        return html.split('&nbsp;•&nbsp;').map(function (part) {
+            var m = part.replace(/<[^>]*>/g, '|').split('|').filter(function (x) { return x.trim(); });
+            var val = (m[0] || '0').trim();
+            var lbl = (m[1] || '').trim();
+            return '<span class="nd-money"><b>' + ndEsc(val) + '</b><i>' + ndEsc(lbl) + '</i></span>';
+        }).join('');
+    };
+    put('nd-fin-debt', reshape(debt));
+    put('nd-fin-credit', reshape(credit));
+
+    // موجودِ حساب‌ها — همان منبعِ کارتِ «حساب‌ها»
+    try {
+        var cash = {};
+        if (typeof db.getCashboxTotalsByCurrency === 'function') {
+            cash = db.getCashboxTotalsByCurrency() || {};
+        } else {
+            (db.getCashboxes() || []).forEach(function (b) {
+                if (b && b.balances && typeof b.balances === 'object') {
+                    Object.keys(b.balances).forEach(function (c) { cash[c] = (cash[c] || 0) + (parseFloat(b.balances[c]) || 0); });
+                } else {
+                    var bc = (b && b.currency) || ndBaseCode();
+                    cash[bc] = (cash[bc] || 0) + (parseFloat(b && b.balance || 0) || 0);
+                }
+            });
+        }
+        put('nd-fin-cash', ndMoneyChips(cash));
+    } catch (e) { put('nd-fin-cash', ndMoneyChips({})); }
+
+    // مجموعِ مفادِ خالص و سرمایهٔ خالص — دقیقاً از همان موتورِ بخشِ «گزارشات»
+    // (_rpProfitAggregate) خوانده می‌شوند، پس ارقام با گزارشِ مفاد یکی‌اند.
+    try {
+        var agg = (typeof _rpProfitAggregate === 'function') ? _rpProfitAggregate('', '') : null;
+        if (agg) {
+            put('nd-fin-net', ndMoneyChips(agg.netByCur || {}));
+            put('nd-fin-equity', ndMoneyChips(agg.equityByCur || {}));
+        } else {
+            put('nd-fin-net', ndMoneyChips({}));
+            put('nd-fin-equity', ndMoneyChips({}));
+        }
+    } catch (e) {
+        put('nd-fin-net', ndMoneyChips({}));
+        put('nd-fin-equity', ndMoneyChips({}));
+    }
+}
+
+// ── فروشات امروز بر اساس کتگوری (دونات + فیصدی) ─────────────────────────────
+function ndCatPalette() {
+    return ['#0d9488', '#2563eb', '#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#14b8a6', '#a855f7', '#64748b', '#94a3b8'];
+}
+function ndRenderCategorySales() {
+    var legend = document.getElementById('nd-cats-legend');
+    var donut = document.getElementById('nd-cats-donut');
+    var totEl = document.getElementById('nd-cats-total');
+    var curEl = document.getElementById('nd-cats-cur');
+    if (!legend || !donut) return;
+
+    var base = ndBaseCode();
+    if (curEl) curEl.textContent = ndCurLabel(base);
+
+    var byCat = {}, total = 0;
+    try {
+        var todayStr = '';
+        try { todayStr = new PersianDate().format('YYYY/MM/DD'); } catch (e) { todayStr = ''; }
+        var prods = {};
+        (db.getProducts() || []).forEach(function (p) { if (p && p.id != null) prods[p.id] = p; });
+
+        (db.getTransactions() || []).forEach(function (tx) {
+            if (!tx || tx.type !== 'فروش') return;
+            var d = String(tx.date || tx.createdAt || '').split(' ')[0];
+            if (todayStr && d !== todayStr) return;
+            if (!Array.isArray(tx.items)) return;
+            tx.items.forEach(function (it) {
+                if (!it) return;
+                var line = (parseFloat(it.quantity) || 0) * (parseFloat(it.price) || 0) - (parseFloat(it.discount) || 0);
+                if (!line) return;
+                var val = ndToBase(line, tx, tx.currency);
+                var cat = 'سایر';
+                if (it.isService) cat = 'خدمات';
+                else {
+                    var p = (it.productId != null) ? prods[it.productId] : null;
+                    if (p && p.categoryMain) cat = p.categoryMain;
+                }
+                byCat[cat] = (byCat[cat] || 0) + val;
+                total += val;
+            });
+        });
+    } catch (e) { try { console.warn('nd cats:', e && e.message); } catch (_) {} }
+
+    if (totEl) totEl.textContent = ndNum(Math.round(total));
+
+    var cats = Object.keys(byCat).map(function (k) { return { name: k, val: byCat[k] }; })
+                     .filter(function (c) { return c.val > 0; })
+                     .sort(function (a, b) { return b.val - a.val; });
+
+    if (!cats.length) {
+        donut.innerHTML = '<circle cx="60" cy="60" r="46" fill="none" stroke="var(--nd-donut-empty,#e2e8f0)" stroke-width="20"></circle>';
+        legend.innerHTML = '<div class="nd-cats-empty">امروز هنوز فروشی ثبت نشده است.</div>';
+        return;
+    }
+    // بیش از ۵ کتگوری → بقیه در «سایر»
+    if (cats.length > 5) {
+        var rest = cats.slice(4).reduce(function (s, c) { return s + c.val; }, 0);
+        cats = cats.slice(0, 4);
+        cats.push({ name: 'سایر', val: rest });
+    }
+
+    var pal = ndCatPalette();
+    var R = 46, C = 2 * Math.PI * R, off = 0, svg = '';
+    svg += '<circle cx="60" cy="60" r="' + R + '" fill="none" stroke="var(--nd-donut-empty,#eef2f7)" stroke-width="20"></circle>';
+    var rows = '';
+    cats.forEach(function (c, i) {
+        var pct = total > 0 ? (c.val / total) * 100 : 0;
+        var len = C * (pct / 100);
+        var col = pal[i % pal.length];
+        svg += '<circle cx="60" cy="60" r="' + R + '" fill="none" stroke="' + col + '" stroke-width="20"'
+             + ' stroke-dasharray="' + len.toFixed(3) + ' ' + (C - len).toFixed(3) + '"'
+             + ' stroke-dashoffset="' + (-off).toFixed(3) + '" transform="rotate(-90 60 60)"></circle>';
+        off += len;
+        rows += '<div class="nd-cat-row">'
+              +   '<span class="nd-cat-dot" style="background:' + col + '"></span>'
+              +   '<span class="nd-cat-name">' + ndEsc(c.name) + '</span>'
+              +   '<span class="nd-cat-pct">' + ndNum(Math.round(pct)) + '%</span>'
+              + '</div>';
+    });
+    donut.innerHTML = svg;
+    legend.innerHTML = rows;
+}
+
+// ── آخرین معامله (۱۰ ردیف) ───────────────────────────────────────────────────
+function ndRenderRecent() {
+    var tb = document.getElementById('nd-recent-body');
+    if (!tb) return;
+    var rows = [];
+    try {
+        var txs = (db.getTransactions() || []).slice();
+        txs.sort(function (a, b) {
+            var ta = String(a && (a.date || a.createdAt) || ''), tbb = String(b && (b.date || b.createdAt) || '');
+            if (ta === tbb) return (parseFloat(b && b.id) || 0) - (parseFloat(a && a.id) || 0);
+            return ta < tbb ? 1 : -1;
+        });
+        rows = txs.slice(0, 8);
+    } catch (e) { rows = []; }
+
+    if (!rows.length) {
+        tb.innerHTML = '<tr><td colspan="4" class="nd-recent-empty">هنوز معامله‌ای ثبت نشده است</td></tr>';
+        return;
+    }
+    var html = '';
+    rows.forEach(function (t) {
+        var type = t.type || '';
+        if (type === 'برگشت') type = 'برگشت از ' + (t.returnType || '');
+        var party = t.personName || t.customerName || t.supplierName || t.partyName || '---';
+        var amt = parseFloat(t.totalAmount || t.amount || 0) || 0;
+        var cur = ndCurLabel(t.currency || ndBaseCode());
+        var st = t.status || (t.paid === false ? 'قرضه' : 'تسویه');
+        var cls = 'nd-tx-' + (type.indexOf('فروش') === 0 ? 'sale' : (type.indexOf('خرید') === 0 ? 'buy' : (type.indexOf('برگشت') === 0 ? 'ret' : 'other')));
+        html += '<tr onclick="if(typeof viewTransaction===\'function\')viewTransaction(' + (t.id) + ')">'
+             +   '<td><span class="nd-tx-type ' + cls + '">' + ndEsc(type) + '</span></td>'
+             +   '<td class="nd-tx-party">' + ndEsc(party) + '</td>'
+             +   '<td class="nd-tx-amt">' + ndNum(amt) + ' ' + ndEsc(cur) + '</td>'
+             +   '<td class="nd-tx-st">' + ndEsc(st) + '</td>'
+             + '</tr>';
+    });
+    tb.innerHTML = html;
+}
+
+// ── جستجوی سراسری روی تمام بخش‌ها ────────────────────────────────────────────
+//  ساختار و استایلِ دراپ‌داون دقیقاً همانِ «جستجوی اجناس/خدمات در فورمِ فروش فوری» است؛
+//  اینجا فقط دامنهٔ جستجو گسترده شده: اجناس، اشخاص، حساب‌ها، مصارف، خدمات، گدام‌ها،
+//  کتگوری‌ها، معاملات و خودِ بخش‌های برنامه. انتخابِ هر نتیجه، کاربر را دقیقاً به همان
+//  جایی می‌برد که به‌صورتِ عادی هم می‌رفت.
+// رفتن به بخشِ «امور مالی» و تبِ خواسته‌شده — دقیقاً همان مسیرِ عادیِ کاربر
+// (پیش‌تر مستقیم showSection('cash-boxes') صدا زده می‌شد که صفحهٔ قدیمی را باز می‌کرد).
+function ndGoFinancial(tab) {
+    try {
+        if (tab === 'expenses' || tab === 'employee-management') {
+            if (typeof switchFinancialTab === 'function') { switchFinancialTab(tab); return; }
+            showSection(tab === 'expenses' ? 'expenses' : 'employee-management');
+            return;
+        }
+        showSection('financial');
+        setTimeout(function () {
+            try { if (typeof switchFinancialTab === 'function') switchFinancialTab(tab || 'cashbox'); } catch (e) {}
+        }, 60);
+    } catch (e) { try { showSection('financial'); } catch (_) {} }
+}
+
+function ndSearchTargets() {
+    return [
+        { t: 'بخش', n: 'داشبورد',            i: 'fa-gauge-high',        go: function () { showSection('dashboard'); } },
+        { t: 'بخش', n: 'اشخاص',              i: 'fa-users',             go: function () { showSection('persons-list'); } },
+        { t: 'بخش', n: 'اجناس',              i: 'fa-boxes-stacked',     go: function () { showSection('products-list'); } },
+        { t: 'بخش', n: 'لیست های فروش',       i: 'fa-bag-shopping',      go: function () { showSection('sales-list'); } },
+        { t: 'بخش', n: 'لیست های خرید',       i: 'fa-cart-shopping',     go: function () { showSection('purchases-list'); } },
+        { t: 'بخش', n: 'لیست های دریافتی',    i: 'fa-download',          go: function () { showSection('receipts-list'); } },
+        { t: 'بخش', n: 'لیست های پرداختی',    i: 'fa-upload',            go: function () { showSection('payments-list'); } },
+        { t: 'بخش', n: 'برگشت از فروش',       i: 'fa-arrow-left-long',   go: function () { showSection('sales-returns-list'); } },
+        { t: 'بخش', n: 'برگشت از خرید',       i: 'fa-arrow-right-long',  go: function () { showSection('purchase-returns-list'); } },
+        { t: 'بخش', n: 'لیست سفارشات',        i: 'fa-list-ul',           go: function () { showSection('proforma-list'); } },
+        { t: 'بخش', n: 'لیست کامل معاملات',   i: 'fa-file-lines',        go: function () { showSection('transactions-list'); } },
+        { t: 'بخش', n: 'آخرین تغییرات',       i: 'fa-rotate',            go: function () { showSection('changelog-list'); } },
+        { t: 'بخش', n: 'خدمات',              i: 'fa-gear',              go: function () { showSection('services-list'); } },
+        { t: 'بخش', n: 'تسلیم دهی',           i: 'fa-clipboard-check',   go: function () { showSection('delivery-list'); } },
+        { t: 'بخش', n: 'امور مالی',           i: 'fa-coins',             go: function () { ndGoFinancial('cashbox'); } },
+        { t: 'بخش', n: 'حساب‌ها',             i: 'fa-university',        go: function () { ndGoFinancial('cashbox'); } },
+        { t: 'بخش', n: 'صندوق‌ها',            i: 'fa-university',        go: function () { ndGoFinancial('cashbox'); } },
+        { t: 'بخش', n: 'مصارفات',            i: 'fa-clipboard',         go: function () { ndGoFinancial('expenses'); } },
+        { t: 'بخش', n: 'کارمندان',           i: 'fa-users-cog',         go: function () { ndGoFinancial('employee-management'); } },
+        { t: 'بخش', n: 'گزارشات',            i: 'fa-chart-pie',         go: function () { showSection('reports'); } }
+    ];
+}
+function ndCollectSearch(q) {
+    var out = [];
+    var ql = String(q || '').toLowerCase().trim();
+    if (!ql) return out;
+    var hit = function (s) { return String(s == null ? '' : s).toLowerCase().indexOf(ql) !== -1; };
+
+    // ۱) بخش‌های برنامه
+    ndSearchTargets().forEach(function (s) { if (hit(s.n)) out.push({ type: s.t, name: s.n, icon: s.i, sub: '', go: s.go }); });
+
+    try {
+        // ۲) اجناس
+        (db.getProducts() || []).forEach(function (p) {
+            if (!p) return;
+            if (hit(p.name) || hit(p.code) || hit(p.categoryMain) || hit(p.categorySub) || hit(p.barcode)) {
+                out.push({
+                    type: 'جنس', name: p.name || '', icon: 'fa-box',
+                    sub: [p.code ? ('کد ' + p.code) : '', p.categoryMain || '', (p.quantity != null ? ('موجودی ' + ndNum(p.quantity) + ' ' + (p.unit || '')) : '')].filter(Boolean).join(' • '),
+                    go: (function (id) { return function () { if (typeof showProductInOutList === 'function') showProductInOutList(id); else showSection('products-list'); }; })(p.id)
+                });
+            }
+        });
+        // ۳) اشخاص
+        (db.getPersons() || []).forEach(function (p) {
+            if (!p) return;
+            if (hit(p.name) || hit(p.phone) || hit(p.category) || hit(p.address)) {
+                out.push({
+                    type: 'شخص', name: p.name || '', icon: 'fa-user',
+                    sub: [p.phone || '', p.category || ''].filter(Boolean).join(' • '),
+                    go: (function (id) { return function () { if (typeof showPersonDetail === 'function') showPersonDetail(id); else showSection('persons-list'); }; })(p.id)
+                });
+            }
+        });
+        // ۴) حساب‌ها
+        (db.getCashboxes() || []).forEach(function (c) {
+            if (!c) return;
+            if (hit(c.name) || hit(c.type)) {
+                out.push({
+                    type: 'حساب', name: c.name || '', icon: 'fa-university', sub: c.type || '',
+                    go: (function (id) { return function () { if (typeof showCashboxTransactions === 'function') showCashboxTransactions(id); else ndGoFinancial('cashbox'); }; })(c.id)
+                });
+            }
+        });
+        // ۵) خدمات
+        if (typeof db.getServices === 'function') {
+            (db.getServices() || []).forEach(function (s) {
+                if (!s) return;
+                if (hit(s.name) || hit(s.code)) {
+                    out.push({ type: 'خدمت', name: s.name || '', icon: 'fa-gear', sub: s.code || '', go: function () { showSection('services-list'); } });
+                }
+            });
+        }
+        // ۶) گدام‌ها
+        if (typeof db.getWarehouses === 'function') {
+            (db.getWarehouses() || []).forEach(function (w) {
+                if (!w) return;
+                if (hit(w.name)) out.push({ type: 'گدام', name: w.name || '', icon: 'fa-warehouse', sub: '', go: function () { showSection('products-list'); } });
+            });
+        }
+        // ۷) مصارف
+        if (typeof db.getExpenses === 'function') {
+            (db.getExpenses() || []).forEach(function (e) {
+                if (!e) return;
+                if (hit(e.title) || hit(e.category) || hit(e.description) || hit(e.note)) {
+                    out.push({
+                        type: 'مصرف', name: e.title || e.category || 'مصرف', icon: 'fa-clipboard',
+                        sub: [e.date || '', (e.amount != null ? ndNum(e.amount) : '')].filter(Boolean).join(' • '),
+                        go: function () { ndGoFinancial('expenses'); }
+                    });
+                }
+            });
+        }
+        // ۸) معاملات (شمارهٔ بل / طرف حساب)
+        (db.getTransactions() || []).forEach(function (t) {
+            if (!t) return;
+            var party = t.personName || t.customerName || t.supplierName || '';
+            if (hit(t.billNumber) || hit(party) || hit(t.type)) {
+                out.push({
+                    type: 'معامله', name: (t.type || '') + (t.billNumber ? (' — بل ' + t.billNumber) : ''), icon: 'fa-file-lines',
+                    sub: [party, t.date || ''].filter(Boolean).join(' • '),
+                    go: (function (id) { return function () { if (typeof viewTransaction === 'function') viewTransaction(id); else showSection('transactions-list'); }; })(t.id)
+                });
+            }
+        });
+    } catch (e) { try { console.warn('nd search:', e && e.message); } catch (_) {} }
+
+    // نزدیک‌ترین نتیجه اول: تطابقِ «شروع با» بالاتر از «شاملِ»
+    out.sort(function (a, b) {
+        var sa = String(a.name || '').toLowerCase().indexOf(ql) === 0 ? 0 : 1;
+        var sb = String(b.name || '').toLowerCase().indexOf(ql) === 0 ? 0 : 1;
+        if (sa !== sb) return sa - sb;
+        return String(a.name || '').length - String(b.name || '').length;
+    });
+    return out.slice(0, 40);
+}
+function ndGlobalSearch(input, ev) {
+    var box = document.getElementById('nd-global-search-results');
+    if (!box) return;
+    if (ev && (ev.key === 'ArrowDown' || ev.key === 'ArrowUp' || ev.key === 'Enter' || ev.key === 'Escape')) return;
+    var q = (input && input.value) || '';
+    if (!String(q).trim()) { box.style.display = 'none'; box.innerHTML = ''; return; }
+
+    var res = ndCollectSearch(q);
+    window.__ndSearchRes = res;
+    if (!res.length) {
+        box.innerHTML = '<div class="nd-sr-empty">نتیجه‌ای یافت نشد</div>';
+        box.style.display = 'block';
+        return;
+    }
+    var html = '';
+    res.forEach(function (r, i) {
+        html += '<div class="nd-sr-item product-search-result-item" data-ndi="' + i + '" onclick="ndPickSearch(' + i + ')">'
+             +   '<span class="nd-sr-ico"><i class="fas ' + (r.icon || 'fa-circle') + '"></i></span>'
+             +   '<span class="nd-sr-main"><span class="nd-sr-name">' + ndEsc(r.name) + '</span>'
+             +   (r.sub ? '<small class="nd-sr-sub">' + ndEsc(r.sub) + '</small>' : '') + '</span>'
+             +   '<span class="nd-sr-tag">' + ndEsc(r.type) + '</span>'
+             + '</div>';
+    });
+    box.innerHTML = html;
+    box.style.display = 'block';
+    window.__ndSearchIdx = -1;
+}
+function ndGlobalSearchKey(ev, input) {
+    var box = document.getElementById('nd-global-search-results');
+    if (!box || box.style.display === 'none') return;
+    var items = box.querySelectorAll('.nd-sr-item');
+    if (!items.length) return;
+    var idx = (typeof window.__ndSearchIdx === 'number') ? window.__ndSearchIdx : -1;
+    if (ev.key === 'ArrowDown') { ev.preventDefault(); idx = Math.min(items.length - 1, idx + 1); }
+    else if (ev.key === 'ArrowUp') { ev.preventDefault(); idx = Math.max(0, idx - 1); }
+    else if (ev.key === 'Enter') { ev.preventDefault(); ndPickSearch(idx < 0 ? 0 : idx); return; }
+    else if (ev.key === 'Escape') { box.style.display = 'none'; return; }
+    else return;
+    window.__ndSearchIdx = idx;
+    for (var i = 0; i < items.length; i++) items[i].classList.toggle('active', i === idx);
+    if (items[idx]) items[idx].scrollIntoView({ block: 'nearest' });
+}
+function ndPickSearch(i) {
+    var res = window.__ndSearchRes || [];
+    var r = res[i];
+    var box = document.getElementById('nd-global-search-results');
+    if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+    var inp = document.getElementById('nd-global-search');
+    if (inp) inp.value = '';
+    if (r && typeof r.go === 'function') { try { r.go(); } catch (e) { try { console.warn('nd go:', e && e.message); } catch (_) {} } }
+}
+function ndCloseSearchOnOutside(e) {
+    try {
+        var box = document.getElementById('nd-global-search-results');
+        if (!box || box.style.display === 'none') return;
+        if (e && e.target && e.target.closest && e.target.closest('.nd-search-wrap')) return;
+        box.style.display = 'none';
+    } catch (err) {}
+}
+
+// ── آیکنِ پشتیبان‌گیری هدر: مستقیم پنجرهٔ پشتیبان/گوگل‌درایو، بدونِ بازکردنِ سایدبار ──
+function ndOpenBackupQuick() {
+    // ۱) اگر ماژولِ گوگل‌درایو در دسترس باشد، مستقیم همان باز می‌شود
+    var cands = ['openDriveBackup', 'DriveBackup', 'driveBackup', 'GoogleDriveBackup', 'gdriveBackup', 'openGoogleDrive'];
+    for (var i = 0; i < cands.length; i++) {
+        var o = window[cands[i]];
+        if (typeof o === 'function') { try { o(); return; } catch (e) {} }
+        if (o && typeof o.open === 'function') { try { o.open(); return; } catch (e) {} }
+        if (o && typeof o.show === 'function') { try { o.show(); return; } catch (e) {} }
+    }
+    // ۲) در غیرِ آن، همان محتوای «پشتیبان‌گیری» سایدبار در یک پنجرهٔ مستقل باز می‌شود
+    ndOpenBackupModal();
+}
+function ndOpenBackupModal() {
+    var old = document.getElementById('nd-backup-modal');
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var inner = '';
+    try { if (typeof ssbLoadSubContent === 'function') inner = ssbLoadSubContent('backup') || ''; } catch (e) { inner = ''; }
+    if (!inner) {
+        inner = '<div class="ssb-card"><h4><i class="fas fa-database"></i> پشتیبان‌گیری</h4>'
+              + '<div style="font-size:.86rem;line-height:1.9;">بخشِ پشتیبان‌گیری در دسترس نیست.</div></div>';
+    }
+    var ov = document.createElement('div');
+    ov.id = 'nd-backup-modal';
+    ov.className = 'nd-modal-overlay';
+    ov.innerHTML =
+        '<div class="nd-modal" role="dialog" aria-modal="true">' +
+            '<div class="nd-modal-head">' +
+                '<span><i class="fas fa-cloud-arrow-up"></i> پشتیبان‌گیری</span>' +
+                '<button type="button" class="nd-modal-x" onclick="ndCloseBackupModal()" title="بستن"><i class="fas fa-times"></i></button>' +
+            '</div>' +
+            '<div class="nd-modal-body">' + inner + '</div>' +
+        '</div>';
+    ov.addEventListener('click', function (e) { if (e.target === ov) ndCloseBackupModal(); });
+    document.body.appendChild(ov);
+    try { if (typeof ssbPopulateForm === 'function') ssbPopulateForm('backup'); } catch (e) {}
+    try { if (typeof ssbRenderBackupList === 'function') ssbRenderBackupList(); } catch (e) {}
+}
+function ndCloseBackupModal() {
+    var m = document.getElementById('nd-backup-modal');
+    if (m && m.parentNode) m.parentNode.removeChild(m);
+}
+
+// ── پروفایلِ کاربر در هدر ────────────────────────────────────────────────────
+function ndToggleProfile(ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    var old = document.getElementById('nd-profile-pop');
+    if (old) { old.parentNode.removeChild(old); return; }
+    var s = {};
+    try { s = (window.db && db.getSettings) ? (db.getSettings() || {}) : {}; } catch (e) {}
+    var row = function (ic, lb, vl) {
+        return '<div class="nd-pp-row"><i class="fas ' + ic + '"></i><span class="nd-pp-lb">' + lb + '</span>'
+             + '<span class="nd-pp-vl">' + ndEsc(vl || '---') + '</span></div>';
+    };
+    var pop = document.createElement('div');
+    pop.id = 'nd-profile-pop';
+    pop.className = 'nd-profile-pop';
+    pop.innerHTML =
+        '<div class="nd-pp-head"><i class="fas fa-circle-user"></i><div>'
+        + '<div class="nd-pp-name">' + ndEsc(s.storeOwner || 'کاربر') + '</div>'
+        + '<div class="nd-pp-store">' + ndEsc(s.storeName || '') + '</div></div></div>'
+        + row('fa-phone', 'تماس', s.storePhone)
+        + row('fa-envelope', 'ایمیل', s.storeEmail)
+        + row('fa-location-dot', 'آدرس', s.storeAddress)
+        + '<button type="button" class="nd-pp-btn" onclick="ndCloseProfile(); openSidebar(); if(typeof ssbOpenSub===\'function\')ssbOpenSub(\'store\');">'
+        + '<i class="fas fa-pen"></i> ویرایش اطلاعات فروشگاه</button>';
+    document.body.appendChild(pop);
+    try {
+        var btn = document.getElementById('nd-profile-btn');
+        var r = btn ? btn.getBoundingClientRect() : null;
+        if (r) {
+            pop.style.top = (r.bottom + 8) + 'px';
+            pop.style.right = Math.max(8, (window.innerWidth - r.right)) + 'px';
+        }
+    } catch (e) {}
+    setTimeout(function () {
+        document.addEventListener('click', ndCloseProfileOnOutside, true);
+    }, 0);
+}
+function ndCloseProfile() {
+    var p = document.getElementById('nd-profile-pop');
+    if (p && p.parentNode) p.parentNode.removeChild(p);
+    document.removeEventListener('click', ndCloseProfileOnOutside, true);
+}
+function ndCloseProfileOnOutside(e) {
+    try {
+        var p = document.getElementById('nd-profile-pop');
+        if (!p) { document.removeEventListener('click', ndCloseProfileOnOutside, true); return; }
+        if (e && e.target && e.target.closest && (e.target.closest('#nd-profile-pop') || e.target.closest('#nd-profile-btn'))) return;
+        ndCloseProfile();
+    } catch (err) {}
+}
+
+// ── رندرِ کاملِ داشبوردِ جدید — از قلّابِ موجود صدا زده می‌شود ──────────────────
+function ndRenderDashboard() {
+    try { ndMenuShield(); } catch (e) {}
+    try { ndBindFit(); } catch (e) {}
+    try { ndUpdSyncSidebarItem(); } catch (e) {}
+    try { ndStartClock(); } catch (e) {}
+    try { ndRenderBrand(); } catch (e) {}
+    try { ndRenderFinancial(); } catch (e) {}
+    try { ndRenderCategorySales(); } catch (e) {}
+    try { ndRenderRecent(); } catch (e) {}
+    try {
+        if (!window.__ndOutsideBound) {
+            window.__ndOutsideBound = true;
+            document.addEventListener('click', ndCloseSearchOnOutside, true);
+        }
+    } catch (e) {}
+    try { if (typeof applyNumberSystemToDocument === 'function') applyNumberSystemToDocument(); } catch (e) {}
+    // بلندیِ داشبورد پس از پرشدنِ محتوا سنجیده می‌شود
+    try { ndFitDashboardHeight(); setTimeout(ndFitDashboardHeight, 180); } catch (e) {}
+}
+
+/* ── ساعت و تاریخِ زندهٔ هدرِ داشبورد (نسخهٔ تابعی) ───────────────────────────
+   نسخهٔ قبلی یک IIFEِ سطحِ بالا بود و روی این صفحه اجرا نمی‌شد، پس هدر بی‌تاریخ
+   می‌ماند. اینجا همان قالبِ قبلی است — «روزِ هفته  تاریخِ شمسی - تاریخِ میلادی -
+   ساعت» — با همان منبعِ ساعتِ افغانستانِ خودِ برنامه. */
+function ndClockTick() {
+    var el = document.getElementById('dash-topbar-datetime');
+    if (!el) return;
+    try {
+        var WD = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
+        var d = (typeof _getAfghNow === 'function') ? _getAfghNow() : new Date();
+        var wd = WD[d.getDay()] || '';
+        var jalali = '';
+        try { if (typeof PersianDate !== 'undefined') jalali = new PersianDate(d).format('YYYY/MM/DD'); } catch (e) {}
+        var greg = d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate();
+        var h24 = d.getHours(), ampm = h24 >= 12 ? 'PM' : 'AM';
+        var h12 = h24 % 12; if (h12 === 0) h12 = 12;
+        var mm = d.getMinutes() < 10 ? '0' + d.getMinutes() : '' + d.getMinutes();
+        var ss = d.getSeconds() < 10 ? '0' + d.getSeconds() : '' + d.getSeconds();
+        var out = wd + '  ' + jalali + '  -  ' + greg + '  -  ' + h12 + ':' + mm + ':' + ss + ampm;
+        try {
+            if (typeof getNumberSystem === 'function' && getNumberSystem() === 'fa' && typeof toPersianDigits === 'function') {
+                out = toPersianDigits(out);
+            }
+        } catch (e) {}
+        el.textContent = out;
+    } catch (e) {}
+}
+function ndStartClock() {
+    if (window.__ndClockTimer) return;
+    ndClockTick();
+    window.__ndClockTimer = setInterval(ndClockTick, 1000);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   «سپرِ منوهای دکمهٔ سه‌نقطه» — یک قاعدهٔ واحد برای همهٔ بخش‌ها
+   ---------------------------------------------------------------------------
+   دو مشکلی که حل می‌کند:
+     ۱) روی موبایل، منوها با onmouseenter باز می‌شوند؛ لمسِ دکمه ابتدا mouseenter
+        می‌دهد و منو زیرِ همان انگشت ظاهر می‌شود، بعد رویدادِ click روی یکی از
+        گزینه‌های تازه‌باز می‌نشیند و فورم «خودبه‌خود» باز می‌شود. اینجا کلیک‌هایی
+        که در ۴۰۰ میلی‌ثانیهٔ اولِ بازشدنِ منو روی خودِ منو می‌افتند نادیده گرفته
+        می‌شوند (لمسِ عمدیِ کاربر همیشه دیرتر از این است).
+     ۲) وقتی منویی باز است، کلیک روی فضای بیرون هم منو را می‌بست و هم عنصرِ زیرین
+        را فعال می‌کرد. حالا آن کلیک فقط منو را می‌بندد و به جای دیگری نمی‌رسد؛
+        کلیکِ بعدی عادی کار می‌کند.
+   فقط رویدادها مدیریت می‌شوند؛ هیچ منطق یا فورمی تغییر نکرده است.
+   ══════════════════════════════════════════════════════════════════════════════ */
+function ndMenuSelectors() {
+    return {
+        menu: '.floating-action-toolbar, .person-row-menu.open, .person-actions-menu, .clog-action-bar, #jouya-pp-sharemenu',
+        trig: '.action-trigger-btn, .person-card-kebab, .product-card-kebab, .sales-card-kebab, '
+            + '.cbtx-kebab, .fin-cb-kebab, .btn-icon.action-trigger-btn'
+    };
+}
+function ndAnyMenuOpen() {
+    try {
+        var list = document.querySelectorAll(ndMenuSelectors().menu);
+        for (var i = 0; i < list.length; i++) {
+            var el = list[i];
+            if (!el) continue;
+            if (el.offsetParent !== null || (el.getClientRects && el.getClientRects().length)) return true;
+        }
+    } catch (e) {}
+    return false;
+}
+function ndCloseAllMenus() {
+    try { if (typeof closeAllActionMenus === 'function') closeAllActionMenus(); } catch (e) {}
+    try { if (typeof closeCashboxActionBar === 'function') closeCashboxActionBar(); } catch (e) {}
+    try { if (typeof closeCashboxMenus === 'function') closeCashboxMenus(); } catch (e) {}
+    try { if (typeof closeProductActionBar === 'function') closeProductActionBar(); } catch (e) {}
+    try {
+        var kill = document.querySelectorAll('.floating-action-toolbar, .clog-action-bar, .person-actions-menu');
+        for (var i = 0; i < kill.length; i++) { try { kill[i].parentNode.removeChild(kill[i]); } catch (e) {} }
+        var open = document.querySelectorAll('.person-row-menu.open');
+        for (var j = 0; j < open.length; j++) open[j].classList.remove('open');
+    } catch (e) {}
+}
+function ndMenuShield() {
+    if (typeof window === 'undefined' || window.__ndMenuShield) return;
+    window.__ndMenuShield = true;
+    window.__ndMenuOpenedAt = 0;
+
+    // زمانِ بازشدنِ هر منوی شناور ثبت می‌شود
+    try {
+        var mo = new MutationObserver(function (muts) {
+            for (var i = 0; i < muts.length; i++) {
+                var added = muts[i].addedNodes || [];
+                for (var j = 0; j < added.length; j++) {
+                    var n = added[j];
+                    if (n && n.nodeType === 1 && n.matches &&
+                        n.matches('.floating-action-toolbar, .clog-action-bar, .person-actions-menu')) {
+                        window.__ndMenuOpenedAt = Date.now();
+                        return;
+                    }
+                }
+            }
+        });
+        mo.observe(document.body, { childList: true, subtree: true });
+    } catch (e) {}
+
+    var handler = function (e) {
+        if (!ndAnyMenuOpen()) return;
+        var t = e.target;
+        var sel = ndMenuSelectors();
+        var inMenu = !!(t && t.closest && t.closest(sel.menu));
+        var onTrig = !!(t && t.closest && t.closest(sel.trig));
+
+        // (۱) کلیکِ ناخواسته در لحظهٔ بازشدنِ منو (لمس روی موبایل)
+        if (inMenu && (Date.now() - (window.__ndMenuOpenedAt || 0)) < 400) {
+            e.preventDefault(); e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            return;
+        }
+        if (inMenu || onTrig) return;   // رفتارِ عادیِ خودِ منو و دکمه
+
+        // (۲) کلیکِ بیرون: فقط بستنِ منو — بدونِ فعال‌شدنِ عنصرِ زیرین
+        e.preventDefault(); e.stopPropagation();
+        if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        ndCloseAllMenus();
+    };
+
+    ['pointerdown', 'mousedown', 'touchstart', 'click'].forEach(function (evt) {
+        try { document.addEventListener(evt, handler, true); } catch (e) {}
+    });
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   بروزرسانیِ برنامه از گیت‌هاب (فقط نسخهٔ نصبیِ Tauri)
+   ---------------------------------------------------------------------------
+   مسیرِ کار برای شما (یک‌بار تنظیم، بعد از آن فقط دو مرحله در هر نسخه):
+     ۱) در فایلِ version.json مخزن را بنویسید:  { "version": "1.0.7", "repo": "USER/REPO" }
+        (می‌توانید همان را از داخلِ برنامه، در همین پنجرهٔ «بروزرسانی» هم وارد کنید.)
+     ۲) برای هر نسخهٔ تازه: شمارهٔ نسخه را در version.json و src-tauri/tauri.conf.json و
+        src-tauri/Cargo.toml بالا ببرید، سپس تگ بزنید و push کنید:
+              git tag v1.0.8 && git push origin v1.0.8
+        گیت‌هاب‌اکشن خودش می‌سازد و فایلِ نصبِ .exe را در Releases منتشر می‌کند.
+     ۳) کاربر در برنامه روی «بروزرسانی» → «بررسی بروزرسانی» می‌زند؛ اگر نسخهٔ تازه‌ای
+        باشد، با یک کلیک فایلِ نصب دانلود می‌شود و با اجرای آن روی نسخهٔ قبلی نصب می‌شود.
+   در نسخهٔ وب و موبایل این گزینه اصلاً نمایش داده نمی‌شود، چون آن‌ها همیشه آخرین
+   فایل‌ها را مستقیم از گیت‌هاب‌پیجز می‌خوانند.
+   ══════════════════════════════════════════════════════════════════════════════ */
+function ndUpdIsDesktopApp() {
+    try { return (typeof __jouyaIsTauri === 'function') ? __jouyaIsTauri() : false; } catch (e) { return false; }
+}
+// نسخهٔ نصبیِ اندروید (بسته‌بندی‌شده با Capacitor). Capacitor شیِ window.Capacitor را تزریق می‌کند.
+function ndUpdIsAndroidApp() {
+    try {
+        var C = window.Capacitor;
+        if (C && typeof C.getPlatform === 'function') return C.getPlatform() === 'android';
+        if (C && C.platform) return C.platform === 'android';
+        // فالبک: نشانِ صریح که در بیلدِ اندروید در index تزریق می‌شود (در صورت نبودِ Capacitor)
+        if (window.__JOUYA_RUNTIME === 'android') return true;
+    } catch (e) {}
+    return false;
+}
+// هر دو نسخهٔ نصبی (دسکتاپ یا اندروید) که از گیت‌هاب بروزرسانی می‌شوند
+function ndUpdIsInstalledApp() { return ndUpdIsDesktopApp() || ndUpdIsAndroidApp(); }
+// گزینهٔ «بروزرسانی» فقط در نسخه‌های نصبی (دسکتاپ/اندروید) دیده می‌شود؛ در وب و PWAِ آیفون پنهان
+function ndUpdSyncSidebarItem() {
+    try {
+        var li = document.getElementById('ssb-item-update');
+        if (li) li.style.display = ndUpdIsInstalledApp() ? '' : 'none';
+    } catch (e) {}
+}
+function ndUpdGetRepo() {
+    try {
+        var v = localStorage.getItem('hb-update-repo');
+        if (v) return v;
+        if (window.__hbVersionInfo && window.__hbVersionInfo.repo) return window.__hbVersionInfo.repo;
+    } catch (e) {}
+    return '';
+}
+function ndUpdSetRepo(r) { try { localStorage.setItem('hb-update-repo', String(r || '').trim()); } catch (e) {} }
+
+// نسخهٔ نصب‌شده: اول از خودِ برنامه (Tauri)، وگرنه از version.json
+function ndUpdCurrentVersion() {
+    return new Promise(function (resolve) {
+        var fallback = function () {
+            fetch('version.json?t=' + Date.now(), { cache: 'no-store' })
+                .then(function (r) { return r.json(); })
+                .then(function (j) {
+                    window.__hbVersionInfo = j || {};
+                    resolve(String((j && j.version) || '0.0.0'));
+                })
+                .catch(function () { resolve('0.0.0'); });
+        };
+        try {
+            if (ndUpdIsDesktopApp() && typeof __jouyaTauriInvoke === 'function') {
+                __jouyaTauriInvoke('hb_app_version')
+                    .then(function (v) { v ? resolve(String(v)) : fallback(); })
+                    .catch(fallback);
+                return;
+            }
+        } catch (e) {}
+        fallback();
+    });
+}
+// مقایسهٔ نسخه‌ها: 1.0.10 از 1.0.9 بزرگ‌تر است
+function ndUpdCmp(a, b) {
+    var pa = String(a || '').replace(/^v/i, '').split('.').map(function (x) { return parseInt(x, 10) || 0; });
+    var pb = String(b || '').replace(/^v/i, '').split('.').map(function (x) { return parseInt(x, 10) || 0; });
+    for (var i = 0; i < Math.max(pa.length, pb.length); i++) {
+        var d = (pa[i] || 0) - (pb[i] || 0);
+        if (d) return d > 0 ? 1 : -1;
+    }
+    return 0;
+}
+function ndUpdSetStatus(html, cls) {
+    var el = document.getElementById('nd-upd-status');
+    if (el) { el.innerHTML = html; el.className = 'nd-upd-status ' + (cls || ''); }
+}
+function ndUpdCheck() {
+    var repo = ndUpdGetRepo();
+    if (!repo || repo.indexOf('/') === -1) {
+        ndUpdSetStatus('ابتدا نشانیِ مخزن را به شکلِ <b>USER/REPO</b> وارد و ذخیره کنید.', 'warn');
+        return;
+    }
+    ndUpdSetStatus('<i class="fas fa-spinner fa-spin"></i> در حال بررسی…', '');
+    ndUpdCurrentVersion().then(function (cur) {
+        var curEl = document.getElementById('nd-upd-current');
+        if (curEl) curEl.textContent = cur;
+        return fetch('https://api.github.com/repos/' + repo + '/releases/latest', {
+            cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' }
+        }).then(function (r) {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        }).then(function (rel) {
+            var tag = String((rel && (rel.tag_name || rel.name)) || '').replace(/^v/i, '');
+            if (!tag) { ndUpdSetStatus('نسخه‌ای در Releases پیدا نشد.', 'warn'); return; }
+            var assets = (rel && rel.assets) || [];
+            var exe = null, msi = null, apk = null;
+            assets.forEach(function (a) {
+                var n = String(a && a.name || '').toLowerCase();
+                if (!exe && /\.exe$/.test(n)) exe = a;
+                if (!msi && /\.msi$/.test(n)) msi = a;
+                if (!apk && /\.apk$/.test(n)) apk = a;
+            });
+            // در اندروید فایلِ APK، در دسکتاپ فایلِ exe/msi انتخاب می‌شود
+            var pick = ndUpdIsAndroidApp() ? (apk || exe || msi) : (exe || msi || apk);
+            window.__hbUpdAsset = pick ? pick.browser_download_url : (rel.html_url || '');
+            if (ndUpdCmp(tag, cur) > 0) {
+                ndUpdSetStatus(
+                    '<b>نسخهٔ تازه موجود است: ' + ndEsc(tag) + '</b><br>' +
+                    (pick ? ('فایلِ نصب: ' + ndEsc(pick.name)) : 'فایلِ نصبی در این انتشار پیدا نشد؛ صفحهٔ انتشار باز می‌شود.') +
+                    '<div style="margin-top:10px;"><button class="ssb-btn ssb-btn-primary" onclick="ndUpdDownload()">' +
+                    '<i class="fas fa-download"></i> دانلود و نصب نسخهٔ ' + ndEsc(tag) + '</button></div>',
+                    'ok');
+            } else {
+                ndUpdSetStatus('برنامهٔ شما به‌روز است. (نسخهٔ نصب‌شده: ' + ndEsc(cur) + ')', 'ok');
+            }
+        });
+    }).catch(function (e) {
+        ndUpdSetStatus('بررسی ناموفق بود: ' + ndEsc((e && e.message) || e) +
+            '<br><small>اتصالِ اینترنت و درستیِ نشانیِ مخزن را بررسی کنید.</small>', 'err');
+    });
+}
+function ndUpdDownload() {
+    var url = window.__hbUpdAsset || '';
+    if (!url) { ndUpdSetStatus('نشانیِ فایلِ نصب در دسترس نیست.', 'err'); return; }
+    try {
+        if (ndUpdIsAndroidApp()) {
+            // اندروید: APK در مرورگرِ سیستم باز می‌شود؛ پس از دانلود، کاربر روی فایل می‌زند و
+            // نصب‌کنندهٔ اندروید روی نسخهٔ قبلی نصبش می‌کند (داده‌ها دست‌نخورده می‌مانند).
+            var opened = false;
+            try {
+                if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser
+                    && typeof window.Capacitor.Plugins.Browser.open === 'function') {
+                    window.Capacitor.Plugins.Browser.open({ url: url }); opened = true;
+                }
+            } catch (e2) {}
+            if (!opened) { try { window.open(url, '_blank'); } catch (e3) { location.href = url; } }
+            ndUpdSetStatus('دانلودِ فایلِ نصبِ اندروید آغاز شد. پس از پایان، روی فایلِ APK بزنید و ' +
+                '«نصب» را تأیید کنید؛ روی نسخهٔ فعلی نصب می‌شود و اطلاعاتِ شما دست‌نخورده می‌ماند.<br>' +
+                '<small>اگر اجازهٔ نصب خواسته شد، «نصب برنامه‌های ناشناس» را برای مرورگر فعال کنید.</small>', 'ok');
+            return;
+        }
+        if (ndUpdIsDesktopApp() && typeof __jouyaTauriInvoke === 'function') {
+            __jouyaTauriInvoke('hb_open_uri', { uri: url }).catch(function () { window.open(url, '_blank'); });
+        } else {
+            window.open(url, '_blank');
+        }
+        ndUpdSetStatus('دانلود آغاز شد. پس از پایانِ دانلود، فایل را اجرا کنید؛ ' +
+            'نصب روی نسخهٔ فعلی انجام می‌شود و اطلاعاتِ شما دست‌نخورده می‌ماند.', 'ok');
+    } catch (e) {
+        ndUpdSetStatus('بازکردنِ نشانیِ دانلود ممکن نشد.', 'err');
+    }
+}
+function ndUpdSaveRepo() {
+    var el = document.getElementById('nd-upd-repo');
+    ndUpdSetRepo(el ? el.value : '');
+    ndUpdSetStatus('نشانیِ مخزن ذخیره شد.', 'ok');
+}
+// محتوای پنلِ «بروزرسانی» در سایدبار
+function ndUpdPanelHtml() {
+    var repo = ndUpdGetRepo();
+    return '<div class="ssb-card">'
+        + '<h4><i class="fas fa-cloud-arrow-down"></i> بروزرسانی برنامه</h4>'
+        + '<div style="font-size:.84rem;line-height:1.9;margin-bottom:10px;">'
+        +   'نسخهٔ نصب‌شده: <b id="nd-upd-current">—</b>'
+        + '</div>'
+        + '<label>نشانی مخزن گیت‌هاب</label>'
+        + '<input type="text" id="nd-upd-repo" placeholder="USER/REPO" value="' + ndEsc(repo) + '">'
+        + '<button class="ssb-btn" onclick="ndUpdSaveRepo()"><i class="fas fa-save"></i> ذخیرهٔ نشانی</button>'
+        + '<button class="ssb-btn ssb-btn-primary" onclick="ndUpdCheck()" style="margin-top:8px;">'
+        +   '<i class="fas fa-rotate"></i> بررسی بروزرسانی</button>'
+        + '<div id="nd-upd-status" class="nd-upd-status" style="margin-top:12px;"></div>'
+        + '</div>';
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   جاشدنِ کاملِ داشبورد در یک صفحه (نسخهٔ نصبی و وبِ کامپیوتر)
+   ---------------------------------------------------------------------------
+   بلندیِ دقیقِ ناحیهٔ داشبورد از روی «پایینِ هدر» تا «بالای نوارِ پایین» اندازه‌گیری
+   و روی شبکه گذاشته می‌شود؛ بعد چیدمانِ فلکس، کارت‌ها را در همان بلندی پخش می‌کند.
+   روی موبایل دست نمی‌خورد (همان اسکرولِ عمودیِ قبلی باقی می‌ماند).
+   ══════════════════════════════════════════════════════════════════════════════ */
+function ndFitDashboardHeight() {
+    try {
+        var grid = document.getElementById('nd-grid');
+        var sec  = document.getElementById('dashboard');
+        var body = document.body;
+        var active = !!(sec && sec.classList.contains('active'));
+        if (!grid) return;
+        if ((window.innerWidth || 0) <= 768 || !active) {   // موبایل یا بخشِ دیگر: بدونِ قفل
+            grid.style.height = ''; grid.style.maxHeight = '';
+            grid.classList.remove('nd-fit');
+            if (body) body.classList.remove('nd-dash-fit');
+            return;
+        }
+        // فاصلهٔ پایینِ ناحیهٔ محتوا (جای نوارِ پایین) در داشبورد لازم نیست، چون خودِ
+        // شبکه دقیقاً تا بالای همان نوار بلندی می‌گیرد. بدونِ این، صفحه اسکرول می‌شد.
+        if (body) body.classList.add('nd-dash-fit');
+
+        var top = grid.getBoundingClientRect().top;
+        var vh  = window.innerHeight || document.documentElement.clientHeight || 0;
+        var bottomLimit = vh;
+        var bn = document.querySelector('.bottom-nav');
+        if (bn) {
+            var br = bn.getBoundingClientRect();
+            if (br.height > 0 && br.top > 0 && br.top < vh) bottomLimit = br.top;
+        }
+        var h = Math.floor(bottomLimit - top - 8);
+        if (!(h > 220)) return;
+        grid.style.height = h + 'px';
+        grid.style.maxHeight = h + 'px';
+        grid.classList.add('nd-fit');
+
+        // بلندیِ بومِ نمودار را صریح می‌گذاریم. Chart.js با responsive+
+        // maintainAspectRatio:false اندازه را از والد می‌گیرد؛ در یک فلکسِ height:auto
+        // این حلقه ناپایدار می‌شود و راهنما/پاورقیِ نمودار بیرون می‌ماند.
+        try {
+            var cbody = document.querySelector('#dashboard .nd-chart > .nd-card-body');
+            var canvas = document.getElementById('weekly-sales-chart');
+            if (cbody && canvas) {
+                var used = 0;
+                ['.weekly-chart-top-row', '.weekly-chart-legend', '.weekly-chart-footer'].forEach(function (sl) {
+                    var e = cbody.querySelector(sl);
+                    if (e) used += e.getBoundingClientRect().height;
+                });
+                var ch = Math.max(60, Math.floor(cbody.clientHeight - used - 12));
+                canvas.style.height = ch + 'px';
+                canvas.style.maxHeight = ch + 'px';
+                try { if (window._advStatsChart && window._advStatsChart.resize) window._advStatsChart.resize(); } catch (e2) {}
+                // اصلاحِ دوم: پس از نشستنِ چیدمان، اگر باز هم چیزی بیرون ماند، بوم
+                // دقیقاً به همان اندازه کوتاه می‌شود تا راهنما و پاورقی کامل دیده شوند.
+                setTimeout(function () {
+                    try {
+                        var over = cbody.scrollHeight - cbody.clientHeight;
+                        if (over > 1) {
+                            var nh = Math.max(60, ch - over - 2);
+                            canvas.style.height = nh + 'px';
+                            canvas.style.maxHeight = nh + 'px';
+                            if (window._advStatsChart && window._advStatsChart.resize) window._advStatsChart.resize();
+                        }
+                    } catch (e3) {}
+                }, 90);
+            }
+        } catch (e) {}
+
+        // پس از نشستنِ بلندی، اندازهٔ متنِ برند دوباره سنجیده شود
+        try { ndFitBrandText(); } catch (e) {}
+    } catch (e) {}
+}
+function ndBindFit() {
+    if (window.__ndFitBound) return;
+    window.__ndFitBound = true;
+    var run = function () { try { ndFitDashboardHeight(); } catch (e) {} };
+    try { window.addEventListener('resize', run); } catch (e) {}
+    try { window.addEventListener('orientationchange', run); } catch (e) {}
+    try { document.addEventListener('sectionChanged', function () { setTimeout(run, 60); }); } catch (e) {}
 }

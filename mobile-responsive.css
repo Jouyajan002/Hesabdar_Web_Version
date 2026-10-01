@@ -1196,3 +1196,115 @@ body:has(#dashboard.section.active) #financial.section.active { display: none !i
     border-radius: 10px;
     overflow: hidden;
 }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   داشبوردِ جدید روی موبایل
+   ---------------------------------------------------------------------------
+   همهٔ ظرف‌های میانی به display:contents می‌روند تا کارت‌ها مستقیماً فرزندِ شبکهٔ
+   اصلی شوند؛ آن‌گاه با order ترتیبِ خواسته‌شده اعمال می‌شود:
+     برند → جستجو → دسترسی سریع → نمودار → کتگوری → وضعیت مالی → آخرین معامله
+     → لیست‌ها → نرخ ارز
+   هر کارت تمامِ عرضِ صفحه را می‌گیرد و هیچ محتوایی از عرض بیرون نمی‌زند.
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+    #dashboard .nd-grid {
+        display: flex !important; flex-direction: column !important;
+        gap: 9px !important; padding: 0 8px 14px 8px !important;
+    }
+    #dashboard .nd-right,
+    #dashboard .nd-left,
+    #dashboard .nd-headrow,
+    #dashboard .nd-cols,
+    #dashboard .nd-colA,
+    #dashboard .nd-colB { display: contents !important; }
+
+    #dashboard .nd-brand  { order: 1; }
+    #dashboard .nd-search { order: 2; }
+    #dashboard .nd-quick  { order: 3; }
+    #dashboard .nd-chart  { order: 4; }
+    #dashboard .nd-cats   { order: 5; }
+    #dashboard .nd-fin    { order: 6; }
+    #dashboard .nd-recent { order: 7; }
+    #dashboard .nd-lists  { order: 8; }
+    #dashboard .nd-fx     { order: 9; }
+
+    #dashboard .nd-grid > * ,
+    #dashboard .nd-brand, #dashboard .nd-search,
+    #dashboard .nd-quick, #dashboard .nd-chart, #dashboard .nd-cats,
+    #dashboard .nd-fin, #dashboard .nd-recent, #dashboard .nd-lists, #dashboard .nd-fx {
+        flex: 0 0 auto !important; width: 100% !important; max-width: 100% !important; min-width: 0 !important;
+    }
+
+    /* برند: نام + شعار در یک سطر با لوگو */
+    #dashboard .nd-brand { padding: 6px 4px !important; gap: 10px !important; }
+    /* اندازهٔ فونتِ نام و شعار را ndFitBrandText بر اساسِ تعدادِ کاراکتر تعیین می‌کند،
+       پس اینجا !important گذاشته نمی‌شود تا آن تنظیمِ منعطف روی موبایل هم اثر کند. */
+    #dashboard .nd-brand .dsi-name { font-size: 1.02rem; }
+    #dashboard .nd-brand .nd-brand-slogan { font-size: .6rem; }
+    #dashboard .nd-brand .dsi-logo-wrap { width: 48px !important; height: 48px !important; }
+
+    /* جستجو */
+    #dashboard .nd-search-hint { font-size: .62rem !important; }
+    #dashboard .nd-search-input { font-size: .76rem !important; padding: 8px 12px 8px 34px !important; }
+    #dashboard .nd-search-results { max-height: 46vh !important; }
+    #dashboard .nd-sr-item { font-size: .74rem !important; }
+
+    /* کارت‌ها کمی فشرده‌تر */
+    #dashboard .nd-card-title { font-size: .78rem !important; }
+    #dashboard .nd-card-head { padding: 7px 10px !important; }
+    #dashboard .nd-card-body { padding: 8px 9px !important; }
+
+    /* دسترسی سریع: دو ردیفِ چهارتایی، همه در عرضِ صفحه */
+    #dashboard .nd-qa-row { flex-wrap: wrap !important; gap: 6px !important; }
+    #dashboard .nd-qa {
+        flex: 0 0 calc(25% - 4.5px) !important; max-width: calc(25% - 4.5px) !important;
+        padding: 7px 2px !important; border-right-width: 3px !important; border-left-width: 3px !important;
+    }
+    #dashboard .nd-qa i { font-size: .95rem !important; }
+    #dashboard .nd-qa span { font-size: .5rem !important; white-space: normal !important; text-align: center; line-height: 1.25; }
+
+    /* نمودار */
+    #dashboard .nd-chart #weekly-sales-chart { height: 128px !important; max-height: 128px !important; }
+    #dashboard .nd-chart .weekly-chart-legend,
+    #dashboard .nd-chart .weekly-chart-footer { font-size: .62rem !important; }
+
+    /* کتگوری‌ها */
+    #dashboard .nd-cats-inner { gap: 10px !important; }
+    #dashboard .nd-donut-wrap { width: 112px !important; height: 112px !important; }
+    #dashboard .nd-donut-val { font-size: .88rem !important; }
+    #dashboard .nd-donut-cur { font-size: .56rem !important; }
+    #dashboard .nd-cat-row { font-size: .7rem !important; gap: 6px !important; }
+
+    /* وضعیت مالی */
+    #dashboard .nd-fin-label { font-size: .72rem !important; min-width: 70px !important; }
+    #dashboard .nd-money { font-size: .66rem !important; padding: 2px 6px !important; }
+
+    /* آخرین معامله */
+    #dashboard .nd-recent .nd-card-body { max-height: 260px !important; }
+    #dashboard .nd-recent-table { font-size: .64rem !important; }
+    #dashboard .nd-recent-table th,
+    #dashboard .nd-recent-table td { padding: 5px 2px !important; }
+
+    /* لیست‌ها */
+    #dashboard .nd-list-grid { gap: 6px !important; }
+    #dashboard .nd-lbtn {
+        min-height: 38px !important; font-size: .62rem !important;
+        padding: 6px 6px !important; gap: 5px !important; border-right-width: 4px !important;
+    }
+    #dashboard .nd-lbtn i { font-size: .8rem !important; }
+
+    /* هدر */
+    .dash-topbar .dash-topbar-datetime { font-size: .62rem !important; }
+    .dash-topbar .nd-topbar-profile { font-size: 1.1rem !important; }
+    .dash-topbar .nd-topbar-backup { font-size: 1rem !important; }
+
+    /* پاپ‌آپ‌ها در عرضِ موبایل */
+    .nd-profile-pop { left: 8px !important; right: 8px !important; min-width: 0 !important; max-width: none !important; }
+}
+
+/* صفحه‌های خیلی باریک */
+@media (max-width: 380px) {
+    #dashboard .nd-qa { flex: 0 0 calc(33.333% - 4px) !important; max-width: calc(33.333% - 4px) !important; }
+    #dashboard .nd-brand .dsi-name { font-size: .92rem; }
+    #dashboard .nd-lbtn { font-size: .56rem !important; }
+}

@@ -165,8 +165,16 @@
             }
             // ۲) لمسِ دکمهٔ بازکنندهٔ منو → دست نزن (منو تازه باز می‌شود).
             if (t.closest(TRIGGER_SELECTOR)) return;
-            // ۳) لمسِ بیرون از هر منو → اگر منویی باز است، همه را ببند.
-            if (anyMenuOpen()) closeAllFloatingActionMenus();
+            // ۳) لمسِ بیرون از هر منو → اگر منویی باز است، همه را ببند و «همین لمس»
+            //    به هیچ عنصرِ دیگری نرسد. پیش‌تر منو بسته می‌شد ولی همان لمس، ردیف یا
+            //    دکمهٔ زیرِ انگشت را هم فعال می‌کرد و کاربر ناخواسته به صفحهٔ دیگری
+            //    می‌رفت. حالا لمسِ اول فقط می‌بندد و لمسِ بعدی عادی کار می‌کند.
+            if (anyMenuOpen()) {
+                closeAllFloatingActionMenus();
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+            }
         } catch (_) {}
     }
     // فازِ capture تا مستقل از بستن‌کننده‌های داخلی، بسته‌شدن تضمین شود.
@@ -337,6 +345,9 @@
         try {
             var info = document.querySelector('#dashboard .dash-info-col');
             if (!info) return;
+            // داشبوردِ جدید: کارتِ «نرخ ارز» خودش جای مشخص و بازِ خودش را دارد،
+            // پس تاگلِ کشوییِ قدیمی ساخته نمی‌شود.
+            if (document.getElementById('nd-grid')) return;
             if (document.getElementById('jouya-info-toggle')) return;
             var toggle = document.createElement('button');
             toggle.id = 'jouya-info-toggle';
