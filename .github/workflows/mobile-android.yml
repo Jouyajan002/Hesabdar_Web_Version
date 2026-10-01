@@ -1,0 +1,160 @@
+name: ساخت نسخهٔ موبایل اندروید (Capacitor APK)
+
+# دستی اجرا می‌شود، و همچنین با ساختِ یک تگِ نسخه (مثلاً v1.0.8) خودکار —
+# پس یک تگ، هم نسخهٔ ویندوز و هم نسخهٔ اندروید را می‌سازد.
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    name: اندروید (APK)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: دریافت کد
+        uses: actions/checkout@v4
+
+      - name: نصب Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: نصب Java (برای Gradle)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: آماده‌سازی Android SDK
+        uses: android-actions/setup-android@v3
+
+      # ══════════════════════════════════════════════════════════════════════
+      #  تعیینِ شمارهٔ نسخه از روی تگ (versionName) + یک versionCode صعودی
+      #  ---------------------------------------------------------------------
+      #  • اگر با تگ v1.0.8 اجرا شود → versionName=1.0.8
+      #  • اگر دستی اجرا شود → از version.json خوانده می‌شود
+      #  • versionCode همیشه = شمارهٔ اجرا (github.run_number) تا همیشه صعودی باشد
+      # ══════════════════════════════════════════════════════════════════════
+      - name: تعیینِ نسخه
+        id: ver
+        run: |
+          REF="${GITHUB_REF##*/}"
+          if [[ "$REF" == v* ]]; then
+            VNAME="${REF#v}"
+          elif [ -f version.json ]; then
+            VNAME=$(node -e "try{process.stdout.write(String(require('./version.json').version||'1.0.0'))}catch(e){process.stdout.write('1.0.0')}")
+          else
+            VNAME="1.0.0"
+          fi
+          echo "vname=$VNAME" >> "$GITHUB_OUTPUT"
+          echo "vcode=${GITHUB_RUN_NUMBER}" >> "$GITHUB_OUTPUT"
+          echo "نسخه: $VNAME (code ${GITHUB_RUN_NUMBER})"
+
+      # ══════════════════════════════════════════════════════════════════════
+      #  آماده‌سازیِ پوشهٔ www — همان فایل‌های وب که در APK بسته می‌شوند
+      #  ---------------------------------------------------------------------
+      #  مثلِ dist-webِ ویندوز، کاملاً درون‌خطی. فایلِ تازهٔ وب اضافه کردید؟ نامش را
+      #  به WEB_FILES اضافه کنید. فایلی که نباشد بی‌صدا رد می‌شود.
+      #  service-worker.js و pwa-register.js عمداً داخلِ APK نمی‌روند (اپلیکیشنِ
+      #  نیتیو به Service Worker نیاز ندارد و وجودش می‌تواند با کشِ داخلی تداخل کند).
+      # ══════════════════════════════════════════════════════════════════════
+      - name: آماده‌سازیِ www
+        run: |
+          set -e
+          mkdir -p www
+          WEB_FILES="index.html \
+            style.css auth-system.css dashboard-store-info-fix.css mobile-responsive.css \
+            tauri-bridge.js database.js script.js persian-date-utils.js \
+            auth-system.js drive-backup.js instant-update-fix.js delivery-list.js \
+            currency-system.js sync-config.js sync-layer.js auth-cloud.js \
+            device-guard.js \
+            demo-mode.js mobile-fit.js jouya-selftest.js \
+            manifest.webmanifest version.json"
+          for f in $WEB_FILES; do
+            if [ -f "$f" ]; then cp "$f" "www/$f"; fi
+          done
+          for d in assets build; do
+            if [ -d "$d" ]; then cp -r "$d" "www/$d"; fi
+          done
+          if [ ! -f www/index.html ]; then echo "::error::index.html در ریشه پیدا نشد"; exit 1; fi
+          echo "— محتوای www —"; ls -la www | head -40
+
+      - name: نصب Capacitor و افزونه‌ها
+        run: |
+          set -e
+          cat > package.json <<'JSON'
+          {
+            "name": "hesabdar-mobile",
+            "version": "1.0.0",
+            "private": true,
+            "description": "حسابدار — بستهٔ موبایل (Capacitor)"
+          }
+          JSON
+          npm install --no-audit --no-fund \
+            @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor/browser@6
+
+      - name: پیکربندیِ Capacitor
+        run: |
+          set -e
+          cat > capacitor.config.json <<JSON
+          {
+            "appId": "com.hesabdar.app",
+            "appName": "حسابدار",
+            "webDir": "www",
+            "android": { "allowMixedContent": true }
+          }
+          JSON
+          cat capacitor.config.json
+
+      - name: افزودنِ پلتفرمِ اندروید
+        run: npx cap add android
+
+      - name: همگام‌سازیِ فایل‌های وب
+        run: npx cap sync android
+
+      # نام و کدِ نسخه را داخلِ گریدلِ اندروید تزریق می‌کنیم تا در «دربارهٔ برنامه» و
+      # در مقایسهٔ بروزرسانی درست نمایش داده شود.
+      - name: تزریقِ شمارهٔ نسخه
+        run: |
+          set -e
+          GRADLE="android/app/build.gradle"
+          sed -i "s/versionCode .*/versionCode ${{ steps.ver.outputs.vcode }}/" "$GRADLE"
+          sed -i "s/versionName .*/versionName \"${{ steps.ver.outputs.vname }}\"/" "$GRADLE"
+          grep -E "versionCode|versionName" "$GRADLE"
+
+      - name: ساختِ APK
+        run: |
+          set -e
+          cd android
+          chmod +x ./gradlew
+          ./gradlew assembleDebug --no-daemon
+
+      - name: نام‌گذاریِ خروجی
+        id: out
+        run: |
+          set -e
+          SRC="android/app/build/outputs/apk/debug/app-debug.apk"
+          DST="hesabdar-${{ steps.ver.outputs.vname }}.apk"
+          cp "$SRC" "$DST"
+          echo "apk=$DST" >> "$GITHUB_OUTPUT"
+          ls -la "$DST"
+
+      - name: بارگذاریِ APK (آرتیفکت)
+        uses: actions/upload-artifact@v4
+        with:
+          name: hesabdar-android-apk
+          if-no-files-found: error
+          path: ${{ steps.out.outputs.apk }}
+
+      - name: انتشار در Releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.out.outputs.apk }}
+          fail_on_unmatched_files: false
