@@ -31,8 +31,13 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
+      # نکته: پیش‌فرضِ این اکشن می‌خواهد بستهٔ منسوخِ «tools» را نصب کند که دیگر در
+      # مخزنِ SDK نیست و باعثِ خطای «Failed to find package 'tools'» می‌شود. این‌جا
+      # صراحتاً فقط بسته‌های لازمِ Capacitor 6 (API 34) را نصب می‌کنیم — بدونِ «tools».
       - name: آماده‌سازی Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: 'platform-tools platforms;android-34 build-tools;34.0.0'
 
       # ══════════════════════════════════════════════════════════════════════
       #  تعیینِ شمارهٔ نسخه از روی تگ (versionName) + یک versionCode صعودی
