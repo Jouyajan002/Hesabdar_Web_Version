@@ -3,11 +3,16 @@ name: ساخت نسخهٔ نصبیِ ویندوز — سازگار با ویند
 # این ورک‌فلو یک بیلدِ «سازگار با ویندوز ۷» می‌سازد که روی ویندوز ۷/۸/۱۰/۱۱ — همه —
 # اجرا می‌شود. یعنی همین یک بیلد برای همهٔ کاربرانِ دسکتاپ کافی است.
 #
-# ❗ مهم: برای اینکه گزینهٔ «بروزرسانی» داخلِ برنامه فایلِ درست را بردارد، باید فقط
-#    «یک» ورک‌فلوی دسکتاپ روی هر تگ اجرا شود. پس اگر این فایل را فعال می‌کنید،
-#    ورک‌فلوی قدیمیِ desktop-tauri.yml را غیرفعال/حذف کنید (توضیح در پیام).
+# روشِ فنی (مهم):
+#   Tauri 2.12 به وابستگی‌هایی نیاز دارد که فقط با Rust جدید (edition2024 / ۱.۸۵+)
+#   کامپایل می‌شوند؛ ولی Rust جدید به‌طورِ عادی باینریِ ناسازگار با ویندوز ۷ می‌سازد
+#   (تابعِ ProcessPrng). راهِ حل: هدفِ رسمیِ «x86_64-win7-windows-msvc» با toolchainِ
+#   nightly و build-std. این‌طور همه‌چیز با Rust جدید کامپایل می‌شود ولی خروجی روی
+#   ویندوز ۷ هم اجرا می‌گردد. هیچ وابستگی‌ای پایین آورده نمی‌شود و مهندسیِ برنامه
+#   (از جمله نسخهٔ windows برای اشتراکِ واتساپ) دست‌نخورده می‌ماند.
 #
-# دستی اجرا می‌شود، و با ساختِ تگِ نسخه (مثلاً v1.0.8) خودکار.
+# ❗ فقط «یک» ورک‌فلوی دسکتاپ باید روی هر تگ اجرا شود تا گزینهٔ «بروزرسانی» فایلِ درست
+#    را بردارد. اگر این را فعال می‌کنید، desktop-tauri.yml را غیرفعال/حذف کنید.
 on:
   workflow_dispatch:
   push:
@@ -16,6 +21,9 @@ on:
 
 permissions:
   contents: write
+
+env:
+  WIN7_TARGET: x86_64-win7-windows-msvc   # برای ویندوز ۷ِ ۳۲بیتی: i686-win7-windows-msvc
 
 jobs:
   windows7:
@@ -26,35 +34,25 @@ jobs:
       - name: دریافت کد
         uses: actions/checkout@v4
 
-      # ── تشخیص: دقیقاً ببینیم چه چیزی در ریشهٔ ریپو هست ──────────────────────
-      # اگر خطای «failed to watch Cargo.toml» گرفتید، اینجا را ببینید: باید پوشهٔ
-      # src-tauri (با Cargo.toml و tauri.conf.json و src\main.rs) «موجود» باشد.
+      # اگر خطای «failed to watch Cargo.toml» گرفتید، اینجا را ببینید: باید src-tauri کامل باشد.
       - name: بررسیِ محتوای ریشهٔ پروژه
         shell: pwsh
         run: |
           Write-Host "پوشهٔ کاری: $(Get-Location)"
-          Write-Host "`n— فایل‌ها و پوشه‌های ریشه —"
-          Get-ChildItem -Force | Select-Object Mode, Name | Format-Table -AutoSize
-          foreach ($m in @('index.html','script.js','src-tauri','src-tauri/Cargo.toml','src-tauri/tauri.conf.json','src-tauri/src/main.rs')) {
+          foreach ($m in @('index.html','script.js','src-tauri/Cargo.toml','src-tauri/tauri.conf.json','src-tauri/src/main.rs')) {
             $ok = Test-Path -LiteralPath $m
             Write-Host ("  {0,-34} {1}" -f $m, $(if ($ok) { 'موجود' } else { '*** نیست ***' }))
           }
           if (-not (Test-Path -LiteralPath 'src-tauri/tauri.conf.json')) {
-            throw "پوشهٔ src-tauri کامل در مخزن نیست. فایلِ src-tauri را کامل آپلود کنید (خطای watch از همین است)."
+            throw "پوشهٔ src-tauri کامل در مخزن نیست. فایلِ src-tauri را کامل آپلود کنید."
           }
 
-      # ══════════════════════════════════════════════════════════════════════
-      #  سازگاری با ویندوز ۷ — بخشِ ۱: Rust
-      #  ---------------------------------------------------------------------
-      #  • toolchainِ پایدار برای «ساختِ خودِ Tauri CLI» نصب می‌شود (بدونِ محدودیتِ MSRV).
-      #  • toolchainِ 1.77.2 جداگانه نصب می‌شود و فقط «پروژه» با آن کامپایل می‌گردد؛
-      #    چون از Rust 1.78 تابعِ ProcessPrng استفاده می‌شود که در ویندوز ۷ نیست.
-      # ══════════════════════════════════════════════════════════════════════
-      - name: نصب Rust پایدار (برای ساختِ Tauri CLI)
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: نصب toolchainِ 1.77.2 (برای کامپایلِ سازگار با ویندوز ۷)
-        run: rustup toolchain install 1.77.2 --profile minimal
+      # toolchainِ nightly + rust-src (برای build-std لازم است). هدفِ win7 تایر-۳ است و
+      # std ندارد؛ build-std آن را از rust-src می‌سازد، پس rustup target add لازم نیست.
+      - name: نصب Rust nightly + rust-src
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rust-src
 
       - name: کشِ Rust
         uses: swatinem/rust-cache@v2
@@ -67,22 +65,12 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.cargo/bin/cargo-tauri.exe
-          key: cargo-tauri-win7-v2-${{ runner.os }}
+          key: cargo-tauri-win7-v3-${{ runner.os }}
 
+      # نصبِ Tauri CLI بدونِ build-std (چون متغیرِ build-std فقط روی مرحلهٔ بیلدِ پروژه ست می‌شود).
       - name: نصب Tauri CLI
         if: steps.cli-cache.outputs.cache-hit != 'true'
         run: cargo install tauri-cli --version "^2" --locked
-
-      # ══════════════════════════════════════════════════════════════════════
-      #  سازگاری با ویندوز ۷ — بخشِ ۲: حذفِ زنجیرهٔ ICU
-      #  ---------------------------------------------------------------------
-      #  نسخهٔ جدیدِ ICU (که از راهِ url→idna می‌آید) MSRVاش ۱.۸۲ است و با 1.77
-      #  کامپایل نمی‌شود. با این دستورِ «مستندِ خودِ idna» پیاده‌سازیِ سبک‌ترِ unicode-rs
-      #  جایگزین می‌شود و ICU کاملاً از گراف حذف می‌گردد. رفتارِ برنامه تغییر نمی‌کند.
-      # ══════════════════════════════════════════════════════════════════════
-      - name: حذفِ ICU برای سازگاری با Rust 1.77
-        working-directory: src-tauri
-        run: cargo update -p idna_adapter --precise 1.0.0
 
       # ══════════════════════════════════════════════════════════════════════
       #  آماده‌سازیِ dist-web (همان منطقِ ورک‌فلوی اصلی؛ کاملاً درون‌خطی)
@@ -133,31 +121,29 @@ jobs:
           if ($missing.Count -gt 0) { Write-Host "موجود نبود (رد شد): $($missing -join ', ')" }
 
       # ══════════════════════════════════════════════════════════════════════
-      #  ساختِ نصب‌کننده — پروژه با 1.77.2 کامپایل می‌شود (سازگار با ویندوز ۷).
-      #  با env، این toolchain به بیلدِ داخلیِ Cargo که Tauri صدا می‌زند هم می‌رسد.
+      #  ساختِ نصب‌کننده برای هدفِ ویندوز ۷ (nightly + build-std)
+      #  ---------------------------------------------------------------------
+      #  • از داخلِ src-tauri اجرا می‌شود تا tauri-cli پروژه را درست پیدا کند.
+      #  • RUSTUP_TOOLCHAIN=nightly و CARGO_UNSTABLE_BUILD_STD فقط همین‌جا ست می‌شوند.
+      #  • --target هدفِ ویندوز ۷ را می‌سازد؛ خروجی زیرِ target\<هدف>\release\bundle است.
       # ══════════════════════════════════════════════════════════════════════
-      # نکته دربارهٔ خطای «failed to watch ...Cargo.toml»:
-      #   وقتی cargo tauri build از «ریشهٔ مخزن» اجرا شود، نسخهٔ جدیدِ tauri-cli سعی
-      #   می‌کند Cargo.toml را در همان ریشه watch کند — ولی Cargo.toml در src-tauri است،
-      #   نه ریشه → خطا. راه‌حلِ قطعی: بیلد را از «داخلِ src-tauri» اجرا کنیم تا هم
-      #   tauri.conf.json و هم Cargo.toml در پوشهٔ جاری باشند. خروجی همان
-      #   src-tauri/target/release/bundle می‌ماند، پس مراحلِ بعدی تغییر نمی‌کنند.
-      - name: ساخت نصب‌کننده (سازگار با ویندوز ۷)
+      - name: ساخت نصب‌کننده (هدفِ ویندوز ۷)
         working-directory: src-tauri
         env:
-          RUSTUP_TOOLCHAIN: "1.77.2"
-        run: cargo tauri build
+          RUSTUP_TOOLCHAIN: nightly
+          CARGO_UNSTABLE_BUILD_STD: "std,panic_abort"
+        run: cargo tauri build --target ${{ env.WIN7_TARGET }}
 
       - name: فهرستِ خروجی‌ها
         if: always()
         shell: pwsh
         run: |
-          $b = 'src-tauri/target/release/bundle'
+          $b = "src-tauri/target/${{ env.WIN7_TARGET }}/release/bundle"
           if (Test-Path $b) {
             Get-ChildItem -Recurse -File $b |
               Select-Object @{n='فایل';e={$_.Name}}, @{n='مگابایت';e={[math]::Round($_.Length/1MB,2)}} |
               Format-Table -AutoSize
-          } else { Write-Host "پوشهٔ bundle ساخته نشد." }
+          } else { Write-Host "پوشهٔ bundle ساخته نشد ($b)." }
 
       - name: بارگذاریِ نصب‌کننده (آرتیفکت)
         uses: actions/upload-artifact@v4
@@ -165,14 +151,14 @@ jobs:
           name: hesabdar-windows7-setup
           if-no-files-found: error
           path: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/${{ env.WIN7_TARGET }}/release/bundle/nsis/*.exe
+            src-tauri/target/${{ env.WIN7_TARGET }}/release/bundle/msi/*.msi
 
       - name: انتشار در Releases
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            src-tauri/target/release/bundle/nsis/*.exe
-            src-tauri/target/release/bundle/msi/*.msi
+            src-tauri/target/${{ env.WIN7_TARGET }}/release/bundle/nsis/*.exe
+            src-tauri/target/${{ env.WIN7_TARGET }}/release/bundle/msi/*.msi
           fail_on_unmatched_files: false
