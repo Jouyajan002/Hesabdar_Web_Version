@@ -136,7 +136,14 @@ jobs:
       #  ساختِ نصب‌کننده — پروژه با 1.77.2 کامپایل می‌شود (سازگار با ویندوز ۷).
       #  با env، این toolchain به بیلدِ داخلیِ Cargo که Tauri صدا می‌زند هم می‌رسد.
       # ══════════════════════════════════════════════════════════════════════
+      # نکته دربارهٔ خطای «failed to watch ...Cargo.toml»:
+      #   وقتی cargo tauri build از «ریشهٔ مخزن» اجرا شود، نسخهٔ جدیدِ tauri-cli سعی
+      #   می‌کند Cargo.toml را در همان ریشه watch کند — ولی Cargo.toml در src-tauri است،
+      #   نه ریشه → خطا. راه‌حلِ قطعی: بیلد را از «داخلِ src-tauri» اجرا کنیم تا هم
+      #   tauri.conf.json و هم Cargo.toml در پوشهٔ جاری باشند. خروجی همان
+      #   src-tauri/target/release/bundle می‌ماند، پس مراحلِ بعدی تغییر نمی‌کنند.
       - name: ساخت نصب‌کننده (سازگار با ویندوز ۷)
+        working-directory: src-tauri
         env:
           RUSTUP_TOOLCHAIN: "1.77.2"
         run: cargo tauri build
