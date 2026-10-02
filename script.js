@@ -38331,11 +38331,9 @@ function ndUpdSetStatus(html, cls) {
     if (el) { el.innerHTML = html; el.className = 'nd-upd-status ' + (cls || ''); }
 }
 function ndUpdCheck() {
+    // مخزن هاردکد است (ND_UPDATE_REPO)؛ هیچ پیامِ «مخزن را وارد کنید» نمایش داده نمی‌شود.
     var repo = ndUpdGetRepo();
-    if (!repo || repo.indexOf('/') === -1) {
-        ndUpdSetStatus('ابتدا نشانیِ مخزن را به شکلِ <b>USER/REPO</b> وارد و ذخیره کنید.', 'warn');
-        return;
-    }
+    if (!repo || repo.indexOf('/') === -1) { return; }   // گاردِ بی‌صدا (در عمل هرگز رخ نمی‌دهد)
     ndUpdSetStatus('<i class="fas fa-spinner fa-spin"></i> در حال بررسی…', '');
     ndUpdCurrentVersion().then(function (cur) {
         var curEl = document.getElementById('nd-upd-current');

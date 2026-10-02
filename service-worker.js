@@ -47,6 +47,7 @@ var CORE = [
   './sync-layer.js',
   './auth-cloud.js',
   './device-guard.js',
+  './capacitor-back.js',
   './demo-mode.js',
   './mobile-fit.js',
   './jouya-selftest.js',
