@@ -38431,6 +38431,70 @@ function ndUpdPanelHtml() {
    و روی شبکه گذاشته می‌شود؛ بعد چیدمانِ فلکس، کارت‌ها را در همان بلندی پخش می‌کند.
    روی موبایل دست نمی‌خورد (همان اسکرولِ عمودیِ قبلی باقی می‌ماند).
    ══════════════════════════════════════════════════════════════════════════════ */
+// بلندیِ بومِ نمودار را صریح می‌گذارد. Chart.js با responsive + maintainAspectRatio:false
+// اندازه را از والد می‌گیرد؛ در فلکسِ height:auto این حلقه ناپایدار می‌شود و راهنما/پاورقیِ
+// نمودار بیرون می‌ماند. (همان منطقِ قبلی — فقط به یک تابع منتقل شد تا در هر پاسِ
+// اندازه‌گیری هم اجرا شود و کمبودِ واقعی درست سنجیده شود.)
+function ndSizeChartCanvas() {
+    try {
+        var cbody = document.querySelector('#dashboard .nd-chart > .nd-card-body');
+        var canvas = document.getElementById('weekly-sales-chart');
+        if (!cbody || !canvas) return;
+        // مهم: offsetHeight (نه getBoundingClientRect) — چون وقتی داشبورد مقیاس خورده
+        // باشد، getBoundingClientRect مقدارِ «مقیاس‌خورده» می‌دهد ولی clientHeight مقدارِ
+        // چیدمانی؛ ترکیبِ این دو باعثِ بیرون‌زدنِ راهنما/پاورقیِ نمودار می‌شد.
+        var used = 0;
+        ['.weekly-chart-top-row', '.weekly-chart-legend', '.weekly-chart-footer'].forEach(function (sl) {
+            var e = cbody.querySelector(sl);
+            if (e) used += (e.offsetHeight || 0);
+        });
+        var ch = Math.max(60, Math.floor(cbody.clientHeight - used - 12));
+        canvas.style.height = ch + 'px';
+        canvas.style.maxHeight = ch + 'px';
+        try { if (window._advStatsChart && window._advStatsChart.resize) window._advStatsChart.resize(); } catch (e2) {}
+        // اصلاحِ همگرا: تا سه بار، اگر راهنما/پاورقی هنوز بیرون مانده‌اند بوم کوتاه‌تر
+        // می‌شود تا هیچ‌چیزِ نمودار بریده نشود.
+        for (var i = 0; i < 3; i++) {
+            var over = cbody.scrollHeight - cbody.clientHeight;
+            if (over <= 1) break;
+            ch = Math.max(60, ch - over - 2);
+            canvas.style.height = ch + 'px';
+            canvas.style.maxHeight = ch + 'px';
+            try { if (window._advStatsChart && window._advStatsChart.resize) window._advStatsChart.resize(); } catch (e3) {}
+        }
+    } catch (e) {}
+}
+
+// پاک‌کردنِ مقیاسِ داشبورد (بازگرداندن به حالتِ عادی)
+function ndClearDashScale(grid) {
+    try {
+        grid.style.transform = '';
+        grid.style.transformOrigin = '';
+        grid.style.width = '';
+        grid.style.marginBottom = '';
+    } catch (e) {}
+}
+// بیشترین «کمبودِ بلندی» درونِ داشبورد: اگر جایی محتوا بریده/اسکرول شود، مقدارش را می‌دهد
+function ndDashDeficit(grid) {
+    var max = 0;
+    try {
+        var d0 = grid.scrollHeight - grid.clientHeight;
+        if (d0 > max) max = d0;
+        var els = grid.querySelectorAll('.nd-card, .nd-card-body, .nd-cats-legend, .nd-cats-inner, .nd-recent');
+        for (var i = 0; i < els.length; i++) {
+            var el = els[i];
+            if (!el || !el.clientHeight) continue;
+            // نکته: هنگامِ این سنجش، بومِ نمودار عمداً روی کمینه (۶۰px) نگه داشته شده
+            // است؛ پس کمبودِ کارتِ نمودار یعنی «حتی با کوچک‌ترین بوم هم جا نمی‌شود» و
+            // باید بلندیِ کار بزرگ‌تر شود. (چون بوم اینجا بزرگ نمی‌شود، حلقهٔ بازخوردی
+            // ایجاد نمی‌گردد.)
+            var d = el.scrollHeight - el.clientHeight;
+            if (d > max) max = d;
+        }
+    } catch (e) {}
+    return max;
+}
+
 function ndFitDashboardHeight() {
     try {
         var grid = document.getElementById('nd-grid');
@@ -38440,6 +38504,7 @@ function ndFitDashboardHeight() {
         if (!grid) return;
         if ((window.innerWidth || 0) <= 768 || !active) {   // موبایل یا بخشِ دیگر: بدونِ قفل
             grid.style.height = ''; grid.style.maxHeight = '';
+            ndClearDashScale(grid);
             grid.classList.remove('nd-fit');
             if (body) body.classList.remove('nd-dash-fit');
             return;
@@ -38447,6 +38512,9 @@ function ndFitDashboardHeight() {
         // فاصلهٔ پایینِ ناحیهٔ محتوا (جای نوارِ پایین) در داشبورد لازم نیست، چون خودِ
         // شبکه دقیقاً تا بالای همان نوار بلندی می‌گیرد. بدونِ این، صفحه اسکرول می‌شد.
         if (body) body.classList.add('nd-dash-fit');
+
+        // اندازه‌گیری‌ها باید «بدونِ مقیاس» انجام شوند، وگرنه نتیجه غلط می‌شود.
+        ndClearDashScale(grid);
 
         var top = grid.getBoundingClientRect().top;
         var vh  = window.innerHeight || document.documentElement.clientHeight || 0;
@@ -38456,37 +38524,70 @@ function ndFitDashboardHeight() {
             var br = bn.getBoundingClientRect();
             if (br.height > 0 && br.top > 0 && br.top < vh) bottomLimit = br.top;
         }
-        var h = Math.floor(bottomLimit - top - 8);
-        if (!(h > 220)) return;
-        grid.style.height = h + 'px';
-        grid.style.maxHeight = h + 'px';
+        var avail = Math.floor(bottomLimit - top - 8);
+        if (!(avail > 220)) return;
         grid.classList.add('nd-fit');
 
-        // بلندیِ بومِ نمودار را صریح می‌گذاریم. Chart.js با responsive+
-        // maintainAspectRatio:false اندازه را از والد می‌گیرد؛ در یک فلکسِ height:auto
-        // این حلقه ناپایدار می‌شود و راهنما/پاورقیِ نمودار بیرون می‌ماند.
+        // ── «کوچک شدن به‌جای پنهان شدن» ───────────────────────────────────────
+        // پیش از این، بلندیِ شبکه روی فضای موجود قفل می‌شد و چون کارت‌ها overflow:hidden
+        // دارند، هر چیزی که جا نمی‌شد «ناپدید» می‌گشت. حالا اول بلندیِ واقعیِ موردنیازِ
+        // محتوا را پیدا می‌کنیم (با چند پاسِ اندازه‌گیری)، سپس کلِ داشبورد را با همان
+        // نسبت کوچک می‌کنیم تا همه‌چیز در یک نگاه دیده شود — بدونِ بریدگی و بدونِ اسکرول.
+        // بومِ نمودار «کشسان» است و باید سهمِ فضای باقی‌مانده را بگیرد؛ پس پیش از
+        // اندازه‌گیری کوچکش می‌کنیم تا بلندیِ موردنیاز را بیهوده بالا نبرد. بعد از
+        // تعیینِ بلندیِ نهایی، کدِ پایین دوباره آن را به اندازهٔ فضای موجود بزرگ می‌کند.
         try {
-            var cbody = document.querySelector('#dashboard .nd-chart > .nd-card-body');
-            var canvas = document.getElementById('weekly-sales-chart');
-            if (cbody && canvas) {
-                var used = 0;
-                ['.weekly-chart-top-row', '.weekly-chart-legend', '.weekly-chart-footer'].forEach(function (sl) {
-                    var e = cbody.querySelector(sl);
-                    if (e) used += e.getBoundingClientRect().height;
-                });
-                var ch = Math.max(60, Math.floor(cbody.clientHeight - used - 12));
-                canvas.style.height = ch + 'px';
-                canvas.style.maxHeight = ch + 'px';
-                try { if (window._advStatsChart && window._advStatsChart.resize) window._advStatsChart.resize(); } catch (e2) {}
-                // اصلاحِ دوم: پس از نشستنِ چیدمان، اگر باز هم چیزی بیرون ماند، بوم
-                // دقیقاً به همان اندازه کوتاه می‌شود تا راهنما و پاورقی کامل دیده شوند.
+            var _cv = document.getElementById('weekly-sales-chart');
+            if (_cv) { _cv.style.height = '60px'; _cv.style.maxHeight = '60px'; }
+        } catch (e) {}
+
+        var work = avail;
+        for (var pass = 0; pass < 5; pass++) {
+            grid.style.height = work + 'px';
+            grid.style.maxHeight = work + 'px';
+            var deficit = ndDashDeficit(grid);      // خواندن → reflow را وادار می‌کند
+            if (deficit <= 1) break;
+            work = work + deficit + 6;
+            if (work > avail * 3) break;            // مهارِ ایمنی
+        }
+
+        if (work <= avail) {
+            // جا می‌شود: همان رفتارِ عادی — فلکس کلِ فضا را پر می‌کند
+            grid.style.height = avail + 'px';
+            grid.style.maxHeight = avail + 'px';
+            ndClearDashScale(grid);
+        } else {
+            // جا نمی‌شود: چیدمان را در بلندیِ کاملِ موردنیاز می‌چینیم و کلِ آن را
+            // یک‌دست کوچک می‌کنیم تا دقیقاً در فضای موجود بنشیند.
+            var s = avail / work;
+            if (s < 0.45) s = 0.45;                 // کفِ منطقیِ کوچک‌نمایی
+            var renderedH = Math.round(work * s);
+            var rtl = false;
+            try { rtl = (window.getComputedStyle(grid).direction === 'rtl'); } catch (e) {}
+            grid.style.height = work + 'px';
+            grid.style.maxHeight = work + 'px';
+            grid.style.width = (100 / s) + '%';
+            grid.style.transformOrigin = rtl ? 'top right' : 'top left';
+            grid.style.transform = 'scale(' + s + ')';
+            // ردِّ چیدمانی را به اندازهٔ ارتفاعِ دیده‌شده کوچک می‌کنیم تا صفحه اسکرول نشود
+            grid.style.marginBottom = (-(work - renderedH)) + 'px';
+        }
+
+        // بومِ نمودار با چیدمانِ نهایی اندازه می‌گیرد تا سهمِ فضای باقی‌مانده را بگیرد
+        ndSizeChartCanvas();
+        // اصلاحِ دوم: اگر پس از نشستنِ چیدمان باز هم راهنما/پاورقیِ نمودار بیرون ماند،
+        // بوم دقیقاً به همان اندازه کوتاه می‌شود تا کاملاً دیده شوند.
+        try {
+            var _cb = document.querySelector('#dashboard .nd-chart > .nd-card-body');
+            var _cn = document.getElementById('weekly-sales-chart');
+            if (_cb && _cn) {
                 setTimeout(function () {
                     try {
-                        var over = cbody.scrollHeight - cbody.clientHeight;
+                        var over = _cb.scrollHeight - _cb.clientHeight;
                         if (over > 1) {
-                            var nh = Math.max(60, ch - over - 2);
-                            canvas.style.height = nh + 'px';
-                            canvas.style.maxHeight = nh + 'px';
+                            var nh = Math.max(60, (parseInt(_cn.style.height, 10) || 60) - over - 2);
+                            _cn.style.height = nh + 'px';
+                            _cn.style.maxHeight = nh + 'px';
                             if (window._advStatsChart && window._advStatsChart.resize) window._advStatsChart.resize();
                         }
                     } catch (e3) {}
