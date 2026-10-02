@@ -32,8 +32,25 @@ jobs:
             Write-Host ("  {0,-14} {1}" -f $m, $(if ($ok) { 'موجود' } else { '*** نیست ***' }))
           }
 
-      - name: نصب Rust
+      # ══════════════════════════════════════════════════════════════════════
+      #  سازگاری با ویندوز ۷ (خطای ProcessPrng در bcryptprimitives.dll)
+      #  ---------------------------------------------------------------------
+      #  از Rust 1.78 به بعد، کتابخانهٔ استانداردِ Rust برای تولیدِ عددِ تصادفی از
+      #  تابعِ ProcessPrng استفاده می‌کند که روی ویندوز ۷ وجود ندارد → خطای
+      #  «ProcessPrng could not be located». پس عمداً Rust را روی 1.77.2 (آخرین
+      #  نسخهٔ سازگار با ویندوز ۷) پین می‌کنیم. این نسخه با Tauri 2.x سازگار است.
+      - name: نصب Rust (پین‌شده برای ویندوز ۷)
         uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: "1.77.2"
+
+      # Rust 1.77 نمی‌تواند نسخهٔ جدیدِ زنجیرهٔ ICU (که idna/url می‌آورد و MSRVاش
+      # ۱.۸۲ است) را کامپایل کند. با این دستورِ «مستندِ خودِ idna»، پیاده‌سازیِ سبک‌ترِ
+      # unicode-rs جایگزین می‌شود و کلِ ICU از گراف حذف می‌گردد → با 1.77 کامپایل می‌شود
+      # و هیچ تغییری در رفتارِ برنامه ندارد (فقط backendِ نرمال‌سازیِ دامنه‌های بین‌المللی).
+      - name: سازگاریِ وابستگی‌ها با Rust 1.77 (حذف ICU)
+        working-directory: src-tauri
+        run: cargo update -p idna_adapter --precise 1.0.0
 
       - name: کشِ Rust
         uses: swatinem/rust-cache@v2
@@ -80,6 +97,7 @@ jobs:
             'tauri-bridge.js', 'database.js', 'script.js', 'persian-date-utils.js',
             'auth-system.js', 'drive-backup.js', 'instant-update-fix.js', 'delivery-list.js',
             'currency-system.js', 'sync-config.js', 'sync-layer.js', 'auth-cloud.js',
+            'device-guard.js',
             'demo-mode.js', 'mobile-fit.js', 'jouya-selftest.js', 'pwa-register.js',
             'manifest.webmanifest', 'version.json'
           )
@@ -112,7 +130,6 @@ jobs:
           if ($missing.Count -gt 0) { Write-Host "موجود نبود (رد شد): $($missing -join ', ')" }
 
       - name: ساخت نصب‌کننده
-        working-directory: ./src-tauri
         run: cargo tauri build
 
       - name: فهرستِ خروجی‌ها
