@@ -914,7 +914,7 @@ if (typeof window !== 'undefined') window._saleCostSnapshot = _saleCostSnapshot;
 //    با «تعدیل کسری» موجود سازگار بماند.
 // خروجی: { saleMap: { saleId: مفادِ کلِ فاکتور }, itemMap: { 'saleId|index': مفادِ همان قلم } }.
 // ========================================================================
-var _fifoProfitCache = { sig: null, maps: null };
+var _fifoProfitCache = { sig: null, maps: null, at: 0 };
 
 function _fifoItemBase(it) {
     var qty = parseFloat(it.quantity) || 0;
@@ -1311,11 +1311,21 @@ function _fifoSignature() {
 }
 
 function _getFifoMaps() {
+    // بهینه‌سازیِ سرعت (بدونِ تغییرِ منطق): محاسبهٔ «امضاء» خودش دو JSON.parse کامل +
+    // دو پیمایشِ کامل است و در رندرِ داشبورد/گزارش/لیست‌ها صدها بار پشتِ‌سرِهم صدا زده
+    // می‌شود. در یک «پنجرهٔ کوتاهِ زمانی» (۳۵۰ms) که عملاً همان یک رندر است، نتیجهٔ
+    // کش‌شده بدونِ محاسبهٔ دوبارهٔ امضاء برگردانده می‌شود. هر تغییرِ واقعیِ داده از راهِ
+    // ذخیره‌ها → rebuildAllDerivedData کش را با at=0 باطل می‌کند، پس تازگیِ داده حفظ است.
+    var now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    if (_fifoProfitCache.maps && _fifoProfitCache.at && (now - _fifoProfitCache.at) < 350) {
+        return _fifoProfitCache.maps;
+    }
     var sig = _fifoSignature();
-    if (_fifoProfitCache.maps && _fifoProfitCache.sig === sig) return _fifoProfitCache.maps;
+    if (_fifoProfitCache.maps && _fifoProfitCache.sig === sig) { _fifoProfitCache.at = now; return _fifoProfitCache.maps; }
     var maps = _computeFifoProfitMaps();
     _fifoProfitCache.sig = sig;
     _fifoProfitCache.maps = maps;
+    _fifoProfitCache.at = now;
     return maps;
 }
 if (typeof window !== 'undefined') { window._computeFifoProfitMaps = _computeFifoProfitMaps; window._getFifoMaps = _getFifoMaps; }
@@ -1816,7 +1826,7 @@ function updateDashboardCards() {
             });
             box.innerHTML = html;
         }
-        if (typeof applyNumberSystemToDocument === 'function') { try { applyNumberSystemToDocument(); } catch (e) {} }
+        if (typeof _ansSchedule === 'function') { _ansSchedule(); }
     };
 
     // ===== ۱) فایده خالص امروز — پویا برای هر ارز (همان فرمول گزارش سود) =====
@@ -1898,7 +1908,7 @@ function updateDashboardCards() {
         _setHtml('dash-bal-credit-vals', _fmtCurVals(_debtM));    // «باقیداری» = جمعِ بدهکاری
         _setHtml('dash-bal-net-vals', _fmtCurVals(_netBalM));     // «خلاصه بیلانس»
         var _ffEl = document.getElementById('dash-bal-foreign'); if (_ffEl) _ffEl.innerHTML = '';
-        if (typeof applyNumberSystemToDocument === 'function') { try { applyNumberSystemToDocument(); } catch (e) {} }
+        if (typeof _ansSchedule === 'function') { _ansSchedule(); }
     } catch (e) { console.warn('dash balance calc:', e); }
     try {
         // اصلاحِ ج-۱ (باگِ داده): پیش‌تر فقط box.balance (ارزِ بومیِ حساب) خوانده می‌شد و
@@ -2070,7 +2080,7 @@ function loadCashboxesSummary() {
         `;
         container.innerHTML += boxHtml;
     });
-    if (typeof applyNumberSystemToDocument === 'function') { try { applyNumberSystemToDocument(); } catch (e) {} }
+    if (typeof _ansSchedule === 'function') { _ansSchedule(); }
 }
 
 // رسم نمودار مقایسه امروز/دیروز
@@ -4401,7 +4411,7 @@ function rebuildAllDerivedData() {
         });
 
         // پاک‌سازیِ کشِ FIFO تا محاسباتِ بعدی از دادهٔ تازه بخوانند
-        try { if (typeof _fifoProfitCache !== 'undefined') { _fifoProfitCache.sig = null; _fifoProfitCache.maps = null; } } catch (e) {}
+        try { if (typeof _fifoProfitCache !== 'undefined') { _fifoProfitCache.sig = null; _fifoProfitCache.maps = null; _fifoProfitCache.at = 0; } } catch (e) {}
 
         // به‌روزرسانیِ شمارندهٔ کمبودِ موجودی پس از بازسازیِ stock
         try { if (typeof db !== 'undefined' && db.updateLowStockCount) db.updateLowStockCount(); } catch (e) {}
@@ -15270,6 +15280,9 @@ function _normJalaliCmp(s) {
 }
 function isInNewReportDateRange(date, fromDate, toDate) {
     if (!date) return true;
+    // بهینه‌سازیِ سرعت (بی‌اثر بر نتیجه): حالتِ «همه/همه» (بدونِ از/تا) همیشه true است،
+    // پس نرمال‌سازیِ پرهزینهٔ تاریخ برای هر ردیف لازم نیست. این مسیرِ داغِ گزارشِ «همه» است.
+    if (!fromDate && !toDate) return true;
     var d = _normJalaliCmp(date);
     var f = _normJalaliCmp(fromDate);
     var t = _normJalaliCmp(toDate);
@@ -15799,12 +15812,20 @@ if (typeof window !== 'undefined') window._rpAfterExcelSaved = _rpAfterExcelSave
 if (typeof window !== 'undefined') window._rpShowPersonsCard = _rpShowPersonsCard;
 
 // ───────── زنده‌بودنِ گزارش (بدونِ دکمهٔ «محاسبه») + فیلترِ ارز ─────────
-function _rpLive() {
+// بهینه‌سازیِ سرعت (بی‌اثر بر نتیجه): هنگامِ تایپِ تاریخ یا تغییرِ سریعِ فیلترها،
+// محاسبهٔ کاملِ «همه» نباید برای هر کلید/تغییر اجرا شود. با یک تأخیرِ کوتاهِ ۲۲۰ms
+// چند تغییرِ پشتِ‌سرِهم به «یک» محاسبه جمع می‌شود. خروجیِ نهایی دقیقاً همان است.
+function _rpLiveNow() {
     var section = (document.getElementById('report-section-select') || {}).value || '';
     if (!section) { var w = document.getElementById('rp-persons-card-wrap'); if (w) w.style.display = 'none'; var t = document.getElementById('rp-results-container'); if (t) t.style.display = 'none'; return; }
     try { calculateNewReport(); } catch (e) { console.error('_rpLive:', e); }
 }
-if (typeof window !== 'undefined') window._rpLive = _rpLive;
+var _rpLiveTimer = null;
+function _rpLive() {
+    if (_rpLiveTimer) { clearTimeout(_rpLiveTimer); }
+    _rpLiveTimer = setTimeout(function () { _rpLiveTimer = null; _rpLiveNow(); }, 220);
+}
+if (typeof window !== 'undefined') { window._rpLive = _rpLive; window._rpLiveNow = _rpLiveNow; }
 
 function _rpSetCurMode(mode) {
     var hid = document.getElementById('rp-cur-mode'); if (hid) hid.value = mode;
@@ -25469,6 +25490,8 @@ function ssbPopulateForm(key) {
                     });
                 }
             } catch (e) {}
+            // بررسیِ خودکار به‌محضِ باز شدنِ پنل (یک‌کلیکی: کاربر فقط «بروزرسانی» را زده)
+            try { setTimeout(function () { if (typeof ndUpdCheck === 'function') ndUpdCheck(); }, 80); } catch (e) {}
             return;
         }
         const settings = db.getSettings ? db.getSettings() : {};
@@ -30343,6 +30366,21 @@ function setNumberSystem(sys) {
         localStorage.setItem('numberSystem', 'en');
         applyNumberSystemToDocument();
     } catch(e) { console.error('setNumberSystem error:', e); }
+}
+
+/**
+ * زمان‌بندِ هم‌جوشِ اعمالِ سیستمِ اعداد (بهینه‌سازیِ سرعت؛ بی‌اثر بر نتیجه).
+ * در رندرِ داشبورد این تابع چند بار پشتِ‌سرِهم صدا زده می‌شود و هر بار کلِ DOM را
+ * می‌پیماید. این زمان‌بند همهٔ صداها در یک فریم را به «یک» پیمایش جمع می‌کند.
+ * فقط برای مسیرهای داغِ داشبورد استفاده می‌شود؛ بقیهٔ فراخوان‌ها همچنان فوری‌اند.
+ */
+var _ansPending = false;
+function _ansSchedule() {
+    if (_ansPending) return;
+    _ansPending = true;
+    var run = function () { _ansPending = false; try { applyNumberSystemToDocument(); } catch (e) {} };
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(run);
+    else setTimeout(run, 16);
 }
 
 /**
@@ -38064,7 +38102,7 @@ function ndRenderDashboard() {
             document.addEventListener('click', ndCloseSearchOnOutside, true);
         }
     } catch (e) {}
-    try { if (typeof applyNumberSystemToDocument === 'function') applyNumberSystemToDocument(); } catch (e) {}
+    try { if (typeof _ansSchedule === 'function') _ansSchedule(); } catch (e) {}
     // بلندیِ داشبورد پس از پرشدنِ محتوا سنجیده می‌شود
     try { ndFitDashboardHeight(); setTimeout(ndFitDashboardHeight, 180); } catch (e) {}
 }
@@ -38169,8 +38207,21 @@ function ndMenuShield() {
         mo.observe(document.body, { childList: true, subtree: true });
     } catch (e) {}
 
+    window.__ndSwallowUntil = 0;   // تا این زمان، رویدادهای باقیِ همان لمس خنثی می‌شوند
+
     var handler = function (e) {
-        if (!ndAnyMenuOpen()) return;
+        // اگر منو را همین الان (با pointerdown/touchstart) بستیم، رویدادهای بعدیِ همان
+        // لمس — به‌ویژه clickِ ساختگی — نباید به عنصرِ زیرین برسند. این همان باگ بود:
+        // pointerdown منو را می‌بست، ولی clickِ بعدی چون دیگر منویی باز نبود رد می‌شد و
+        // ردیفِ زیرین را باز می‌کرد. اینجا آن click/… بلعیده می‌شود.
+        if (!ndAnyMenuOpen()) {
+            if (window.__ndSwallowUntil && Date.now() < window.__ndSwallowUntil) {
+                e.preventDefault(); e.stopPropagation();
+                if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+                if (e.type === 'click') window.__ndSwallowUntil = 0;   // پایانِ همان لمس
+            }
+            return;
+        }
         var t = e.target;
         var sel = ndMenuSelectors();
         var inMenu = !!(t && t.closest && t.closest(sel.menu));
@@ -38188,6 +38239,9 @@ function ndMenuShield() {
         e.preventDefault(); e.stopPropagation();
         if (e.stopImmediatePropagation) e.stopImmediatePropagation();
         ndCloseAllMenus();
+        // اگر این رویداد click نبود (pointerdown/touchstart/mousedown)، رویدادهای باقیِ
+        // همان لمس را تا clickِ پایانی خنثی کن تا چیزی در زیر فعال نشود.
+        if (e.type !== 'click') { window.__ndSwallowUntil = Date.now() + 700; }
     };
 
     ['pointerdown', 'mousedown', 'touchstart', 'click'].forEach(function (evt) {
@@ -38233,15 +38287,11 @@ function ndUpdSyncSidebarItem() {
         if (li) li.style.display = ndUpdIsInstalledApp() ? '' : 'none';
     } catch (e) {}
 }
-function ndUpdGetRepo() {
-    try {
-        var v = localStorage.getItem('hb-update-repo');
-        if (v) return v;
-        if (window.__hbVersionInfo && window.__hbVersionInfo.repo) return window.__hbVersionInfo.repo;
-    } catch (e) {}
-    return '';
-}
-function ndUpdSetRepo(r) { try { localStorage.setItem('hb-update-repo', String(r || '').trim()); } catch (e) {} }
+// مخزنِ رسمیِ برنامه — هاردکد است تا کاربر هیچ آدرسی وارد نکند و نشانیِ گیت‌هاب در
+// رابطِ کاربری دیده نشود. بروزرسانی همیشه از همین مخزن بررسی می‌شود.
+var ND_UPDATE_REPO = 'Jouyajan002/Hesabdar_Web_Version';
+function ndUpdGetRepo() { return ND_UPDATE_REPO; }
+function ndUpdSetRepo(r) { /* بی‌اثر: مخزن ثابت است */ }
 
 // نسخهٔ نصب‌شده: اول از خودِ برنامه (Tauri)، وگرنه از version.json
 function ndUpdCurrentVersion() {
@@ -38321,8 +38371,8 @@ function ndUpdCheck() {
             }
         });
     }).catch(function (e) {
-        ndUpdSetStatus('بررسی ناموفق بود: ' + ndEsc((e && e.message) || e) +
-            '<br><small>اتصالِ اینترنت و درستیِ نشانیِ مخزن را بررسی کنید.</small>', 'err');
+        ndUpdSetStatus('بررسی ناموفق بود.' +
+            '<br><small>اتصالِ اینترنت را بررسی کنید و دوباره تلاش کنید.</small>', 'err');
     });
 }
 function ndUpdDownload() {
@@ -38361,18 +38411,16 @@ function ndUpdSaveRepo() {
     ndUpdSetRepo(el ? el.value : '');
     ndUpdSetStatus('نشانیِ مخزن ذخیره شد.', 'ok');
 }
-// محتوای پنلِ «بروزرسانی» در سایدبار
+// محتوای پنلِ «بروزرسانی» در سایدبار — بدونِ هیچ فیلد یا نمایشِ نشانیِ گیت‌هاب.
+// با باز شدنِ پنل، به‌طورِ خودکار بررسی می‌شود و در صورتِ وجودِ نسخهٔ تازه، فقط یک دکمهٔ
+// «دانلود و نصب» دیده می‌شود (یک‌کلیکی).
 function ndUpdPanelHtml() {
-    var repo = ndUpdGetRepo();
     return '<div class="ssb-card">'
         + '<h4><i class="fas fa-cloud-arrow-down"></i> بروزرسانی برنامه</h4>'
         + '<div style="font-size:.84rem;line-height:1.9;margin-bottom:10px;">'
         +   'نسخهٔ نصب‌شده: <b id="nd-upd-current">—</b>'
         + '</div>'
-        + '<label>نشانی مخزن گیت‌هاب</label>'
-        + '<input type="text" id="nd-upd-repo" placeholder="USER/REPO" value="' + ndEsc(repo) + '">'
-        + '<button class="ssb-btn" onclick="ndUpdSaveRepo()"><i class="fas fa-save"></i> ذخیرهٔ نشانی</button>'
-        + '<button class="ssb-btn ssb-btn-primary" onclick="ndUpdCheck()" style="margin-top:8px;">'
+        + '<button class="ssb-btn ssb-btn-primary" onclick="ndUpdCheck()">'
         +   '<i class="fas fa-rotate"></i> بررسی بروزرسانی</button>'
         + '<div id="nd-upd-status" class="nd-upd-status" style="margin-top:12px;"></div>'
         + '</div>';
@@ -38455,7 +38503,22 @@ function ndFitDashboardHeight() {
 function ndBindFit() {
     if (window.__ndFitBound) return;
     window.__ndFitBound = true;
-    var run = function () { try { ndFitDashboardHeight(); } catch (e) {} };
+    // هنگامِ Maximize/تغییرِ اندازه، webview گاهی رویدادِ resize را «پیش از نشستنِ
+    // چیدمانِ نهایی» می‌فرستد؛ اگر همان لحظه اندازه بگیریم، بلندیِ شبکه روی اندازهٔ
+    // گذارِ کوچک قفل می‌شود و محتوا بریده می‌نماید. پس اندازه‌گیری را کمی به تعویق
+    // می‌اندازیم و یک پاسِ اصلاحیِ دوم هم می‌زنیم تا پس از Maximize همه‌چیز در همان
+    // سایزِ بزرگ کامل دیده شود. (هیچ منطقی تغییر نمی‌کند؛ فقط زمان‌بندیِ اندازه‌گیری.)
+    var _fitT1 = null, _fitT2 = null;
+    var measure = function () {
+        if (typeof requestAnimationFrame === 'function') requestAnimationFrame(function () { try { ndFitDashboardHeight(); } catch (e) {} });
+        else { try { ndFitDashboardHeight(); } catch (e) {} }
+    };
+    var run = function () {
+        if (_fitT1) clearTimeout(_fitT1);
+        if (_fitT2) clearTimeout(_fitT2);
+        _fitT1 = setTimeout(measure, 60);
+        _fitT2 = setTimeout(function () { try { ndFitDashboardHeight(); } catch (e) {} }, 240);
+    };
     try { window.addEventListener('resize', run); } catch (e) {}
     try { window.addEventListener('orientationchange', run); } catch (e) {}
     try { document.addEventListener('sectionChanged', function () { setTimeout(run, 60); }); } catch (e) {}

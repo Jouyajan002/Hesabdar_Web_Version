@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>حسابدار</title>
 
+    <!-- پس‌زمینهٔ روشن از همان نخستین فریم: پیش از لودر، به‌جای صفحهٔ سیاهِ پیش‌فرضِ
+         webview یک پس‌زمینهٔ روشن (هم‌رنگِ لودر) دیده می‌شود. فقط html است تا پس از
+         بارگذاری، پس‌زمینهٔ خودِ برنامه (و حالتِ تیره) دست‌نخورده بماند. -->
+    <style>html{background:#ffffff;}</style>
+
     <!-- ═══ PWA (نسخهٔ وب نصب‌شونده + آفلاین) و iOS «افزودن به صفحهٔ اصلی» ═══
          افزودنی و بی‌اثر بر منطقِ اپ. مسیرها نسبی‌اند تا روی GitHub Pages زیرِ هر
          زیرمسیری کار کنند. -->
@@ -125,9 +130,12 @@
                         if (lock && lock.style && lock.style.display && lock.style.display !== 'none') { reveal(); return true; }
                         // ۲) اگر صفحهٔ ورود ساخته شده (کاربر لاگ‌این نیست) → آماده است
                         if (document.getElementById('auth-screen-overlay')) { reveal(); return true; }
-                        // ۳) اگر یک بخشِ فعالِ واقعی رندر شده (داشبورد و…؛ کاربر لاگ‌این است) → آماده است
-                        var active = document.querySelector('.section.active');
-                        if (active) { reveal(); return true; }
+                        // ۳) اگر «داشبورد» واقعاً فعال شده (کاربر لاگ‌این است و showSection اجرا شده)
+                        //    → آماده است. عمداً فقط #dashboard بررسی می‌شود، نه هر .section.active،
+                        //    چون ممکن است بخشِ دیگری در HTML به‌طورِ پیش‌فرض active مانده باشد و باعثِ
+                        //    «پرش/چشمک» پیش از نشستنِ داشبورد شود.
+                        var dash = document.getElementById('dashboard');
+                        if (dash && dash.classList.contains('active')) { reveal(); return true; }
                     } catch (e) {}
                     return false;
                 }
@@ -142,8 +150,10 @@
                         if (readyThenReveal() || tries >= 40) { clearInterval(iv); if (tries >= 40) reveal(); }
                     }, 60); // حداکثر ~۲.۴ ثانیه
                 });
-                // failsafeها: در هر شرایطی صفحه آشکار شود تا هرگز پنهان نماند.
-                window.addEventListener('load', function () { setTimeout(reveal, 60); });
+                // failsafeها: ابتدا فقط وقتی آشکار کن که صفحهٔ نهایی (داشبورد/ورود/قفل)
+                // آماده باشد؛ تا اگر load زودتر از نشستنِ داشبورد رسید، چیزِ ناتمام چشمک نزند.
+                window.addEventListener('load', function () { setTimeout(readyThenReveal, 60); });
+                // failsafeِ سخت: در هر شرایطی حداکثر پس از ۵ ثانیه آشکار شود تا هرگز پنهان نماند.
                 setTimeout(reveal, 5000);
             } catch (e) { /* در صورتِ خطا کلاسی افزوده نمی‌شود و اپ عادی نمایش داده می‌شود */ }
         })();
@@ -397,7 +407,7 @@
 
 <!-- ===== بخش امور مالی (تب‌های زیبا و منظم مثل bottom-nav) ===== -->
 <!-- ===== بخش امور مالی (تب‌های ثابت، فیلتر مثل انبار/افراد، بدون فضای خالی) ===== -->
-<section id="financial" class="section active">
+<section id="financial" class="section">
   <!-- هدر امور مالی: دقیقاً مثل بخش اجناس (آیکن‌ها چپ، عنوان+برگشت راست) — بدون نوار جستجو -->
   <div class="list-header-filter">
     <div class="filter-icons-left">

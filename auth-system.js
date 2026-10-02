@@ -2329,19 +2329,12 @@
         const list = document.getElementById('ssb-main-list');
         if (!list) return;
 
-        // گزینه بروزرسانی
-        if (!list.querySelector('[data-update-item]')) {
-            const li = document.createElement('li');
-            li.setAttribute('data-update-item', '1');
-            li.style.cursor = 'pointer';
-            li.onclick = () => window.AuthUI.openUpdateModal();
-            li.innerHTML = `
-                <span class="ssb-item-icon"><i class="fas fa-sync-alt"></i></span>
-                <span class="ssb-item-label">بروزرسانی</span>
-                <i class="fas fa-chevron-left ssb-arrow"></i>
-            `;
-            list.appendChild(li);
-        }
+        // گزینهٔ «بروزرسانی» عمداً اینجا اضافه نمی‌شود. گزینهٔ رسمیِ بروزرسانی همان
+        // ssb-item-update در index.html است که فقط در نسخه‌های نصبی (اندروید/Tauri) با
+        // ndUpdSyncSidebarItem() نمایش داده می‌شود و در وب پنهان می‌ماند. (این نسخهٔ قدیمیِ
+        // مبتنی بر Electron در وب هم دیده می‌شد و تکراری/نادرست بود.)
+        // اگر از قبل (در نسخه‌های کش‌شده) ساخته شده بود، حذفش می‌کنیم:
+        try { var _oldUpd = list.querySelector('[data-update-item]'); if (_oldUpd) _oldUpd.remove(); } catch (e) {}
 
         // گزینه درباره ما
         if (!list.querySelector('[data-about-item]')) {
