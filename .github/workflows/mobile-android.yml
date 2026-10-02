@@ -78,7 +78,7 @@ jobs:
             tauri-bridge.js database.js script.js persian-date-utils.js \
             auth-system.js drive-backup.js instant-update-fix.js delivery-list.js \
             currency-system.js sync-config.js sync-layer.js auth-cloud.js \
-            device-guard.js \
+            device-guard.js capacitor-back.js \
             demo-mode.js mobile-fit.js jouya-selftest.js \
             manifest.webmanifest version.json"
           for f in $WEB_FILES; do
@@ -102,7 +102,7 @@ jobs:
           }
           JSON
           npm install --no-audit --no-fund \
-            @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor/browser@6
+            @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor/browser@6 @capacitor/app@6
 
       - name: پیکربندیِ Capacitor
         run: |
@@ -119,6 +119,35 @@ jobs:
 
       - name: افزودنِ پلتفرمِ اندروید
         run: npx cap add android
+
+      # ══════════════════════════════════════════════════════════════════════
+      #  تولیدِ آیکنِ برنامه (آیکنِ روی صفحهٔ اصلیِ گوشی)
+      #  ---------------------------------------------------------------------
+      #  منابعِ آیکن از قبل در پوشهٔ mobile-icons/capacitor-assets موجودند
+      #  (icon/foreground/background/splash). این‌ها را با نام‌های موردِانتظارِ
+      #  @capacitor/assets در پوشهٔ assets می‌گذاریم و ابزار، همهٔ mipmapهای اندروید
+      #  (آیکنِ عادی + تطبیقیِ اندروید ۸+) را می‌سازد و در پروژهٔ اندروید می‌ریزد.
+      #  اگر این مرحله به هر دلیل شکست بخورد، بیلد متوقف نمی‌شود (آیکنِ پیش‌فرض می‌ماند).
+      # ══════════════════════════════════════════════════════════════════════
+      - name: تولیدِ آیکن‌های اندروید
+        run: |
+          set -e
+          SRC="mobile-icons/capacitor-assets"
+          if [ -d "$SRC" ]; then
+            mkdir -p assets
+            # نام‌های سازگار با نسخه‌های مختلفِ @capacitor/assets
+            cp "$SRC/icon.png"            assets/icon-only.png   || true
+            cp "$SRC/icon.png"            assets/icon.png        || true
+            cp "$SRC/icon.png"            assets/logo.png        || true
+            cp "$SRC/icon-foreground.png" assets/icon-foreground.png || true
+            cp "$SRC/icon-background.png" assets/icon-background.png || true
+            cp "$SRC/splash.png"          assets/splash.png      || true
+            cp "$SRC/splash-dark.png"     assets/splash-dark.png || true
+            npx @capacitor/assets@3 generate --android \
+              || echo "::warning::تولیدِ آیکن ناموفق بود؛ آیکنِ پیش‌فرض باقی می‌ماند."
+          else
+            echo "::warning::پوشهٔ mobile-icons/capacitor-assets پیدا نشد؛ آیکنِ پیش‌فرض باقی می‌ماند."
+          fi
 
       - name: همگام‌سازیِ فایل‌های وب
         run: npx cap sync android

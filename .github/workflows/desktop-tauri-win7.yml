@@ -86,7 +86,7 @@ jobs:
             'tauri-bridge.js', 'database.js', 'script.js', 'persian-date-utils.js',
             'auth-system.js', 'drive-backup.js', 'instant-update-fix.js', 'delivery-list.js',
             'currency-system.js', 'sync-config.js', 'sync-layer.js', 'auth-cloud.js',
-            'device-guard.js',
+            'device-guard.js', 'capacitor-back.js',
             'demo-mode.js', 'mobile-fit.js', 'jouya-selftest.js', 'pwa-register.js',
             'manifest.webmanifest', 'version.json'
           )
