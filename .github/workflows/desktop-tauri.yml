@@ -1,0 +1,154 @@
+name: ساخت نسخهٔ نصبیِ ویندوز ۱۰/۱۱ (Tauri)
+
+# نسخهٔ پایدار برای ویندوز ۱۰ و ۱۱ (و ویندوز ۸.۱). این ورک‌فلوی «اصلیِ» انتشار است:
+# با ساختِ تگِ نسخه (مثلاً v1.0.8) خودکار اجرا می‌شود، و دستی هم قابلِ اجراست.
+# نسخهٔ ویندوز ۷ جداگانه و دستی ساخته می‌شود (desktop-tauri-win7.yml).
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: ویندوز (x64)
+    runs-on: windows-latest
+
+    steps:
+      - name: دریافت کد
+        uses: actions/checkout@v4
+
+      # ── تشخیص: دقیقاً ببینیم چه چیزی در ریشهٔ ریپو هست ──────────────────────
+      # اگر بیلد جایی گیر کرد، اول به خروجیِ همین مرحله نگاه کنید.
+      - name: بررسیِ محتوای ریشهٔ پروژه
+        shell: pwsh
+        run: |
+          Write-Host "پوشهٔ کاری: $(Get-Location)"
+          Write-Host "`n— فایل‌ها و پوشه‌های ریشه —"
+          Get-ChildItem -Force | Select-Object Mode, Name | Format-Table -AutoSize
+          foreach ($m in @('index.html','script.js','style.css','database.js','src-tauri')) {
+            $ok = Test-Path -LiteralPath $m
+            Write-Host ("  {0,-14} {1}" -f $m, $(if ($ok) { 'موجود' } else { '*** نیست ***' }))
+          }
+
+      # نسخهٔ پایدارِ Rust (همان حالتِ قبلی که بیلدِ ویندوز را درست می‌ساخت).
+      # نکته: سازگاری با ویندوز ۷ از راهِ اسکریپتِ محلیِ publish-release.ps1 با سوئیچِ
+      # -Win7 انجام می‌شود (پین Rust 1.77.2 + حذفِ ICU) تا این خطِ لولهٔ CI که برای
+      # ویندوز ۱۰/۱۱ کار می‌کند دست‌نخورده و پایدار بماند.
+      - name: نصب Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: کشِ Rust
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      # نصبِ CLI کش می‌شود تا اجراهای بعدی چند دقیقه سریع‌تر باشند.
+      - name: کشِ Tauri CLI
+        id: cli-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-tauri.exe
+          key: cargo-tauri-v2-${{ runner.os }}
+
+      - name: نصب Tauri CLI
+        if: steps.cli-cache.outputs.cache-hit != 'true'
+        run: cargo install tauri-cli --version "^2" --locked
+
+      # ══════════════════════════════════════════════════════════════════════
+      #  آماده‌سازیِ dist-web — کاملاً درون‌خطی
+      #  ---------------------------------------------------------------------
+      #  عمداً هیچ فایلِ بیرونی صدا زده نمی‌شود. اگر این مرحله به یک اسکریپتِ جدا
+      #  (مثلِ prepare-dist.ps1) وابسته باشد و آن فایل به هر دلیلی در ریپو نباشد،
+      #  کلِ بیلد می‌شکند. پس منطق همین‌جاست و بیلد به هیچ فایلِ اضافه‌ای نیاز ندارد.
+      #
+      #  چرا این کار لازم است؟ اگر frontendDist را روی ریشهٔ پروژه بگذاریم، Tauri کلِ
+      #  پوشه را داخلِ باینری embed می‌کند — از جمله src-tauri\target که چند گیگابایت
+      #  محصولِ بیلد است. نتیجه: شکستِ بیلد با «No space left on device».
+      #
+      #  ▸ فایلِ وبِ جدید اضافه کردید؟ نامش را به $WebFiles اضافه کنید.
+      #  ▸ فایلی که نباشد بی‌صدا رد می‌شود، پس فهرست می‌تواند سخاوتمند باشد.
+      #  ▸ service-worker.js عمداً کپی نمی‌شود: نسخهٔ نصبی Service Worker لازم ندارد.
+      # ══════════════════════════════════════════════════════════════════════
+      - name: آماده‌سازیِ فایل‌های وب (dist-web)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $Root = (Get-Location).Path
+          $Dist = Join-Path $Root 'src-tauri\dist-web'
+
+          $WebFiles = @(
+            'index.html',
+            'style.css', 'auth-system.css', 'dashboard-store-info-fix.css', 'mobile-responsive.css',
+            'tauri-bridge.js', 'database.js', 'script.js', 'persian-date-utils.js',
+            'auth-system.js', 'drive-backup.js', 'instant-update-fix.js', 'delivery-list.js',
+            'currency-system.js', 'sync-config.js', 'sync-layer.js', 'auth-cloud.js',
+            'device-guard.js',
+            'demo-mode.js', 'mobile-fit.js', 'jouya-selftest.js', 'pwa-register.js',
+            'manifest.webmanifest', 'version.json'
+          )
+          $WebDirs = @('assets', 'build')
+
+          if (Test-Path $Dist) { Remove-Item -Recurse -Force $Dist }
+          New-Item -ItemType Directory -Force -Path $Dist | Out-Null
+
+          $copied = 0; $missing = @()
+          foreach ($f in $WebFiles) {
+            $src = Join-Path $Root $f
+            if (Test-Path -LiteralPath $src -PathType Leaf) {
+              Copy-Item -LiteralPath $src -Destination (Join-Path $Dist $f) -Force
+              $copied++
+            } else { $missing += $f }
+          }
+          foreach ($d in $WebDirs) {
+            $src = Join-Path $Root $d
+            if (Test-Path -LiteralPath $src -PathType Container) {
+              Copy-Item -LiteralPath $src -Destination $Dist -Recurse -Force
+            } else { $missing += "$d\" }
+          }
+
+          if (-not (Test-Path -LiteralPath (Join-Path $Dist 'index.html'))) {
+            throw "index.html در ریشهٔ پروژه پیدا نشد ($Root). به خروجیِ مرحلهٔ «بررسیِ محتوای ریشهٔ پروژه» نگاه کنید."
+          }
+
+          $mb = [math]::Round(((Get-ChildItem -Recurse -File $Dist | Measure-Object Length -Sum).Sum / 1MB), 2)
+          Write-Host "کپی شد: $copied فایلِ ریشه + پوشه‌های $($WebDirs -join ', ')  →  $mb مگابایت"
+          if ($missing.Count -gt 0) { Write-Host "موجود نبود (رد شد): $($missing -join ', ')" }
+
+      # بیلد از داخلِ src-tauri اجرا می‌شود تا tauri-cli فایلِ Cargo.toml و tauri.conf.json
+      # را درست پیدا کند (رفعِ خطای «failed to watch ...Cargo.toml» وقتی از ریشه اجرا شود).
+      - name: ساخت نصب‌کننده
+        working-directory: src-tauri
+        run: cargo tauri build
+
+      - name: فهرستِ خروجی‌ها
+        if: always()
+        shell: pwsh
+        run: |
+          $b = 'src-tauri/target/release/bundle'
+          if (Test-Path $b) {
+            Get-ChildItem -Recurse -File $b |
+              Select-Object @{n='فایل';e={$_.Name}}, @{n='مگابایت';e={[math]::Round($_.Length/1MB,2)}} |
+              Format-Table -AutoSize
+          } else { Write-Host "پوشهٔ bundle ساخته نشد." }
+
+      - name: بارگذاریِ نصب‌کننده
+        uses: actions/upload-artifact@v4
+        with:
+          name: hesabdar-windows-setup
+          if-no-files-found: error
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+
+      - name: انتشار در Releases
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/msi/*.msi
+          fail_on_unmatched_files: false

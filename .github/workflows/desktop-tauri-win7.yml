@@ -11,13 +11,11 @@ name: ساخت نسخهٔ نصبیِ ویندوز — سازگار با ویند
 #   ویندوز ۷ هم اجرا می‌گردد. هیچ وابستگی‌ای پایین آورده نمی‌شود و مهندسیِ برنامه
 #   (از جمله نسخهٔ windows برای اشتراکِ واتساپ) دست‌نخورده می‌ماند.
 #
-# ❗ فقط «یک» ورک‌فلوی دسکتاپ باید روی هر تگ اجرا شود تا گزینهٔ «بروزرسانی» فایلِ درست
-#    را بردارد. اگر این را فعال می‌کنید، desktop-tauri.yml را غیرفعال/حذف کنید.
+# این ورک‌فلو «فقط دستی» اجرا می‌شود (workflow_dispatch) تا با ورک‌فلوی اصلیِ انتشار
+# (desktop-tauri.yml برای ویندوز ۱۰/۱۱) روی تگ تداخل نکند. هر وقت خواستید نسخهٔ ویندوز ۷
+# را جداگانه بسازید، از تبِ Actions → این ورک‌فلو → دکمهٔ «Run workflow» اجرایش کنید.
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - 'v*'
 
 permissions:
   contents: write
@@ -123,16 +121,20 @@ jobs:
       # ══════════════════════════════════════════════════════════════════════
       #  ساختِ نصب‌کننده برای هدفِ ویندوز ۷ (nightly + build-std)
       #  ---------------------------------------------------------------------
-      #  • از داخلِ src-tauri اجرا می‌شود تا tauri-cli پروژه را درست پیدا کند.
-      #  • RUSTUP_TOOLCHAIN=nightly و CARGO_UNSTABLE_BUILD_STD فقط همین‌جا ست می‌شوند.
-      #  • --target هدفِ ویندوز ۷ را می‌سازد؛ خروجی زیرِ target\<هدف>\release\bundle است.
+      #  نکتهٔ مهم: هدفِ ویندوز ۷ «tier-3» است و در «rustup target list» نیست، پس اگر با
+      #  آرگومانِ --target به tauri-cli بدهیم، tauri-cli آن را رد می‌کند
+      #  («Target ... does not exist»). راهِ حل: هدف را به‌جای --target با متغیرِ
+      #  محیطیِ CARGO_BUILD_TARGET می‌دهیم؛ این‌طور خودِ cargo (با build-std) آن را
+      #  می‌سازد و از اعتبارسنجیِ --target در tauri-cli رد می‌شویم. خروجی همان
+      #  target\<هدف>\release\bundle است.
       # ══════════════════════════════════════════════════════════════════════
       - name: ساخت نصب‌کننده (هدفِ ویندوز ۷)
         working-directory: src-tauri
         env:
           RUSTUP_TOOLCHAIN: nightly
           CARGO_UNSTABLE_BUILD_STD: "std,panic_abort"
-        run: cargo tauri build --target ${{ env.WIN7_TARGET }}
+          CARGO_BUILD_TARGET: ${{ env.WIN7_TARGET }}
+        run: cargo tauri build
 
       - name: فهرستِ خروجی‌ها
         if: always()
