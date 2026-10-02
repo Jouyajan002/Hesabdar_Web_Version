@@ -1,0 +1,102 @@
+/**
+ * capacitor-share.js — اشتراکِ فایلِ PDF در اپلیکیشنِ اندروید (فروشگاه جویا)
+ * =============================================================================
+ * لایهٔ کاملاً افزودنی و مستقل (مثلِ capacitor-back.js). هیچ فایلِ دیگری را تغییر نمی‌دهد.
+ *
+ * مشکل: در نسخهٔ وب، دکمهٔ «ارسال به واتساپ» از navigator.share استفاده می‌کند و درست
+ * کار می‌کند. ولی داخلِ WebViewِ Capacitor (اپلیکیشنِ اندروید)، navigator.share «وجود
+ * دارد» اما اشتراکِ فایل را عملاً انجام نمی‌دهد؛ پس کار به فالبکِ «ذخیره در دانلودها»
+ * می‌افتد و پنجرهٔ اشتراکِ واتساپ باز نمی‌شود.
+ *
+ * راهِ حل (همان کاری که نسخهٔ Tauri با پنلِ اشتراکِ ویندوز می‌کند، ولی برای اندروید):
+ *   ۱) فایلِ PDF را روی حافظهٔ موقتِ دستگاه می‌نویسیم (@capacitor/filesystem)
+ *   ۲) نشانیِ فایل (file URI) را می‌گیریم
+ *   ۳) پنلِ اشتراکِ نیتیوِ اندروید را با همان فایل باز می‌کنیم (@capacitor/share)
+ *      → واتساپ و بقیهٔ برنامه‌ها در همان پنل ظاهر می‌شوند.
+ *
+ * فقط روی «اندرویدِ نیتیو» فعال است؛ روی وب/آیفون/Tauri هیچ کاری نمی‌کند و مسیرهای
+ * قبلیِ برنامه دست‌نخورده باقی می‌مانند.
+ * =============================================================================
+ */
+(function () {
+    'use strict';
+
+    function isAndroidNative() {
+        try {
+            var C = window.Capacitor;
+            if (!C) return false;
+            var p = (typeof C.getPlatform === 'function') ? C.getPlatform() : (C.platform || '');
+            if (p === 'android') return true;
+            if (C.isNativePlatform && C.isNativePlatform() && p && p !== 'ios' && p !== 'web') return true;
+        } catch (e) {}
+        return false;
+    }
+
+    function plugins() {
+        try { return (window.Capacitor && window.Capacitor.Plugins) || null; } catch (e) { return null; }
+    }
+
+    // آیا افزونه‌های لازم در این بیلد هستند؟
+    function isReady() {
+        var P = plugins();
+        return !!(isAndroidNative() && P && P.Filesystem && P.Share);
+    }
+
+    function blobToBase64(blob) {
+        return new Promise(function (resolve, reject) {
+            try {
+                var fr = new FileReader();
+                fr.onload = function () {
+                    var s = String(fr.result || '');
+                    var i = s.indexOf(',');
+                    resolve(i >= 0 ? s.slice(i + 1) : s);   // حذفِ پیشوندِ data:...;base64,
+                };
+                fr.onerror = function () { reject(new Error('خواندنِ فایل ناموفق بود')); };
+                fr.readAsDataURL(blob);
+            } catch (e) { reject(e); }
+        });
+    }
+
+    // نامِ فایلِ امن برای سیستمِ فایلِ اندروید
+    function safeName(name) {
+        var n = String(name || 'document.pdf').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').trim();
+        if (!n) n = 'document.pdf';
+        if (!/\.pdf$/i.test(n)) n += '.pdf';
+        return n;
+    }
+
+    /**
+     * نوشتنِ PDF روی دستگاه و بازکردنِ پنلِ اشتراکِ اندروید.
+     * @returns Promise — موفق: پنل باز شد | رد: پیامِ خطا (تماس‌گیرنده فالبک می‌کند)
+     */
+    function sharePdfBlob(blob, fileName, title) {
+        var P = plugins();
+        if (!isAndroidNative()) return Promise.reject(new Error('اندرویدِ نیتیو نیست'));
+        if (!P || !P.Filesystem || !P.Share) return Promise.reject(new Error('افزونه‌های اشتراک در این بیلد نیستند'));
+        if (!blob) return Promise.reject(new Error('فایلِ PDF خالی است'));
+
+        var name = safeName(fileName);
+        return blobToBase64(blob)
+            .then(function (b64) {
+                // CACHE: نیازی به اجازهٔ حافظه ندارد و خودکار پاک می‌شود
+                return P.Filesystem.writeFile({ path: name, data: b64, directory: 'CACHE' });
+            })
+            .then(function () {
+                return P.Filesystem.getUri({ path: name, directory: 'CACHE' });
+            })
+            .then(function (r) {
+                var uri = r && (r.uri || r.path);
+                if (!uri) throw new Error('نشانیِ فایل به‌دست نیامد');
+                return P.Share.share({
+                    title: String(title || 'گزارش'),
+                    files: [uri]
+                });
+            });
+    }
+
+    window.JouyaCapShare = {
+        isAndroidNative: isAndroidNative,
+        isReady: isReady,
+        sharePdfBlob: sharePdfBlob
+    };
+})();
