@@ -78,7 +78,7 @@ jobs:
             tauri-bridge.js database.js script.js persian-date-utils.js \
             auth-system.js drive-backup.js instant-update-fix.js delivery-list.js \
             currency-system.js sync-config.js sync-layer.js auth-cloud.js \
-            device-guard.js capacitor-back.js \
+            device-guard.js capacitor-back.js capacitor-share.js \
             demo-mode.js mobile-fit.js jouya-selftest.js \
             manifest.webmanifest version.json"
           for f in $WEB_FILES; do
@@ -89,6 +89,40 @@ jobs:
           done
           if [ ! -f www/index.html ]; then echo "::error::index.html در ریشه پیدا نشد"; exit 1; fi
           echo "— محتوای www —"; ls -la www | head -40
+
+      # ══════════════════════════════════════════════════════════════════════
+      #  بررسیِ کاملیِ بسته — تضمینِ «نسخهٔ اندروید = نسخهٔ وب»
+      #  ---------------------------------------------------------------------
+      #  مرحلهٔ بالا فایلِ نبوده را بی‌صدا رد می‌کند؛ یعنی اگر روزی نامِ فایلی از فهرست
+      #  جا بیفتد یا در مخزن نباشد، APK بدونِ آن ساخته می‌شود و باگ‌های قدیمی برمی‌گردند
+      #  بدونِ هیچ هشداری. اینجا هر فایلی که index.html واقعاً استفاده می‌کند بررسی
+      #  می‌شود و اگر در بسته نباشد، بیلد با خطای روشن متوقف می‌گردد.
+      #  استثناها: pwa-register.js و service-worker.js عمداً در اپِ نیتیو نیستند
+      #  (Service Worker با سرویس‌دهیِ فایل‌های Capacitor تداخل می‌کند).
+      # ══════════════════════════════════════════════════════════════════════
+      - name: بررسیِ کاملیِ بستهٔ وب
+        run: |
+          node -e '
+            const fs=require("fs"), path=require("path");
+            const EXCEPT=new Set(["pwa-register.js","service-worker.js"]);
+            const html=fs.readFileSync("www/index.html","utf8");
+            const refs=new Set();
+            const add=(re)=>{let m;while((m=re.exec(html)))refs.add(m[1]);};
+            add(/<script[^>]+src=["\x27]([^"\x27]+)["\x27]/g);
+            add(/<link[^>]+href=["\x27]([^"\x27]+)["\x27]/g);
+            const missing=[];
+            for(const r of refs){
+              if(/^(https?:)?\/\//.test(r)||r.startsWith("data:")||r.startsWith("#"))continue;
+              const rel=r.replace(/^\.\//,"").split("?")[0];
+              if(EXCEPT.has(rel))continue;
+              if(!fs.existsSync(path.join("www",rel))) missing.push(rel);
+            }
+            if(missing.length){
+              console.error("::error::این فایل‌ها در بستهٔ اندروید نیستند و نسخهٔ اندروید ناقص می‌شود: "+missing.join(", "));
+              process.exit(1);
+            }
+            console.log("بستهٔ وب کامل است — همهٔ "+refs.size+" ارجاعِ index.html موجودند.");
+          '
 
       - name: نصب Capacitor و افزونه‌ها
         run: |
@@ -102,7 +136,8 @@ jobs:
           }
           JSON
           npm install --no-audit --no-fund \
-            @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor/browser@6 @capacitor/app@6
+            @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor/browser@6 @capacitor/app@6 \
+            @capacitor/share@6 @capacitor/filesystem@6
 
       - name: پیکربندیِ Capacitor
         run: |
@@ -151,6 +186,33 @@ jobs:
 
       - name: همگام‌سازیِ فایل‌های وب
         run: npx cap sync android
+
+      # ══════════════════════════════════════════════════════════════════════
+      #  بررسیِ ثبتِ افزونه‌های نیتیو (بدونِ نیاز به تستِ روی گوشی)
+      #  ---------------------------------------------------------------------
+      #  اشتراکِ فایلِ PDF در اندروید فقط با افزونه‌های Share و Filesystem ممکن است.
+      #  اگر ثبت نشده باشند، APK ساخته می‌شود ولی «ارسال به واتساپ» کار نمی‌کند.
+      #  این مرحله همین‌جا بیلد را متوقف می‌کند تا از همان لاگِ بیلد بفهمیم مشکل کجاست.
+      # ══════════════════════════════════════════════════════════════════════
+      - name: بررسیِ افزونه‌های Capacitor
+        run: |
+          set -e
+          echo "— افزونه‌های شناسایی‌شده —"
+          npx cap ls android || true
+          SETTINGS="android/capacitor.settings.gradle"
+          if [ ! -f "$SETTINGS" ]; then
+            echo "::error::$SETTINGS پیدا نشد — همگام‌سازیِ Capacitor کامل نشده است."; exit 1
+          fi
+          echo "— محتوای $SETTINGS —"; cat "$SETTINGS"
+          MISSING=""
+          grep -q "capacitor-share" "$SETTINGS"      || MISSING="$MISSING @capacitor/share"
+          grep -q "capacitor-filesystem" "$SETTINGS" || MISSING="$MISSING @capacitor/filesystem"
+          grep -q "capacitor-app" "$SETTINGS"        || MISSING="$MISSING @capacitor/app"
+          if [ -n "$MISSING" ]; then
+            echo "::error::این افزونه‌ها در پروژهٔ اندروید ثبت نشده‌اند:$MISSING — ارسال به واتساپ کار نخواهد کرد."
+            exit 1
+          fi
+          echo "✓ افزونه‌های Share و Filesystem و App درست ثبت شده‌اند."
 
       # نام و کدِ نسخه را داخلِ گریدلِ اندروید تزریق می‌کنیم تا در «دربارهٔ برنامه» و
       # در مقایسهٔ بروزرسانی درست نمایش داده شود.
