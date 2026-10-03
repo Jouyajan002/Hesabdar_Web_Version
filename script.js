@@ -11109,6 +11109,172 @@ function __jouyaTauriInvoke(cmd, args) {
     } catch (e) { return Promise.reject(e); }
     return Promise.reject(new Error('tauri-invoke-unavailable'));
 }
+/* ══════════════════════════════════════════════════════════════════════════════
+   موتورِ اشتراکِ اندروید (Capacitor) — کاملاً درونِ همین فایل
+   ---------------------------------------------------------------------------
+   چرا اینجا و نه در فایلِ جدا؟ چون اگر فایلِ جدا به هر دلیلی در بستهٔ APK نباشد،
+   هیچ‌کدام از این کدها اجرا نمی‌شود — نه اشتراک و نه حتی پنجرهٔ گزارش. script.js
+   همیشه در بسته هست، پس اینجا به هیچ فایلِ دیگری وابسته نیستیم. نام‌ها هم داخلی‌اند
+   تا نسخهٔ قدیمیِ capacitor-share.js (که بعد از این فایل بارگذاری می‌شود) نتواند
+   آن‌ها را بازنویسی کند.
+   ══════════════════════════════════════════════════════════════════════════════ */
+var __jouyaAndSteps = [];
+function __jouyaAndReset() { __jouyaAndSteps = []; }
+function __jouyaAndLog(k, v) { try { __jouyaAndSteps.push(String(k) + ' → ' + String(v)); } catch (e) {} }
+
+function __jouyaAndIsNative() {
+    try {
+        var C = window.Capacitor;
+        if (!C) return false;
+        var p = (typeof C.getPlatform === 'function') ? C.getPlatform() : (C.platform || '');
+        if (p === 'android') return true;
+        if (C.isNativePlatform && C.isNativePlatform() && p && p !== 'ios' && p !== 'web') return true;
+    } catch (e) {}
+    return false;
+}
+
+// سه راهِ دسترسی به افزونه — هرکدام جواب داد همان استفاده می‌شود
+var __jouyaAndRegCache = {};
+function __jouyaAndCall(plugin, method, options) {
+    var C = window.Capacitor;
+    if (!C) return Promise.reject(new Error('Capacitor موجود نیست'));
+    try {
+        var P = C.Plugins && C.Plugins[plugin];
+        if (P && typeof P[method] === 'function') return Promise.resolve(P[method](options));
+    } catch (e) {}
+    try {
+        if (typeof C.registerPlugin === 'function') {
+            if (!__jouyaAndRegCache[plugin]) __jouyaAndRegCache[plugin] = C.registerPlugin(plugin);
+            var P2 = __jouyaAndRegCache[plugin];
+            if (P2 && typeof P2[method] === 'function') return Promise.resolve(P2[method](options));
+        }
+    } catch (e) {}
+    try {
+        if (typeof C.nativePromise === 'function') return Promise.resolve(C.nativePromise(plugin, method, options || {}));
+    } catch (e) {}
+    return Promise.reject(new Error(plugin + '.' + method + ' در دسترس نیست'));
+}
+function __jouyaAndAccess(plugin) {
+    var C = window.Capacitor, out = [];
+    try { if (C && C.Plugins && C.Plugins[plugin]) out.push('Plugins'); } catch (e) {}
+    try { if (C && typeof C.registerPlugin === 'function') out.push('register'); } catch (e) {}
+    try { if (C && typeof C.nativePromise === 'function') out.push('bridge'); } catch (e) {}
+    return out.length ? out.join('+') : 'هیچ';
+}
+function __jouyaAndB64(blob) {
+    return new Promise(function (resolve, reject) {
+        try {
+            var fr = new FileReader();
+            fr.onload = function () { var s = String(fr.result || ''); var i = s.indexOf(','); resolve(i >= 0 ? s.slice(i + 1) : s); };
+            fr.onerror = function () { reject(new Error('خواندنِ blob ناموفق')); };
+            fr.readAsDataURL(blob);
+        } catch (e) { reject(e); }
+    });
+}
+function __jouyaAndSafeName(name, ext) {
+    var n = String(name || ('file.' + ext)).replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').trim();
+    if (!n) n = 'file.' + ext;
+    if (new RegExp('\\.' + ext + '$', 'i').test(n) === false) n += '.' + ext;
+    return n;
+}
+// نوشتنِ فایل روی دستگاه — چند پوشه به‌ترتیب امتحان می‌شود
+function __jouyaAndWrite(name, data, isText) {
+    var DIRS = isText ? ['DOCUMENTS', 'EXTERNAL', 'CACHE', 'DATA'] : ['CACHE', 'DOCUMENTS', 'EXTERNAL', 'DATA'];
+    function step(i) {
+        if (i >= DIRS.length) return Promise.reject(new Error('نوشتن در هیچ پوشه‌ای ممکن نشد'));
+        var dir = DIRS[i];
+        var opts = { path: name, data: data, directory: dir, recursive: true };
+        if (isText) opts.encoding = 'utf8';
+        return __jouyaAndCall('Filesystem', 'writeFile', opts)
+            .then(function () { return __jouyaAndCall('Filesystem', 'getUri', { path: name, directory: dir }); })
+            .then(function (r) {
+                var uri = r && (r.uri || r.path);
+                if (!uri) throw new Error('بدونِ uri');
+                __jouyaAndLog('نوشتنِ فایل', dir + ' ✓');
+                return { uri: uri, dir: dir, name: name };
+            })
+            .catch(function (e) {
+                __jouyaAndLog('نوشتن در ' + dir, 'خطا: ' + ((e && (e.message || e.errorMessage)) || e));
+                return step(i + 1);
+            });
+    }
+    return step(0);
+}
+
+// ── اشتراکِ PDF در اندروید: همهٔ راه‌ها به‌ترتیب ─────────────────────────────────
+function __jouyaAndSharePdf(blob, fileName, title) {
+    var name = __jouyaAndSafeName(fileName, 'pdf');
+    __jouyaAndLog('اندازهٔ PDF', (blob && blob.size) ? (blob.size + ' بایت') : 'خالی!');
+    __jouyaAndLog('دسترسیِ Share', __jouyaAndAccess('Share'));
+    __jouyaAndLog('دسترسیِ Filesystem', __jouyaAndAccess('Filesystem'));
+
+    // راه ۱: افزونهٔ نیتیو (نوشتنِ فایل + پنلِ اشتراک)
+    return __jouyaAndB64(blob)
+        .then(function (b64) { return __jouyaAndWrite(name, b64, false); })
+        .then(function (res) {
+            return __jouyaAndCall('Share', 'share', { title: String(title || 'گزارش'), files: [res.uri] })
+                .then(function () { __jouyaAndLog('پنلِ اشتراک', 'باز شد ✓'); return true; });
+        })
+        .catch(function (e1) {
+            __jouyaAndLog('راه ۱ (افزونهٔ نیتیو)', 'ناموفق: ' + ((e1 && (e1.message || e1.errorMessage)) || e1));
+            // راه ۲: اشتراکِ فایل با خودِ مرورگر (اگر WebView پشتیبانی کند)
+            return new Promise(function (resolve, reject) {
+                try {
+                    var f = new File([blob], name, { type: 'application/pdf' });
+                    if (navigator.share && (!navigator.canShare || navigator.canShare({ files: [f] }))) {
+                        navigator.share({ files: [f], title: String(title || 'گزارش') })
+                            .then(function () { __jouyaAndLog('راه ۲ (navigator.share فایل)', 'موفق ✓'); resolve(true); })
+                            .catch(function (e2) {
+                                __jouyaAndLog('راه ۲ (navigator.share فایل)', 'ناموفق: ' + ((e2 && e2.message) || e2));
+                                reject(new Error('هیچ راهی برای ارسالِ فایل کار نکرد'));
+                            });
+                        return;
+                    }
+                    __jouyaAndLog('راه ۲ (navigator.share فایل)', 'پشتیبانی نمی‌شود');
+                } catch (e3) {
+                    __jouyaAndLog('راه ۲', 'خطا: ' + ((e3 && e3.message) || e3));
+                }
+                reject(new Error('هیچ راهی برای ارسالِ فایل کار نکرد'));
+            });
+        });
+}
+
+// ── پنجرهٔ تشخیصِ شفافِ سیاه (فقط هنگامِ شکست؛ برای اسکرین‌شات) ────────────────
+function __jouyaAndShowDiag(headline) {
+    try {
+        var old = document.getElementById('jouya-and-diag');
+        if (old) old.remove();
+        var env = [];
+        try {
+            var C = window.Capacitor;
+            env.push('پلتفرم: ' + ((C && C.getPlatform) ? C.getPlatform() : 'بدونِ Capacitor'));
+            env.push('Capacitor: ' + (C ? 'هست' : 'نیست') +
+                ' | Plugins: ' + ((C && C.Plugins) ? Object.keys(C.Plugins).length + ' تا' : 'ندارد'));
+            env.push('registerPlugin: ' + ((C && typeof C.registerPlugin === 'function') ? 'هست' : 'نیست') +
+                ' | bridge: ' + ((C && typeof C.nativePromise === 'function') ? 'هست' : 'نیست'));
+            env.push('navigator.share: ' + (typeof navigator.share) + ' | canShare: ' + (typeof navigator.canShare));
+            env.push('capacitor-share.js: ' + (window.JouyaCapShare ? 'بارگذاری شد' : 'بارگذاری نشد'));
+        } catch (e) {}
+        var all = env.concat(['──────────────']).concat(__jouyaAndSteps);
+        var ov = document.createElement('div');
+        ov.id = 'jouya-and-diag';
+        ov.setAttribute('dir', 'rtl');
+        ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.86);' +
+            'display:flex;align-items:center;justify-content:center;padding:12px;font-family:Vazirmatn,monospace;';
+        ov.innerHTML = '<div style="width:100%;max-width:520px;max-height:94vh;overflow:auto;color:#fff;">' +
+            '<div style="font-size:15px;font-weight:800;color:#ffd166;margin-bottom:8px;">تشخیصِ ارسال — ' + String(headline || '') + '</div>' +
+            '<div style="font-size:12.5px;line-height:2;white-space:pre-wrap;word-break:break-word;">' +
+            all.map(function (l) { return String(l).replace(/[<>&]/g, ''); }).join('\n') +
+            '</div>' +
+            '<button id="jouya-and-diag-x" style="margin-top:14px;width:100%;background:#fff;border:none;color:#000;' +
+            'border-radius:10px;padding:12px;font-family:inherit;font-weight:800;font-size:14px;">بستن</button>' +
+            '</div>';
+        document.body.appendChild(ov);
+        var x = document.getElementById('jouya-and-diag-x');
+        if (x) x.onclick = function () { try { ov.remove(); } catch (e) {} };
+    } catch (e) {}
+}
+
 // ⚠ در WebView2 هرگز navigator.share را صدا نزنید.
 //  گزارشِ دستگاهِ کاربر ثابت کرد: navigator.share و canShare هر دو «موجود»اند و canShare
 //  برای فایل true برمی‌گرداند، ولی فراخوانی هیچ پنجره‌ای باز نمی‌کند و Promise آن هیچ‌وقت
@@ -11230,8 +11396,8 @@ function __jouyaDiagEnv() {
         push('typeof Capacitor.nativePromise', (window.Capacitor ? q(window.Capacitor.nativePromise) : 'n/a'));
         push('typeof window.JouyaCapShare', q(window.JouyaCapShare));
         push('JouyaCapShare.isAndroidNative()', (window.JouyaCapShare && window.JouyaCapShare.isAndroidNative) ? String(window.JouyaCapShare.isAndroidNative()) : 'n/a');
-        push('دسترسیِ افزونهٔ Share', (window.JouyaCapShare && window.JouyaCapShare.pluginAccess) ? window.JouyaCapShare.pluginAccess('Share') : 'n/a');
-        push('دسترسیِ افزونهٔ Filesystem', (window.JouyaCapShare && window.JouyaCapShare.pluginAccess) ? window.JouyaCapShare.pluginAccess('Filesystem') : 'n/a');
+        push('دسترسیِ افزونهٔ Share', __jouyaAndAccess('Share'));
+        push('دسترسیِ افزونهٔ Filesystem', __jouyaAndAccess('Filesystem'));
         push('window size', String(window.innerWidth) + 'x' + String(window.innerHeight));
     } catch (e) {
         lines.push('  (env error: ' + (e && e.message) + ')');
@@ -11255,9 +11421,8 @@ function __jouyaShowDiagOnScreen(txt, fname, reason) {
         ov.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(15,23,42,.97);' +
             'display:flex;align-items:center;justify-content:center;padding:14px;' +
             'font-family:Vazirmatn,inherit;color:#e2e8f0;';
-        var cap = (window.JouyaCapShare || null);
-        var canSave  = !!(cap && cap.hasFilesystem && cap.hasFilesystem());
-        var canShare = !!(cap && cap.hasShare && cap.hasShare());
+        var canSave  = __jouyaAndIsNative();
+        var canShare = __jouyaAndIsNative();
         ov.innerHTML =
             '<div style="width:100%;max-width:560px;max-height:92vh;display:flex;flex-direction:column;' +
                 'background:#1e293b;border:1px solid #334155;border-radius:16px;padding:16px;">' +
@@ -11296,7 +11461,8 @@ function __jouyaShowDiagOnScreen(txt, fname, reason) {
         if (sh) sh.onclick = function () {
             note('در حالِ بازکردنِ پنلِ اشتراک…');
             try {
-                window.JouyaCapShare.shareText(fname, txt, 'گزارشِ تشخیصی')
+                __jouyaAndWrite(String(fname), String(txt), true)
+                    .then(function (r) { return __jouyaAndCall('Share', 'share', { title: 'گزارشِ تشخیصی', files: [r.uri] }); })
                     .then(function () { note('پنلِ اشتراک باز شد.'); })
                     .catch(function (e) { note('ارسال نشد: ' + ((e && e.message) || e)); });
             } catch (e) { note('ارسال نشد: ' + ((e && e.message) || e)); }
@@ -11305,7 +11471,7 @@ function __jouyaShowDiagOnScreen(txt, fname, reason) {
         if (sv) sv.onclick = function () {
             note('در حالِ ذخیره…');
             try {
-                window.JouyaCapShare.saveText(fname, txt)
+                __jouyaAndWrite(String(fname), String(txt), true)
                     .then(function (r) { note('ذخیره شد: ' + (r && r.dir) + ' → ' + (r && r.name)); })
                     .catch(function (e) { note('ذخیره نشد: ' + ((e && e.message) || e)); });
             } catch (e) { note('ذخیره نشد: ' + ((e && e.message) || e)); }
@@ -11360,7 +11526,7 @@ function __jouyaDiagReport(reason) {
     //    می‌خورد (کاربر پیامِ «ذخیره شد» می‌دید ولی فایلی وجود نداشت). پس به‌جای آن، متنِ
     //    گزارش روی صفحه و قابلِ کپی نشان داده می‌شود — این روش همیشه کار می‌کند.
     try {
-        if (window.JouyaCapShare && window.JouyaCapShare.isAndroidNative && window.JouyaCapShare.isAndroidNative()) {
+        if (__jouyaAndIsNative()) {
             __jouyaShowDiagOnScreen(txt, fname, reason);
             return txt;
         }
@@ -11422,58 +11588,38 @@ function __jouyaShareToWhatsApp(fullHtml, pdfName, blobReady) {
     //  نمی‌دهد و کار به فالبکِ ذخیرهٔ فایل می‌افتد. اینجا فایل روی دستگاه نوشته و با
     //  پنلِ اشتراکِ خودِ اندروید (شاملِ واتساپ) فرستاده می‌شود — معادلِ همان کاری که
     //  نسخهٔ Tauri با پنلِ اشتراکِ ویندوز می‌کند.
-    try {
-        if (window.JouyaCapShare && window.JouyaCapShare.isAndroidNative && window.JouyaCapShare.isAndroidNative()
-            && !(window.JouyaCapShare.isReady && window.JouyaCapShare.isReady())) {
-            // اندروید هست ولی افزونه‌های اشتراک در این بیلد ثبت نشده‌اند → این مسیر رد
-            // می‌شود و مسیرهای بعدی (مثلِ قبل) اجرا می‌گردند. علتش در «محیط» گزارش پیداست.
-            __jouyaDiagAdd('مسیر ۰-الف', 'اندروید است ولی افزونه‌های اشتراک (Filesystem/Share) در دسترس نیستند — رد شد');
-        }
-    } catch (e) {}
-    if (window.JouyaCapShare && window.JouyaCapShare.isReady && window.JouyaCapShare.isReady()) {
-        __jouyaDiagAdd('مسیر ۰-الف', 'اپلیکیشنِ اندروید شناسایی شد — پنلِ اشتراکِ اندروید');
+    if (__jouyaAndIsNative()) {
+        __jouyaAndReset();
+        __jouyaAndLog('شروع', 'اپلیکیشنِ اندروید');
         var goAndroid = function (blob) {
-            if (!blob) { __jouyaDiagReport('PDF ساخته نشد (blob خالی)'); return; }
-            __jouyaDiagAdd('PDF آماده', String(blob.size) + ' بایت');
-            window.JouyaCapShare.sharePdfBlob(blob, shareName, pdfName)
-                .then(function () { __jouyaDiagAdd('مسیر ۰-الف', 'پنلِ اشتراک باز شد'); })
+            if (!blob || !blob.size) {
+                __jouyaAndLog('ساختِ PDF', 'blob خالی است');
+                __jouyaAndShowDiag('PDF ساخته نشد');
+                return;
+            }
+            __jouyaAndSharePdf(blob, shareName, pdfName)
+                .then(function () { /* موفق → هیچ پیامی نمایش داده نمی‌شود */ })
                 .catch(function (e) {
                     var msg = (e && (e.message || e.errorMessage)) || String(e);
-                    if (/cancel|abort/i.test(msg)) { __jouyaDiagAdd('مسیر ۰-الف', 'کاربر لغو کرد'); return; }
-                    __jouyaDiagAdd('مسیر ۰-الف خطا', msg);
-                    // فالبکِ ۱: فایل را ذخیره کن و همان را با پنلِ اشتراک بفرست (فقط فایل)
-                    var saved = false;
-                    try {
-                        if (typeof __jouyaDownloadBlob === 'function') { __jouyaDownloadBlob(blob, shareName); saved = true; __jouyaDiagAdd('فالبک', 'ذخیرهٔ فایل انجام شد'); }
-                    } catch (e2) {}
-                    // فالبکِ ۲: واتساپ را با متن باز کن — همان مکانیزمی که در «ارسالِ
-                    // بیلانسِ شخص» کار می‌کند؛ دستِ‌کم واتساپ باز می‌شود و کاربر فایلِ
-                    // ذخیره‌شده را پیوست می‌کند.
-                    try {
-                        window.JouyaCapShare.sharePlainText(
-                            String(pdfName || 'گزارش') + ' — فایلِ PDF روی دستگاه ذخیره شد.',
-                            String(pdfName || 'گزارش')
-                        ).then(function () { __jouyaDiagAdd('فالبک ۲', 'پنلِ اشتراکِ متن باز شد'); })
-                         .catch(function () {
-                            try { window.open('https://wa.me/?text=' + encodeURIComponent(String(pdfName || 'گزارش')), '_blank'); } catch (e3) {}
-                         });
-                    } catch (e4) {}
-                    if (saved && typeof showMessage === 'function') {
-                        showMessage('ارسال به واتساپ',
-                            'پنلِ اشتراکِ فایل باز نشد؛ فایلِ PDF روی دستگاه ذخیره شد.\nآن را در واتساپ پیوست کنید.');
-                        return;
-                    }
-                    __jouyaDiagReport('اشتراکِ اندروید ناموفق: ' + msg);
+                    if (/cancel|abort|dismiss/i.test(msg)) return;      // کاربر لغو کرد → سکوت
+                    // آخرین تلاش: واتساپ را با متن باز کن (همان راهی که در «بیلانسِ شخص» کار می‌کند)
+                    __jouyaAndCall('Share', 'share', { title: String(pdfName || 'گزارش'), text: String(pdfName || 'گزارش') })
+                        .then(function () { __jouyaAndLog('راه ۳ (اشتراکِ متن)', 'باز شد — ولی فایل ارسال نشد'); __jouyaAndShowDiag('فایل ارسال نشد'); })
+                        .catch(function (e5) {
+                            __jouyaAndLog('راه ۳ (اشتراکِ متن)', 'ناموفق: ' + ((e5 && e5.message) || e5));
+                            __jouyaAndShowDiag('ارسال ناموفق');
+                        });
                 });
         };
         if (blobReady) { goAndroid(blobReady); return true; }
         if (typeof window.__jouyaHtmlToPdfBlob !== 'function') {
-            __jouyaDiagReport('موتورِ ساختِ PDF بارگذاری نشده است');
+            __jouyaAndLog('موتورِ PDF', 'بارگذاری نشده است');
+            __jouyaAndShowDiag('موتورِ PDF نیست');
             return true;
         }
         window.__jouyaHtmlToPdfBlob(fullHtml).then(goAndroid).catch(function (e) {
-            __jouyaDiagAdd('ساختِ PDF ناموفق', (e && e.message) || String(e));
-            __jouyaDiagReport('ساختِ PDF ناموفق: ' + ((e && e.message) || e));
+            __jouyaAndLog('ساختِ PDF', 'خطا: ' + ((e && e.message) || e));
+            __jouyaAndShowDiag('ساختِ PDF ناموفق');
         });
         return true;
     }
@@ -11829,26 +11975,17 @@ function __jouyaDownloadBlob(blob, filename) {
     // اپلیکیشنِ اندروید: <a download> در WebView هیچ فایلی نمی‌سازد و بی‌صدا شکست می‌خورد.
     // پس فایل با Filesystem روی دستگاه نوشته می‌شود و محلش به کاربر گفته می‌شود.
     try {
-        if (window.JouyaCapShare && window.JouyaCapShare.isAndroidNative && window.JouyaCapShare.isAndroidNative()
-            && window.JouyaCapShare.hasFilesystem && window.JouyaCapShare.hasFilesystem()) {
-            var fr = new FileReader();
-            fr.onload = function () {
-                try {
-                    var s = String(fr.result || ''); var i = s.indexOf(',');
-                    var b64 = i >= 0 ? s.slice(i + 1) : s;
-                    var P = window.Capacitor.Plugins;
-                    P.Filesystem.writeFile({ path: String(filename), data: b64, directory: 'DOCUMENTS', recursive: true })
-                        .then(function () {
-                            if (typeof showMessage === 'function') showMessage('ذخیرهٔ فایل',
-                                'فایل ذخیره شد:\nپوشهٔ Documents → ' + String(filename));
-                        })
-                        .catch(function (e) {
-                            if (typeof showMessage === 'function') showMessage('ذخیرهٔ فایل',
-                                'ذخیرهٔ فایل ممکن نشد: ' + ((e && (e.message || e.errorMessage)) || e));
-                        });
-                } catch (e) {}
-            };
-            fr.readAsDataURL(blob);
+        if (__jouyaAndIsNative()) {
+            __jouyaAndB64(blob)
+                .then(function (b64) { return __jouyaAndWrite(String(filename), b64, false); })
+                .then(function (r) {
+                    if (typeof showMessage === 'function') showMessage('ذخیرهٔ فایل',
+                        'فایل ذخیره شد:\n' + (r && r.dir) + ' → ' + (r && r.name));
+                })
+                .catch(function (e) {
+                    if (typeof showMessage === 'function') showMessage('ذخیرهٔ فایل',
+                        'ذخیرهٔ فایل ممکن نشد: ' + ((e && (e.message || e.errorMessage)) || e));
+                });
             return true;
         }
     } catch (e) {}
@@ -11880,18 +12017,19 @@ function __jouyaDoNativeShare(blob, persianName, titleName) {
         }
     } catch (e) {}
     // ── اپلیکیشنِ اندروید: پنلِ اشتراکِ نیتیوِ اندروید ───────────────────────────
-    //  در WebViewِ Capacitor، navigator.share فایل را نمی‌فرستد؛ پس همان مسیرِ نیتیو.
+    //  در WebViewِ Capacitor، navigator.share فایل را نمی‌فرستد؛ پس همان موتورِ نیتیو.
     try {
-        if (window.JouyaCapShare && window.JouyaCapShare.isReady && window.JouyaCapShare.isReady()) {
+        if (__jouyaAndIsNative()) {
+            __jouyaAndReset();
+            __jouyaAndLog('شروع', 'اشتراکِ دستگاه (اندروید)');
             var andName = (typeof __jouyaShareFileName === 'function')
                 ? __jouyaShareFileName(titleName || persianName)
                 : String(persianName || 'گزارش.pdf');
-            window.JouyaCapShare.sharePdfBlob(blob, andName, titleName || persianName)
+            __jouyaAndSharePdf(blob, andName, titleName || persianName)
                 .catch(function (err) {
                     var m = (err && (err.message || err.errorMessage)) || String(err);
-                    if (/cancel|abort/i.test(m)) return;                  // کاربر لغو کرد — بی‌صدا
-                    try { console.warn('[jouya-share] android share:', m); } catch (_) {}
-                    __jouyaDownloadBlob(blob, persianName);               // فالبکِ امن
+                    if (/cancel|abort|dismiss/i.test(m)) return;          // کاربر لغو کرد — بی‌صدا
+                    __jouyaAndShowDiag('ارسال ناموفق');
                 });
             return true;
         }
