@@ -76,17 +76,32 @@
         if (!blob) return Promise.reject(new Error('فایلِ PDF خالی است'));
 
         var name = safeName(fileName);
+        // چند پوشه را به ترتیب امتحان می‌کنیم: اگر FileProvider یکی را پوشش ندهد،
+        // بعدی امتحان می‌شود. CACHE اول است چون به هیچ اجازه‌ای نیاز ندارد.
+        var DIRS = ['CACHE', 'DOCUMENTS', 'EXTERNAL', 'DATA'];
+        var errs = [];
+
+        function tryDir(b64, i) {
+            if (i >= DIRS.length) {
+                return Promise.reject(new Error('نوشتنِ فایل در هیچ پوشه‌ای ممکن نشد — ' + errs.join(' | ')));
+            }
+            var dir = DIRS[i];
+            return P.Filesystem.writeFile({ path: name, data: b64, directory: dir, recursive: true })
+                .then(function () { return P.Filesystem.getUri({ path: name, directory: dir }); })
+                .then(function (r) {
+                    var uri = r && (r.uri || r.path);
+                    if (!uri) throw new Error('بدونِ uri');
+                    return uri;
+                })
+                .catch(function (e) {
+                    errs.push(dir + ': ' + ((e && (e.message || e.errorMessage)) || e));
+                    return tryDir(b64, i + 1);
+                });
+        }
+
         return blobToBase64(blob)
-            .then(function (b64) {
-                // CACHE: نیازی به اجازهٔ حافظه ندارد و خودکار پاک می‌شود
-                return P.Filesystem.writeFile({ path: name, data: b64, directory: 'CACHE' });
-            })
-            .then(function () {
-                return P.Filesystem.getUri({ path: name, directory: 'CACHE' });
-            })
-            .then(function (r) {
-                var uri = r && (r.uri || r.path);
-                if (!uri) throw new Error('نشانیِ فایل به‌دست نیامد');
+            .then(function (b64) { return tryDir(b64, 0); })
+            .then(function (uri) {
                 return P.Share.share({
                     title: String(title || 'گزارش'),
                     files: [uri]
