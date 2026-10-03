@@ -11226,9 +11226,12 @@ function __jouyaDiagEnv() {
             push('typeof Plugins.Filesystem', (C && C.Plugins) ? q(C.Plugins.Filesystem) : 'n/a');
             push('typeof Plugins.Share', (C && C.Plugins) ? q(C.Plugins.Share) : 'n/a');
         } catch (e2) { push('Capacitor info', 'error: ' + ((e2 && e2.message) || e2)); }
+        push('typeof Capacitor.registerPlugin', (window.Capacitor ? q(window.Capacitor.registerPlugin) : 'n/a'));
+        push('typeof Capacitor.nativePromise', (window.Capacitor ? q(window.Capacitor.nativePromise) : 'n/a'));
         push('typeof window.JouyaCapShare', q(window.JouyaCapShare));
         push('JouyaCapShare.isAndroidNative()', (window.JouyaCapShare && window.JouyaCapShare.isAndroidNative) ? String(window.JouyaCapShare.isAndroidNative()) : 'n/a');
-        push('JouyaCapShare.isReady()', (window.JouyaCapShare && window.JouyaCapShare.isReady) ? String(window.JouyaCapShare.isReady()) : 'n/a');
+        push('دسترسیِ افزونهٔ Share', (window.JouyaCapShare && window.JouyaCapShare.pluginAccess) ? window.JouyaCapShare.pluginAccess('Share') : 'n/a');
+        push('دسترسیِ افزونهٔ Filesystem', (window.JouyaCapShare && window.JouyaCapShare.pluginAccess) ? window.JouyaCapShare.pluginAccess('Filesystem') : 'n/a');
         push('window size', String(window.innerWidth) + 'x' + String(window.innerHeight));
     } catch (e) {
         lines.push('  (env error: ' + (e && e.message) + ')');
@@ -11438,15 +11441,28 @@ function __jouyaShareToWhatsApp(fullHtml, pdfName, blobReady) {
                     var msg = (e && (e.message || e.errorMessage)) || String(e);
                     if (/cancel|abort/i.test(msg)) { __jouyaDiagAdd('مسیر ۰-الف', 'کاربر لغو کرد'); return; }
                     __jouyaDiagAdd('مسیر ۰-الف خطا', msg);
-                    // فالبکِ امن: فایل ذخیره شود تا کاربر دستی بفرستد
+                    // فالبکِ ۱: فایل را ذخیره کن و همان را با پنلِ اشتراک بفرست (فقط فایل)
+                    var saved = false;
                     try {
-                        if (typeof __jouyaDownloadBlob === 'function' && __jouyaDownloadBlob(blob, shareName)) {
-                            __jouyaDiagAdd('فالبک', 'فایلِ PDF ذخیره شد');
-                            if (typeof showMessage === 'function') showMessage('ارسال به واتساپ',
-                                'پنلِ اشتراک باز نشد؛ فایلِ PDF ذخیره شد. از پوشهٔ دانلودها آن را در واتساپ بفرستید.');
-                            return;
-                        }
+                        if (typeof __jouyaDownloadBlob === 'function') { __jouyaDownloadBlob(blob, shareName); saved = true; __jouyaDiagAdd('فالبک', 'ذخیرهٔ فایل انجام شد'); }
                     } catch (e2) {}
+                    // فالبکِ ۲: واتساپ را با متن باز کن — همان مکانیزمی که در «ارسالِ
+                    // بیلانسِ شخص» کار می‌کند؛ دستِ‌کم واتساپ باز می‌شود و کاربر فایلِ
+                    // ذخیره‌شده را پیوست می‌کند.
+                    try {
+                        window.JouyaCapShare.sharePlainText(
+                            String(pdfName || 'گزارش') + ' — فایلِ PDF روی دستگاه ذخیره شد.',
+                            String(pdfName || 'گزارش')
+                        ).then(function () { __jouyaDiagAdd('فالبک ۲', 'پنلِ اشتراکِ متن باز شد'); })
+                         .catch(function () {
+                            try { window.open('https://wa.me/?text=' + encodeURIComponent(String(pdfName || 'گزارش')), '_blank'); } catch (e3) {}
+                         });
+                    } catch (e4) {}
+                    if (saved && typeof showMessage === 'function') {
+                        showMessage('ارسال به واتساپ',
+                            'پنلِ اشتراکِ فایل باز نشد؛ فایلِ PDF روی دستگاه ذخیره شد.\nآن را در واتساپ پیوست کنید.');
+                        return;
+                    }
                     __jouyaDiagReport('اشتراکِ اندروید ناموفق: ' + msg);
                 });
         };

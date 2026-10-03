@@ -1,21 +1,25 @@
 /**
  * capacitor-share.js — اشتراکِ فایلِ PDF در اپلیکیشنِ اندروید (فروشگاه جویا)
  * =============================================================================
- * لایهٔ کاملاً افزودنی و مستقل (مثلِ capacitor-back.js). هیچ فایلِ دیگری را تغییر نمی‌دهد.
+ * لایهٔ کاملاً افزودنی و مستقل. هیچ فایلِ دیگری را تغییر نمی‌دهد و فقط روی
+ * «اندرویدِ نیتیو (Capacitor)» فعال است؛ وب/آیفون/Tauri دست‌نخورده می‌مانند.
  *
- * مشکل: در نسخهٔ وب، دکمهٔ «ارسال به واتساپ» از navigator.share استفاده می‌کند و درست
- * کار می‌کند. ولی داخلِ WebViewِ Capacitor (اپلیکیشنِ اندروید)، navigator.share «وجود
- * دارد» اما اشتراکِ فایل را عملاً انجام نمی‌دهد؛ پس کار به فالبکِ «ذخیره در دانلودها»
- * می‌افتد و پنجرهٔ اشتراکِ واتساپ باز نمی‌شود.
+ * ── چرا لازم است؟ ───────────────────────────────────────────────────────────
+ * در WebViewِ اندروید:
+ *   • اشتراکِ «متن» کار می‌کند  → برای همین «ارسالِ بیلانسِ شخص» درست کار می‌کند.
+ *   • اشتراکِ «فایل» (navigator.share با files) پشتیبانی نمی‌شود → ارسالِ PDF شکست
+ *     می‌خورد و به فالبکِ «ذخیرهٔ فایل» می‌افتد که آن هم در WebView کار نمی‌کند.
+ * پس برای فرستادنِ PDF باید از افزونه‌های نیتیوِ Capacitor استفاده شود.
  *
- * راهِ حل (همان کاری که نسخهٔ Tauri با پنلِ اشتراکِ ویندوز می‌کند، ولی برای اندروید):
- *   ۱) فایلِ PDF را روی حافظهٔ موقتِ دستگاه می‌نویسیم (@capacitor/filesystem)
- *   ۲) نشانیِ فایل (file URI) را می‌گیریم
- *   ۳) پنلِ اشتراکِ نیتیوِ اندروید را با همان فایل باز می‌کنیم (@capacitor/share)
- *      → واتساپ و بقیهٔ برنامه‌ها در همان پنل ظاهر می‌شوند.
- *
- * فقط روی «اندرویدِ نیتیو» فعال است؛ روی وب/آیفون/Tauri هیچ کاری نمی‌کند و مسیرهای
- * قبلیِ برنامه دست‌نخورده باقی می‌مانند.
+ * ── نکتهٔ کلیدیِ دسترسی به افزونه‌ها ─────────────────────────────────────────
+ * این پروژه باندلر ندارد و بسته‌های JSِ افزونه‌ها import نمی‌شوند؛ بنابراین
+ * window.Capacitor.Plugins.Share ممکن است «تعریف‌نشده» باشد حتی وقتی افزونهٔ نیتیو
+ * درست نصب شده است. برای همین اینجا به یک راه تکیه نمی‌کنیم و سه راهِ دسترسی را
+ * به‌ترتیب امتحان می‌کنیم:
+ *   ۱) window.Capacitor.Plugins.<نام>        (راهِ استاندارد)
+ *   ۲) window.Capacitor.registerPlugin(<نام>) (ثبتِ دستی بدونِ نیاز به بستهٔ JS)
+ *   ۳) window.Capacitor.nativePromise(...)    (پلِ سطح‌پایینِ خودِ Capacitor)
+ * با این کار، تا وقتی افزونهٔ نیتیو در بیلد باشد، حتماً یکی از این سه راه جواب می‌دهد.
  * =============================================================================
  */
 (function () {
@@ -32,14 +36,43 @@
         return false;
     }
 
-    function plugins() {
-        try { return (window.Capacitor && window.Capacitor.Plugins) || null; } catch (e) { return null; }
+    // ── فراخوانیِ یک متدِ افزونه با سه راهبردِ پشتِ‌سرِهم ──────────────────────────
+    var _registered = {};
+    function callPlugin(plugin, method, options) {
+        var C = window.Capacitor;
+        if (!C) return Promise.reject(new Error('Capacitor موجود نیست'));
+        var errs = [];
+
+        // ۱) راهِ استاندارد
+        try {
+            var P = C.Plugins && C.Plugins[plugin];
+            if (P && typeof P[method] === 'function') return Promise.resolve(P[method](options));
+        } catch (e) { errs.push('Plugins: ' + ((e && e.message) || e)); }
+
+        // ۲) ثبتِ دستیِ افزونه (بدونِ نیاز به بستهٔ JS)
+        try {
+            if (typeof C.registerPlugin === 'function') {
+                if (!_registered[plugin]) _registered[plugin] = C.registerPlugin(plugin);
+                var P2 = _registered[plugin];
+                if (P2 && typeof P2[method] === 'function') return Promise.resolve(P2[method](options));
+            }
+        } catch (e) { errs.push('registerPlugin: ' + ((e && e.message) || e)); }
+
+        // ۳) پلِ سطح‌پایینِ Capacitor
+        try {
+            if (typeof C.nativePromise === 'function') return Promise.resolve(C.nativePromise(plugin, method, options || {}));
+        } catch (e) { errs.push('nativePromise: ' + ((e && e.message) || e)); }
+
+        return Promise.reject(new Error('افزونهٔ ' + plugin + '.' + method + ' در دسترس نیست' + (errs.length ? ' — ' + errs.join(' | ') : '')));
     }
 
-    // آیا افزونه‌های لازم در این بیلد هستند؟
-    function isReady() {
-        var P = plugins();
-        return !!(isAndroidNative() && P && P.Filesystem && P.Share);
+    // کدام راه‌ها در این دستگاه موجودند (فقط برای گزارشِ تشخیصی)
+    function pluginAccess(plugin) {
+        var C = window.Capacitor, out = [];
+        try { if (C && C.Plugins && C.Plugins[plugin]) out.push('Plugins'); } catch (e) {}
+        try { if (C && typeof C.registerPlugin === 'function') out.push('registerPlugin'); } catch (e) {}
+        try { if (C && typeof C.nativePromise === 'function') out.push('nativePromise'); } catch (e) {}
+        return out.length ? out.join('+') : 'none';
     }
 
     function blobToBase64(blob) {
@@ -49,7 +82,7 @@
                 fr.onload = function () {
                     var s = String(fr.result || '');
                     var i = s.indexOf(',');
-                    resolve(i >= 0 ? s.slice(i + 1) : s);   // حذفِ پیشوندِ data:...;base64,
+                    resolve(i >= 0 ? s.slice(i + 1) : s);
                 };
                 fr.onerror = function () { reject(new Error('خواندنِ فایل ناموفق بود')); };
                 fr.readAsDataURL(blob);
@@ -57,7 +90,6 @@
         });
     }
 
-    // نامِ فایلِ امن برای سیستمِ فایلِ اندروید
     function safeName(name) {
         var n = String(name || 'document.pdf').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-').trim();
         if (!n) n = 'document.pdf';
@@ -65,66 +97,23 @@
         return n;
     }
 
-    /**
-     * نوشتنِ PDF روی دستگاه و بازکردنِ پنلِ اشتراکِ اندروید.
-     * @returns Promise — موفق: پنل باز شد | رد: پیامِ خطا (تماس‌گیرنده فالبک می‌کند)
-     */
-    function sharePdfBlob(blob, fileName, title) {
-        var P = plugins();
-        if (!isAndroidNative()) return Promise.reject(new Error('اندرویدِ نیتیو نیست'));
-        if (!P || !P.Filesystem || !P.Share) return Promise.reject(new Error('افزونه‌های اشتراک در این بیلد نیستند'));
-        if (!blob) return Promise.reject(new Error('فایلِ PDF خالی است'));
-
-        var name = safeName(fileName);
-        // چند پوشه را به ترتیب امتحان می‌کنیم: اگر FileProvider یکی را پوشش ندهد،
-        // بعدی امتحان می‌شود. CACHE اول است چون به هیچ اجازه‌ای نیاز ندارد.
-        var DIRS = ['CACHE', 'DOCUMENTS', 'EXTERNAL', 'DATA'];
-        var errs = [];
-
-        function tryDir(b64, i) {
-            if (i >= DIRS.length) {
-                return Promise.reject(new Error('نوشتنِ فایل در هیچ پوشه‌ای ممکن نشد — ' + errs.join(' | ')));
-            }
-            var dir = DIRS[i];
-            return P.Filesystem.writeFile({ path: name, data: b64, directory: dir, recursive: true })
-                .then(function () { return P.Filesystem.getUri({ path: name, directory: dir }); })
-                .then(function (r) {
-                    var uri = r && (r.uri || r.path);
-                    if (!uri) throw new Error('بدونِ uri');
-                    return uri;
-                })
-                .catch(function (e) {
-                    errs.push(dir + ': ' + ((e && (e.message || e.errorMessage)) || e));
-                    return tryDir(b64, i + 1);
-                });
-        }
-
-        return blobToBase64(blob)
-            .then(function (b64) { return tryDir(b64, 0); })
-            .then(function (uri) {
-                return P.Share.share({
-                    title: String(title || 'گزارش'),
-                    files: [uri]
-                });
-            });
-    }
-
-    // ── ذخیرهٔ یک فایلِ متنی روی دستگاه (برای گزارشِ تشخیصی) ─────────────────────
-    //  در WebViewِ اندروید، دانلودِ مرورگری (<a download>) هیچ فایلی نمی‌سازد و بی‌صدا
-    //  شکست می‌خورد؛ پس فایل باید با Filesystem نوشته شود. پوشه‌های «قابلِ دیدن برای
-    //  کاربر» اول امتحان می‌شوند تا بتواند فایل را پیدا و ارسال کند.
-    function saveText(fileName, text) {
-        var P = plugins();
-        if (!P || !P.Filesystem) return Promise.reject(new Error('افزونهٔ Filesystem در دسترس نیست'));
-        var name = String(fileName || 'log.txt').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-');
-        var DIRS = ['DOCUMENTS', 'EXTERNAL', 'CACHE', 'DATA'];
+    // نوشتنِ فایل روی دستگاه و گرفتنِ نشانیِ آن (چند پوشه به‌ترتیب امتحان می‌شود)
+    function writeAndGetUri(name, dataBase64, isText) {
+        var DIRS = isText ? ['DOCUMENTS', 'EXTERNAL', 'CACHE', 'DATA']
+                          : ['CACHE', 'DOCUMENTS', 'EXTERNAL', 'DATA'];
         var errs = [];
         function tryDir(i) {
             if (i >= DIRS.length) return Promise.reject(new Error('نوشتنِ فایل ممکن نشد — ' + errs.join(' | ')));
             var dir = DIRS[i];
-            return P.Filesystem.writeFile({ path: name, data: String(text || ''), directory: dir, encoding: 'utf8', recursive: true })
-                .then(function () { return P.Filesystem.getUri({ path: name, directory: dir }); })
-                .then(function (r) { return { uri: (r && (r.uri || r.path)) || '', dir: dir, name: name }; })
+            var opts = { path: name, data: dataBase64, directory: dir, recursive: true };
+            if (isText) opts.encoding = 'utf8';
+            return callPlugin('Filesystem', 'writeFile', opts)
+                .then(function () { return callPlugin('Filesystem', 'getUri', { path: name, directory: dir }); })
+                .then(function (r) {
+                    var uri = r && (r.uri || r.path);
+                    if (!uri) throw new Error('بدونِ uri');
+                    return { uri: uri, dir: dir, name: name };
+                })
                 .catch(function (e) {
                     errs.push(dir + ': ' + ((e && (e.message || e.errorMessage)) || e));
                     return tryDir(i + 1);
@@ -133,23 +122,52 @@
         return tryDir(0);
     }
 
-    // نوشتنِ فایلِ متنی و بازکردنِ پنلِ اشتراک (برای فرستادنِ گزارش به پشتیبانی)
+    /** نوشتنِ PDF روی دستگاه و بازکردنِ پنلِ اشتراکِ اندروید (لیستِ برنامه‌ها → واتساپ) */
+    function sharePdfBlob(blob, fileName, title) {
+        if (!isAndroidNative()) return Promise.reject(new Error('اندرویدِ نیتیو نیست'));
+        if (!blob) return Promise.reject(new Error('فایلِ PDF خالی است'));
+        var name = safeName(fileName);
+        return blobToBase64(blob)
+            .then(function (b64) { return writeAndGetUri(name, b64, false); })
+            .then(function (res) {
+                return callPlugin('Share', 'share', {
+                    title: String(title || 'گزارش'),
+                    files: [res.uri]
+                });
+            });
+    }
+
+    /** ذخیرهٔ یک فایلِ متنی (گزارشِ تشخیصی) */
+    function saveText(fileName, text) {
+        var name = String(fileName || 'log.txt').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-');
+        return writeAndGetUri(name, String(text || ''), true);
+    }
+
+    /** ذخیره + اشتراکِ فایلِ متنی */
     function shareText(fileName, text, title) {
-        var P = plugins();
-        if (!P || !P.Share) return Promise.reject(new Error('افزونهٔ Share در دسترس نیست'));
         return saveText(fileName, text).then(function (res) {
-            if (!res || !res.uri) throw new Error('نشانیِ فایل به‌دست نیامد');
-            return P.Share.share({ title: String(title || 'گزارشِ تشخیصی'), files: [res.uri] });
+            return callPlugin('Share', 'share', { title: String(title || 'گزارش'), files: [res.uri] });
         });
+    }
+
+    /** اشتراکِ «متن» با پنلِ نیتیو (فالبک وقتی اشتراکِ فایل ممکن نشد) */
+    function sharePlainText(text, title) {
+        return callPlugin('Share', 'share', { title: String(title || 'حسابدار'), text: String(text || '') });
     }
 
     window.JouyaCapShare = {
         isAndroidNative: isAndroidNative,
-        isReady: isReady,
+        // isReady عمداً فقط «اندرویدِ نیتیو بودن» را می‌سنجد: چون دسترسی به افزونه از سه
+        // راه امتحان می‌شود، نبودِ Plugins.X به‌تنهایی دلیلِ ناتوانی نیست. اگر هیچ راهی
+        // جواب ندهد، خودِ فراخوان rejectمی‌شود و فالبکِ برنامه اجرا می‌گردد.
+        isReady: isAndroidNative,
+        hasFilesystem: function () { return isAndroidNative(); },
+        hasShare: function () { return isAndroidNative(); },
+        pluginAccess: pluginAccess,
+        callPlugin: callPlugin,
         sharePdfBlob: sharePdfBlob,
-        hasFilesystem: function () { var P = plugins(); return !!(P && P.Filesystem); },
-        hasShare: function () { var P = plugins(); return !!(P && P.Share); },
         saveText: saveText,
-        shareText: shareText
+        shareText: shareText,
+        sharePlainText: sharePlainText
     };
 })();
