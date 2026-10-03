@@ -11236,6 +11236,85 @@ function __jouyaDiagEnv() {
     return lines.join('\n');
 }
 // ساختِ متنِ گزارش + ذخیره در پوشهٔ دانلود + پیام به کاربر
+// ══ نمایشِ گزارشِ تشخیصی روی صفحه (ویژهٔ اپلیکیشنِ اندروید) ═══════════════════════
+//  چرا لازم است؟ در WebViewِ اندروید، دانلودِ مرورگری (<a download>) هیچ فایلی نمی‌سازد
+//  و بی‌صدا شکست می‌خورد؛ یعنی کاربر پیامِ «ذخیره شد» می‌دید ولی هیچ فایلی وجود نداشت.
+//  اینجا متنِ کاملِ گزارش روی صفحه و «قابلِ کپی» نشان داده می‌شود — این روش بدونِ هیچ
+//  افزونه‌ای هم کار می‌کند. اگر افزونه‌ها باشند، دکمه‌های «ذخیرهٔ فایل» و «ارسالِ گزارش»
+//  هم فعال می‌شوند.
+function __jouyaShowDiagOnScreen(txt, fname, reason) {
+    try {
+        var old = document.getElementById('jouya-diag-overlay');
+        if (old) old.remove();
+        var ov = document.createElement('div');
+        ov.id = 'jouya-diag-overlay';
+        ov.setAttribute('dir', 'rtl');
+        ov.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(15,23,42,.97);' +
+            'display:flex;align-items:center;justify-content:center;padding:14px;' +
+            'font-family:Vazirmatn,inherit;color:#e2e8f0;';
+        var cap = (window.JouyaCapShare || null);
+        var canSave  = !!(cap && cap.hasFilesystem && cap.hasFilesystem());
+        var canShare = !!(cap && cap.hasShare && cap.hasShare());
+        ov.innerHTML =
+            '<div style="width:100%;max-width:560px;max-height:92vh;display:flex;flex-direction:column;' +
+                'background:#1e293b;border:1px solid #334155;border-radius:16px;padding:16px;">' +
+            '<div style="font-weight:800;font-size:16px;color:#fff;margin-bottom:6px;">گزارشِ تشخیصیِ ارسال</div>' +
+            '<div style="font-size:12.5px;color:#94a3b8;line-height:1.9;margin-bottom:10px;">' +
+                'ارسالِ خودکار انجام نشد. علت: ' + String(reason || '?') +
+                '<br>متنِ زیر را کپی کنید و برای پشتیبانی بفرستید.</div>' +
+            '<textarea id="jouya-diag-text" readonly style="flex:1 1 auto;min-height:38vh;width:100%;box-sizing:border-box;' +
+                'background:#0f172a;color:#cbd5e1;border:1px solid #334155;border-radius:10px;padding:10px;' +
+                'font-family:monospace;font-size:11px;line-height:1.7;direction:ltr;text-align:left;resize:none;"></textarea>' +
+            '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;">' +
+                '<button id="jouya-diag-copy" style="flex:1 1 46%;background:#2dd4bf;border:none;color:#0f172a;' +
+                    'border-radius:10px;padding:11px;font-family:inherit;font-weight:800;font-size:13px;cursor:pointer;">کپیِ گزارش</button>' +
+                (canShare ? '<button id="jouya-diag-share" style="flex:1 1 46%;background:#1e3a5f;border:none;color:#fff;' +
+                    'border-radius:10px;padding:11px;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;">ارسالِ گزارش</button>' : '') +
+                (canSave ? '<button id="jouya-diag-save" style="flex:1 1 46%;background:transparent;border:1px solid #334155;' +
+                    'color:#cbd5e1;border-radius:10px;padding:11px;font-family:inherit;font-size:13px;cursor:pointer;">ذخیرهٔ فایل</button>' : '') +
+                '<button id="jouya-diag-close" style="flex:1 1 46%;background:transparent;border:1px solid #334155;' +
+                    'color:#cbd5e1;border-radius:10px;padding:11px;font-family:inherit;font-size:13px;cursor:pointer;">بستن</button>' +
+            '</div>' +
+            '<div id="jouya-diag-note" style="font-size:12px;color:#64748b;margin-top:8px;min-height:18px;"></div>' +
+            '</div>';
+        document.body.appendChild(ov);
+        var ta = document.getElementById('jouya-diag-text');
+        if (ta) ta.value = String(txt || '');
+        var note = function (m) { var n = document.getElementById('jouya-diag-note'); if (n) n.textContent = m; };
+
+        var cp = document.getElementById('jouya-diag-copy');
+        if (cp) cp.onclick = function () {
+            var ok = false;
+            try { if (ta) { ta.removeAttribute('readonly'); ta.select(); ta.setSelectionRange(0, 999999); ok = document.execCommand('copy'); ta.setAttribute('readonly', 'readonly'); } } catch (e) {}
+            try { if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(String(txt || '')); ok = true; } } catch (e) {}
+            note(ok ? 'گزارش کپی شد — در واتساپ بچسبانید و بفرستید.' : 'کپی نشد؛ متن را دستی انتخاب و کپی کنید.');
+        };
+        var sh = document.getElementById('jouya-diag-share');
+        if (sh) sh.onclick = function () {
+            note('در حالِ بازکردنِ پنلِ اشتراک…');
+            try {
+                window.JouyaCapShare.shareText(fname, txt, 'گزارشِ تشخیصی')
+                    .then(function () { note('پنلِ اشتراک باز شد.'); })
+                    .catch(function (e) { note('ارسال نشد: ' + ((e && e.message) || e)); });
+            } catch (e) { note('ارسال نشد: ' + ((e && e.message) || e)); }
+        };
+        var sv = document.getElementById('jouya-diag-save');
+        if (sv) sv.onclick = function () {
+            note('در حالِ ذخیره…');
+            try {
+                window.JouyaCapShare.saveText(fname, txt)
+                    .then(function (r) { note('ذخیره شد: ' + (r && r.dir) + ' → ' + (r && r.name)); })
+                    .catch(function (e) { note('ذخیره نشد: ' + ((e && e.message) || e)); });
+            } catch (e) { note('ذخیره نشد: ' + ((e && e.message) || e)); }
+        };
+        var cl = document.getElementById('jouya-diag-close');
+        if (cl) cl.onclick = function () { try { ov.remove(); } catch (e) {} };
+    } catch (e) {
+        try { console.error('[jouya-diag] overlay error:', e && e.message); } catch (_) {}
+    }
+}
+if (typeof window !== 'undefined') window.__jouyaShowDiagOnScreen = __jouyaShowDiagOnScreen;
+
 function __jouyaDiagReport(reason) {
     var txt = '';
     try {
@@ -11274,7 +11353,17 @@ function __jouyaDiagReport(reason) {
         }
     } catch (e) {}
 
-    // ۲) وگرنه: دانلودِ مرورگری
+    // ۲) اپلیکیشنِ اندروید: دانلودِ مرورگری در WebView هیچ فایلی نمی‌سازد و بی‌صدا شکست
+    //    می‌خورد (کاربر پیامِ «ذخیره شد» می‌دید ولی فایلی وجود نداشت). پس به‌جای آن، متنِ
+    //    گزارش روی صفحه و قابلِ کپی نشان داده می‌شود — این روش همیشه کار می‌کند.
+    try {
+        if (window.JouyaCapShare && window.JouyaCapShare.isAndroidNative && window.JouyaCapShare.isAndroidNative()) {
+            __jouyaShowDiagOnScreen(txt, fname, reason);
+            return txt;
+        }
+    } catch (e) {}
+
+    // ۳) وگرنه (وب/دسکتاپ): دانلودِ مرورگری
     try {
         var blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
         var url = URL.createObjectURL(blob);
@@ -11721,6 +11810,32 @@ function __jouyaShareFileName(name) {
 
 // دانلودِ فایل با نامِ فارسی (فالبک وقتی اشتراکِ نیتیوِ فایل در دسترس نیست)
 function __jouyaDownloadBlob(blob, filename) {
+    // اپلیکیشنِ اندروید: <a download> در WebView هیچ فایلی نمی‌سازد و بی‌صدا شکست می‌خورد.
+    // پس فایل با Filesystem روی دستگاه نوشته می‌شود و محلش به کاربر گفته می‌شود.
+    try {
+        if (window.JouyaCapShare && window.JouyaCapShare.isAndroidNative && window.JouyaCapShare.isAndroidNative()
+            && window.JouyaCapShare.hasFilesystem && window.JouyaCapShare.hasFilesystem()) {
+            var fr = new FileReader();
+            fr.onload = function () {
+                try {
+                    var s = String(fr.result || ''); var i = s.indexOf(',');
+                    var b64 = i >= 0 ? s.slice(i + 1) : s;
+                    var P = window.Capacitor.Plugins;
+                    P.Filesystem.writeFile({ path: String(filename), data: b64, directory: 'DOCUMENTS', recursive: true })
+                        .then(function () {
+                            if (typeof showMessage === 'function') showMessage('ذخیرهٔ فایل',
+                                'فایل ذخیره شد:\nپوشهٔ Documents → ' + String(filename));
+                        })
+                        .catch(function (e) {
+                            if (typeof showMessage === 'function') showMessage('ذخیرهٔ فایل',
+                                'ذخیرهٔ فایل ممکن نشد: ' + ((e && (e.message || e.errorMessage)) || e));
+                        });
+                } catch (e) {}
+            };
+            fr.readAsDataURL(blob);
+            return true;
+        }
+    } catch (e) {}
     try {
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');

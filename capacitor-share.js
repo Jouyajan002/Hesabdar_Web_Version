@@ -109,9 +109,47 @@
             });
     }
 
+    // ── ذخیرهٔ یک فایلِ متنی روی دستگاه (برای گزارشِ تشخیصی) ─────────────────────
+    //  در WebViewِ اندروید، دانلودِ مرورگری (<a download>) هیچ فایلی نمی‌سازد و بی‌صدا
+    //  شکست می‌خورد؛ پس فایل باید با Filesystem نوشته شود. پوشه‌های «قابلِ دیدن برای
+    //  کاربر» اول امتحان می‌شوند تا بتواند فایل را پیدا و ارسال کند.
+    function saveText(fileName, text) {
+        var P = plugins();
+        if (!P || !P.Filesystem) return Promise.reject(new Error('افزونهٔ Filesystem در دسترس نیست'));
+        var name = String(fileName || 'log.txt').replace(/[\\/:*?"<>|\u0000-\u001f]/g, '-');
+        var DIRS = ['DOCUMENTS', 'EXTERNAL', 'CACHE', 'DATA'];
+        var errs = [];
+        function tryDir(i) {
+            if (i >= DIRS.length) return Promise.reject(new Error('نوشتنِ فایل ممکن نشد — ' + errs.join(' | ')));
+            var dir = DIRS[i];
+            return P.Filesystem.writeFile({ path: name, data: String(text || ''), directory: dir, encoding: 'utf8', recursive: true })
+                .then(function () { return P.Filesystem.getUri({ path: name, directory: dir }); })
+                .then(function (r) { return { uri: (r && (r.uri || r.path)) || '', dir: dir, name: name }; })
+                .catch(function (e) {
+                    errs.push(dir + ': ' + ((e && (e.message || e.errorMessage)) || e));
+                    return tryDir(i + 1);
+                });
+        }
+        return tryDir(0);
+    }
+
+    // نوشتنِ فایلِ متنی و بازکردنِ پنلِ اشتراک (برای فرستادنِ گزارش به پشتیبانی)
+    function shareText(fileName, text, title) {
+        var P = plugins();
+        if (!P || !P.Share) return Promise.reject(new Error('افزونهٔ Share در دسترس نیست'));
+        return saveText(fileName, text).then(function (res) {
+            if (!res || !res.uri) throw new Error('نشانیِ فایل به‌دست نیامد');
+            return P.Share.share({ title: String(title || 'گزارشِ تشخیصی'), files: [res.uri] });
+        });
+    }
+
     window.JouyaCapShare = {
         isAndroidNative: isAndroidNative,
         isReady: isReady,
-        sharePdfBlob: sharePdfBlob
+        sharePdfBlob: sharePdfBlob,
+        hasFilesystem: function () { var P = plugins(); return !!(P && P.Filesystem); },
+        hasShare: function () { var P = plugins(); return !!(P && P.Share); },
+        saveText: saveText,
+        shareText: shareText
     };
 })();
