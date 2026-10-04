@@ -86,8 +86,8 @@ jobs:
             'tauri-bridge.js', 'database.js', 'script.js', 'persian-date-utils.js',
             'auth-system.js', 'drive-backup.js', 'instant-update-fix.js', 'delivery-list.js',
             'currency-system.js', 'sync-config.js', 'sync-layer.js', 'auth-cloud.js',
-            'device-guard.js', 'capacitor-back.js',
-            'demo-mode.js', 'mobile-fit.js', 'jouya-selftest.js', 'pwa-register.js',
+            'device-guard.js', 'capacitor-back.js', 'capacitor-share.js',
+            'demo-mode.js', 'mobile-fit.js', 'jouya-selftest.js', 'jouya-ux-fixes.js', 'pwa-register.js',
             'manifest.webmanifest', 'version.json'
           )
           $WebDirs = @('assets', 'build')
@@ -117,6 +117,43 @@ jobs:
           $mb = [math]::Round(((Get-ChildItem -Recurse -File $Dist | Measure-Object Length -Sum).Sum / 1MB), 2)
           Write-Host "کپی شد: $copied فایلِ ریشه + پوشه‌های $($WebDirs -join ', ')  →  $mb مگابایت"
           if ($missing.Count -gt 0) { Write-Host "موجود نبود (رد شد): $($missing -join ', ')" }
+
+      # ══════════════════════════════════════════════════════════════════════
+      #  (مورد j) محافظت از سورس — درهم‌ریزیِ JSِ برنامه داخلِ dist-web پیش از embed
+      #  نام توابعِ سراسری حفظ می‌شود؛ رشته‌ها رمز و توضیحات حذف می‌شوند. اگر خروجیِ
+      #  فایلی نامعتبر شد، نسخهٔ اصلیِ همان فایل می‌ماند. غیرفعال‌سازی: JOUYA_OBFUSCATE=0
+      # ══════════════════════════════════════════════════════════════════════
+      # (مورد h) هنگامِ بیلد با تگ، نسخه را از تگ در version.json و tauri.conf.json یکی می‌کنیم
+      # تا «نسخهٔ نصب‌شده» در بررسیِ بروزرسانی درست باشد و فقط لازم باشد یک «تگ» بسازید.
+      - name: تزریقِ نسخه از تگ
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $v = "${{ github.ref_name }}" -replace '^v',''
+          Write-Host "نسخهٔ بیلد: $v"
+          # version.json داخلِ dist-web (فالبکِ نمایشِ نسخه)
+          "{ ""version"": ""$v"", ""repo"": """" }" | Set-Content -Encoding UTF8 (Join-Path 'src-tauri' 'dist-web/version.json')
+          # فقط «مقدارِ version» در tauri.conf.json عوض می‌شود (بقیهٔ فایل دست‌نخورده)
+          $p = 'src-tauri/tauri.conf.json'
+          (Get-Content $p -Raw) -replace '("version"\s*:\s*")[^"]*(")', ('${1}' + $v + '${2}') | Set-Content -Encoding UTF8 $p
+          Write-Host "— خطِ version در tauri.conf.json —"
+          Select-String -Path $p -Pattern '"version"' | Select-Object -First 1
+
+      - name: راه‌اندازیِ Node (برای محافظتِ سورس)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: محافظت از سورس (obfuscate)
+        shell: pwsh
+        run: |
+          npm install --no-audit --no-fund javascript-obfuscator@4
+          node tools/obfuscate.js src-tauri/dist-web
+
+      # (لایهٔ ۲) رمزنگاریِ فایل‌های JS داخلِ dist-web پیش از embed. خاموش‌کردن: JOUYA_ENCRYPT=0
+      - name: رمزنگاریِ فایل‌ها (پکِر لایهٔ ۲)
+        shell: pwsh
+        run: node tools/pack-encrypt.js src-tauri/dist-web
 
       # بیلد از داخلِ src-tauri اجرا می‌شود تا tauri-cli فایلِ Cargo.toml و tauri.conf.json
       # را درست پیدا کند (رفعِ خطای «failed to watch ...Cargo.toml» وقتی از ریشه اجرا شود).

@@ -1,0 +1,81 @@
+name: انتشارِ وبِ رمزنگاری‌شده (GitHub Pages)
+
+# نسخهٔ وب (PWA) را با همان دو لایهٔ محافظت (obfuscate + رمزنگاری) می‌سازد و روی
+# GitHub Pages منتشر می‌کند. برخلافِ سرو کردنِ مستقیمِ سورس از مخزن، این‌جا فایل‌های JS
+# پیش از انتشار درهم‌ریخته و رمز می‌شوند، پس نسخهٔ وب هم دیگر سورسِ خام نشان نمی‌دهد.
+#
+# ⚠️ یک‌بار لازم است: در تنظیماتِ مخزن → Settings → Pages → «Build and deployment» →
+#    Source را روی «GitHub Actions» بگذارید (نه «Deploy from a branch»). بعد از آن،
+#    هر push به main این ورک‌فلو نسخهٔ رمزشده را منتشر می‌کند.
+#
+# خاموش‌کردنِ فوریِ محافظت (برای عیب‌یابی): مقادیرِ env زیر را به "0" تغییر دهید.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+env:
+  JOUYA_OBFUSCATE: "1"
+  JOUYA_ENCRYPT: "1"
+
+jobs:
+  build-deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: دریافت کد
+        uses: actions/checkout@v4
+
+      - name: راه‌اندازیِ Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: آماده‌سازیِ پوشهٔ انتشار (dist)
+        run: |
+          set -e
+          rm -rf dist && mkdir -p dist
+          # فایل‌های ریشه‌ایِ موردنیازِ وب
+          for f in index.html *.css *.js manifest.webmanifest version.json .nojekyll; do
+            [ -e "$f" ] && cp "$f" dist/ || true
+          done
+          # پوشه‌ها
+          for d in assets build mobile-icons; do
+            [ -d "$d" ] && cp -r "$d" dist/ || true
+          done
+          # .nojekyll تا GitHub Pages فایل‌های با _ ابتدایی (__jouya_dec.js) را سرو کند
+          touch dist/.nojekyll
+          echo "فایل‌های ریشهٔ dist:"; ls dist | head -50
+
+      - name: نصبِ ابزارِ محافظت
+        run: npm install --no-audit --no-fund javascript-obfuscator@4
+
+      - name: محافظت از سورس (obfuscate)
+        run: node tools/obfuscate.js dist
+
+      - name: رمزنگاریِ فایل‌ها (پکِر لایهٔ ۲)
+        run: node tools/pack-encrypt.js dist
+
+      - name: پیکربندیِ Pages
+        uses: actions/configure-pages@v5
+
+      - name: بارگذاریِ آرتیفکتِ Pages
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: انتشار در Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

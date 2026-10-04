@@ -79,7 +79,7 @@ jobs:
             auth-system.js drive-backup.js instant-update-fix.js delivery-list.js \
             currency-system.js sync-config.js sync-layer.js auth-cloud.js \
             device-guard.js capacitor-back.js capacitor-share.js \
-            demo-mode.js mobile-fit.js jouya-selftest.js \
+            demo-mode.js mobile-fit.js jouya-selftest.js jouya-ux-fixes.js \
             manifest.webmanifest version.json"
           for f in $WEB_FILES; do
             if [ -f "$f" ]; then cp "$f" "www/$f"; fi
@@ -104,7 +104,7 @@ jobs:
         run: |
           node -e '
             const fs=require("fs"), path=require("path");
-            const EXCEPT=new Set(["pwa-register.js","service-worker.js"]);
+            const EXCEPT=new Set(["pwa-register.js","service-worker.js","__jouya_dec.js"]);
             const html=fs.readFileSync("www/index.html","utf8");
             const refs=new Set();
             const add=(re)=>{let m;while((m=re.exec(html)))refs.add(m[1]);};
@@ -137,7 +137,8 @@ jobs:
           JSON
           npm install --no-audit --no-fund \
             @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor/browser@6 @capacitor/app@6 \
-            @capacitor/share@6 @capacitor/filesystem@6
+            @capacitor/share@6 @capacitor/filesystem@6 \
+            javascript-obfuscator@4
 
       - name: پیکربندیِ Capacitor
         run: |
@@ -154,6 +155,76 @@ jobs:
 
       - name: افزودنِ پلتفرمِ اندروید
         run: npx cap add android
+
+      # ══════════════════════════════════════════════════════════════════════
+      #  (مورد f) ماندگاریِ دادهٔ کاربر — پشتیبان‌گیریِ خودکارِ اندروید
+      #  ---------------------------------------------------------------------
+      #  هدف: داده‌های کاربر (localStorageِ WebView) در این حالت‌ها از بین نرود:
+      #    • «بروزرسانیِ» برنامه (نصبِ APKِ تازه روی نسخهٔ قبلی): چون appId ثابت
+      #      (com.hesabdar.app) و versionCode صعودی است، داده به‌طورِ خودکار می‌ماند.
+      #    • «نصبِ مجدد پس از حذف»: با فعال‌کردنِ Android Auto Backup، اندروید داده را
+      #      در فضای کاربر نگه می‌دارد و هنگامِ نصبِ دوباره برمی‌گرداند (مثلِ ماندگاریِ
+      #      فایلِ نسخهٔ Tauri). این کار با allowBackup=true و قواعدِ بکاپِ زیر انجام
+      #      می‌شود؛ هیچ داده‌ای از بکاپ کنار گذاشته نمی‌شود تا همه‌چیز بازگردد.
+      #  توجه: بازگردانیِ پس از حذف به وجودِ حسابِ گوگل/transportِ بکاپ روی گوشی وابسته
+      #  است؛ برای تضمینِ کامل، «پشتیبانِ دستی/گوگل‌درایو» داخلِ برنامه هم در دسترس است.
+      # ══════════════════════════════════════════════════════════════════════
+      - name: فعال‌سازیِ ماندگاریِ داده (Auto Backup)
+        run: |
+          set -e
+          MF="android/app/src/main/AndroidManifest.xml"
+          XMLDIR="android/app/src/main/res/xml"
+          if [ ! -f "$MF" ]; then
+            echo "::error::AndroidManifest.xml پیدا نشد ($MF)"; exit 1
+          fi
+          mkdir -p "$XMLDIR"
+
+          # قواعدِ بکاپ برای اندروید ۱۱ و پایین‌تر (fullBackupContent)
+          cat > "$XMLDIR/jouya_backup_rules.xml" <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <!-- همهٔ دادهٔ برنامه بکاپ می‌شود: WebView localStorage در sharedpref/database/file نگه‌داری می‌شود -->
+          <full-backup-content>
+              <include domain="sharedpref" path="." />
+              <include domain="database" path="." />
+              <include domain="file" path="." />
+          </full-backup-content>
+          XML
+
+          # قواعدِ استخراجِ داده برای اندروید ۱۲+ (dataExtractionRules)
+          cat > "$XMLDIR/jouya_data_extraction_rules.xml" <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <data-extraction-rules>
+              <cloud-backup>
+                  <include domain="sharedpref" path="." />
+                  <include domain="database" path="." />
+                  <include domain="file" path="." />
+              </cloud-backup>
+              <device-transfer>
+                  <include domain="sharedpref" path="." />
+                  <include domain="database" path="." />
+                  <include domain="file" path="." />
+              </device-transfer>
+          </data-extraction-rules>
+          XML
+
+          # حذفِ فاصله‌های ابتداییِ ناشی از YAML/heredoc — اعلانِ <?xml باید کاملاً اولِ خط باشد
+          sed -i 's/^[[:space:]]*//' "$XMLDIR/jouya_backup_rules.xml" "$XMLDIR/jouya_data_extraction_rules.xml"
+          echo "— jouya_backup_rules.xml —"; head -1 "$XMLDIR/jouya_backup_rules.xml"
+
+          # اطمینان از allowBackup=true روی <application>
+          if grep -q 'android:allowBackup' "$MF"; then
+            sed -i 's/android:allowBackup="[^"]*"/android:allowBackup="true"/' "$MF"
+          else
+            sed -i 's/<application /<application android:allowBackup="true" /' "$MF"
+          fi
+          # ارجاع به قواعدِ بکاپ (اگر از قبل نبود، اضافه می‌شود)
+          grep -q 'android:fullBackupContent' "$MF" || \
+            sed -i 's/<application /<application android:fullBackupContent="@xml\/jouya_backup_rules" /' "$MF"
+          grep -q 'android:dataExtractionRules' "$MF" || \
+            sed -i 's/<application /<application android:dataExtractionRules="@xml\/jouya_data_extraction_rules" /' "$MF"
+
+          echo "— <application> پس از تنظیم —"
+          grep -n '<application' "$MF" || true
 
       # ══════════════════════════════════════════════════════════════════════
       #  تولیدِ آیکنِ برنامه (آیکنِ روی صفحهٔ اصلیِ گوشی)
@@ -183,6 +254,29 @@ jobs:
           else
             echo "::warning::پوشهٔ mobile-icons/capacitor-assets پیدا نشد؛ آیکنِ پیش‌فرض باقی می‌ماند."
           fi
+
+      # ══════════════════════════════════════════════════════════════════════
+      #  (مورد j) محافظت از سورس — درهم‌ریزیِ فایل‌های JSِ برنامه در www پیش از sync
+      #  ---------------------------------------------------------------------
+      #  نام توابعِ سراسری حفظ می‌شود (برای onclickها)، رشته‌ها رمز و توضیحات حذف
+      #  می‌شوند. اگر خروجیِ فایلی نامعتبر شد، نسخهٔ اصلیِ همان فایل می‌ماند (بیلد نمی‌شکند).
+      #  برای غیرفعال‌سازیِ موقت: متغیرِ محیطیِ JOUYA_OBFUSCATE=0 را ست کنید.
+      # ══════════════════════════════════════════════════════════════════════
+      # (مورد h) نسخهٔ داخلِ www/version.json را با همین نسخهٔ بیلد یکی می‌کنیم تا «نسخهٔ
+      # نصب‌شده» در بررسیِ بروزرسانی درست نمایش داده شود. (در اندروید نسخهٔ واقعی از APK هم
+      # خوانده می‌شود، ولی این فایل برای سازگاری به‌روز می‌ماند.)
+      - name: تزریقِ نسخه در version.json
+        run: |
+          printf '{ "version": "%s", "repo": "" }\n' "${{ steps.ver.outputs.vname }}" > www/version.json
+          cat www/version.json
+
+      - name: محافظت از سورس (obfuscate)
+        run: node tools/obfuscate.js www
+
+      # (لایهٔ ۲) رمزنگاریِ فایل‌های JS — بعد از obfuscate، قبل از sync. خروجی روی دیسک رمز می‌شود.
+      # خاموش‌کردنِ فوری: JOUYA_ENCRYPT=0
+      - name: رمزنگاریِ فایل‌ها (پکِر لایهٔ ۲)
+        run: node tools/pack-encrypt.js www
 
       - name: همگام‌سازیِ فایل‌های وب
         run: npx cap sync android
