@@ -159,6 +159,9 @@ jobs:
       # را درست پیدا کند (رفعِ خطای «failed to watch ...Cargo.toml» وقتی از ریشه اجرا شود).
       - name: ساخت نصب‌کننده
         working-directory: src-tauri
+        env:
+          # Client Secret ورودِ گوگل: از GitHub Secrets خوانده و فقط داخلِ باینریِ Rust قرار می‌گیرد
+          HESABDAR_GOOGLE_CLIENT_SECRET: ${{ secrets.HESABDAR_GOOGLE_CLIENT_SECRET }}
         run: cargo tauri build
 
       - name: فهرستِ خروجی‌ها

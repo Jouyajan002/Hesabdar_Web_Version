@@ -165,6 +165,8 @@ jobs:
           RUSTUP_TOOLCHAIN: nightly
           CARGO_UNSTABLE_BUILD_STD: "std,panic_abort"
           CARGO_BUILD_TARGET: ${{ env.WIN7_TARGET }}
+          # Client Secret ورودِ گوگل: از GitHub Secrets خوانده و فقط داخلِ باینریِ Rust قرار می‌گیرد
+          HESABDAR_GOOGLE_CLIENT_SECRET: ${{ secrets.HESABDAR_GOOGLE_CLIENT_SECRET }}
         run: cargo tauri build
 
       - name: فهرستِ خروجی‌ها
