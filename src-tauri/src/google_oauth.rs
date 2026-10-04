@@ -111,7 +111,7 @@ impl AuthResult {
 // ── ابزارهای کوچک: تصادفی، Base64url، PKCE ─────────────────────────────────────
 fn random_bytes<const N: usize>() -> Result<[u8; N], String> {
     let mut b = [0u8; N];
-    getrandom::getrandom(&mut b).map_err(|e| format!("random: {}", e))?;
+    getrandom::fill(&mut b).map_err(|e| format!("random: {}", e))?;
     Ok(b)
 }
 
