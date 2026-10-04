@@ -160,7 +160,12 @@
 
         // --- نرخ‌ها ---
         getRates: function () { return _read(LS_RATES, []); },
-        saveRates: function (list) { _write(LS_RATES, list || []); },
+        saveRates: function (list) {
+            _write(LS_RATES, list || []);
+            // اعلامِ «تغییرِ نرخ» تا گزارش‌ها/داشبورد به‌صورتِ زنده تازه شوند (مورد d).
+            // این تنها نقطهٔ ذخیرهٔ نرخ است، پس همهٔ مسیرها (افزودن/ویرایش/حذف) را پوشش می‌دهد.
+            try { window.dispatchEvent(new CustomEvent('jouya:rates-changed')); } catch (e) {}
+        },
         addRate: function (rate) {
             if (!rate || !rate.from || !rate.to) return { ok: false, msg: 'ارز مبدأ و مقصد الزامی است' };
             if (rate.from === rate.to) return { ok: false, msg: 'ارز مبدأ و مقصد نباید یکسان باشد' };

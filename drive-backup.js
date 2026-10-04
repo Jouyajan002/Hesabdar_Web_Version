@@ -23,6 +23,21 @@
 
     const isElectron = !!(window.electronAPI && typeof window.electronAPI.googleSignIn === 'function');
 
+    // نسخهٔ نصبیِ Tauri (ویندوز). پلِ tauri-bridge.js شیِ window.electronAPI را می‌سازد ولی
+    // googleSignIn ندارد؛ پس isElectron روی Tauri نادرست می‌شد و خطای «only electron» می‌داد.
+    function isTauriNative() {
+        try {
+            return !!(window.__TAURI__ || window.__TAURI_INTERNALS__ ||
+                      window.__JOUYA_RUNTIME === 'tauri' ||
+                      (window.electronAPI && window.electronAPI.__runtime === 'tauri'));
+        } catch (e) { return false; }
+    }
+    // آیا دستورِ نیتیوِ ورودِ گوگل (در بیلدِ نصبی) در دسترس است؟
+    function hasNativeGoogleSignIn() {
+        try { return !!(window.electronAPI && typeof window.electronAPI.googleSignIn === 'function'); }
+        catch (e) { return false; }
+    }
+
     // =========================================================================
     // مدیریت توکن
     // =========================================================================
@@ -54,7 +69,9 @@
     // ورود — از طریق main process (Desktop OAuth) یا fallback مرورگر
     // =========================================================================
     async function googleSignIn() {
-        if (isElectron) {
+        // مسیرِ نیتیو: الکترون یا هر بیلدِ نصبی‌ای که دستورِ نیتیوِ googleSignIn را فراهم کند
+        // (Tauri هم اگر دستورِ نیتیو داشته باشد از همین مسیر می‌رود — بدونِ خطای «only electron»).
+        if (hasNativeGoogleSignIn()) {
             const result = await window.electronAPI.googleSignIn();
             if (!result.success) {
                 throw new Error(result.error || 'ورود ناموفق');
@@ -72,7 +89,80 @@
             }));
             return result.token;
         }
-        throw new Error('این روش فقط در Electron پشتیبانی می‌شود.');
+
+        // مسیرِ درونِ‌مرورگر (Tauri/ویندوز و وب): بدونِ نیاز به کدِ نیتیو، با Google Identity
+        // Services و یک «شناسهٔ کلاینتِ وب». این‌طور ورودِ گوگل در ویندوز/Tauri کار می‌کند و
+        // دیگر خطای «فقط در Electron» دیده نمی‌شود. (توکن یک‌ساعته است؛ برای پشتیبانِ دستی کافی است.)
+        const webToken = await gisWebSignIn();
+        if (webToken) return webToken;
+
+        // اگر هیچ‌کدام مهیا نبود، پیامِ روشن و راهنما (نه خطای مبهمِ قبلی)
+        if (isTauriNative()) {
+            throw new Error('برای ورود به گوگل در نسخهٔ ویندوز، «شناسهٔ کلاینتِ وبِ گوگل» تنظیم نشده است. ' +
+                'لطفاً طبقِ راهنما، شناسه را در jouya-google-config.js قرار دهید.');
+        }
+        throw new Error('ورود به گوگل در این محیط پشتیبانی نمی‌شود.');
+    }
+
+    // ── ورودِ گوگل در خودِ وب‌ویو با Google Identity Services (بدونِ کدِ نیتیو) ──────────
+    // شناسهٔ کلاینتِ وب از این منابع خوانده می‌شود (هرکدام که بود):
+    //   window.JOUYA_GOOGLE_WEB_CLIENT_ID  یا  localStorage['jouya_google_web_client_id']
+    function _getWebClientId() {
+        try {
+            if (window.JOUYA_GOOGLE_WEB_CLIENT_ID) return String(window.JOUYA_GOOGLE_WEB_CLIENT_ID);
+            var v = localStorage.getItem('jouya_google_web_client_id');
+            return v ? String(v) : '';
+        } catch (e) { return ''; }
+    }
+    function _loadGis() {
+        return new Promise(function (resolve, reject) {
+            try {
+                if (window.google && window.google.accounts && window.google.accounts.oauth2) return resolve(true);
+                var s = document.createElement('script');
+                s.src = 'https://accounts.google.com/gsi/client';
+                s.async = true; s.defer = true;
+                s.onload = function () { resolve(true); };
+                s.onerror = function () { reject(new Error('بارگذاریِ Google Identity ناموفق بود (اینترنت؟)')); };
+                document.head.appendChild(s);
+            } catch (e) { reject(e); }
+        });
+    }
+    async function gisWebSignIn() {
+        var clientId = _getWebClientId();
+        if (!clientId) return null;   // تنظیم نشده → مسیرِ بعدی/پیامِ راهنما
+        await _loadGis();
+        var token = await new Promise(function (resolve, reject) {
+            try {
+                var tc = window.google.accounts.oauth2.initTokenClient({
+                    client_id: clientId,
+                    scope: 'https://www.googleapis.com/auth/drive.appdata https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile',
+                    callback: function (resp) {
+                        if (resp && resp.access_token) {
+                            resolve({ access_token: resp.access_token, expires_in: resp.expires_in || 3600, savedAt: Date.now() });
+                        } else { reject(new Error((resp && resp.error) || 'ورود ناموفق')); }
+                    }
+                });
+                tc.requestAccessToken();
+            } catch (e) { reject(e); }
+        });
+        TokenStore.save(token);
+        // گرفتنِ ایمیل/نام
+        try {
+            var r = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                headers: { 'Authorization': 'Bearer ' + token.access_token }
+            });
+            if (r.ok) {
+                var info = await r.json();
+                if (info && info.email) {
+                    localStorage.setItem('jouya_gdrive_email', info.email);
+                    localStorage.setItem('jouya_gdrive_name', info.name || '');
+                }
+                window.dispatchEvent(new CustomEvent('gdrive-signed-in', {
+                    detail: { email: info && info.email, token: token }
+                }));
+            }
+        } catch (e) {}
+        return token;
     }
 
     async function getValidToken() {
@@ -81,7 +171,7 @@
         }
         // تلاش برای رفرش
         const token = TokenStore.get();
-        if (token && token.refresh_token && isElectron) {
+        if (token && token.refresh_token && hasNativeGoogleSignIn() && typeof window.electronAPI.googleRefreshToken === 'function') {
             try {
                 const result = await window.electronAPI.googleRefreshToken(token.refresh_token);
                 if (result.success) {

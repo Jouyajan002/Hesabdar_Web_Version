@@ -16360,9 +16360,21 @@ function _rpBuildReportAOA(kind) {
                 if (kind === 'p_soldout') return p.stock <= 0;
                 return true;
             });
-            aoa.push(['نام جنس', 'کد جنس', 'گتگوری', 'ورودی', 'خروجی', 'موجودی فعلی', 'واحد شمارش', 'تاریخ انقضا', 'اطلاعات بیشتر']);
+            // ستونِ «قیمت خرید» از همان قیمتِ تمام‌شده‌ای که گزارشِ موجودی/سرمایه استفاده می‌کند
+            // (_landedPurchasePriceMap) تا اعداد در همهٔ گزارش‌ها هم‌خوان باشد. به ارزِ پایه.
+            var _ppBase = _baseCur();
+            var _landedPP = (typeof _landedPurchasePriceMap === 'function') ? _landedPurchasePriceMap() : {};
+            var _rawPPById = {};
+            try { (((db.getAllProducts && db.getAllProducts()) || (db.getProducts && db.getProducts())) || []).forEach(function (rp) { if (rp && rp.id != null) _rawPPById[rp.id] = rp; }); } catch (e) {}
+            var _ppFor = function (id) {
+                var L = _landedPP && _landedPP[id] ? _landedPP[id] : null;
+                var rp = _rawPPById[id] || {};
+                if (_ppBase === 'USD') return (L && L.usd != null) ? (parseFloat(L.usd) || 0) : (parseFloat(rp.purchasePriceUSD) || 0);
+                return (L && L.afn != null) ? (parseFloat(L.afn) || 0) : (parseFloat(rp.purchasePriceAFN) || 0);
+            };
+            aoa.push(['نام جنس', 'کد جنس', 'گتگوری', 'ورودی', 'خروجی', 'موجودی فعلی', 'واحد شمارش', 'قیمت خرید (' + _ppBase + ')', 'تاریخ انقضا', 'اطلاعات بیشتر']);
             list.forEach(function (p) {
-                aoa.push([p.name, p.code, p.category, R(p.inQ), R(p.outQ), R(p.stock), p.unit, p.expiry, p.notes]);
+                aoa.push([p.name, p.code, p.category, R(p.inQ), R(p.outQ), R(p.stock), p.unit, R(_ppFor(p.id)), p.expiry, p.notes]);
             });
         } else if (kind === 'f_expenses') {
             title = 'مصارفات';
@@ -38660,6 +38672,24 @@ function ndUpdCurrentVersion() {
                 return;
             }
         } catch (e) {}
+        // اندروید: نسخهٔ واقعیِ نصب‌شده را از خودِ APK (versionName) بخوان، نه از version.jsonِ
+        // ممکن‌است‌قدیمی. افزونهٔ App مقدارِ version را می‌دهد؛ اگر نشد، به version.json برمی‌گردیم.
+        try {
+            if (ndUpdIsAndroidApp()) {
+                var App = null;
+                try { App = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.App) || null; } catch (e2) {}
+                try { if (!App && window.Capacitor && typeof window.Capacitor.registerPlugin === 'function') App = window.Capacitor.registerPlugin('App'); } catch (e3) {}
+                if (App && typeof App.getInfo === 'function') {
+                    Promise.resolve(App.getInfo())
+                        .then(function (info) {
+                            var v = info && info.version ? String(info.version) : '';
+                            v ? resolve(v) : fallback();
+                        })
+                        .catch(fallback);
+                    return;
+                }
+            }
+        } catch (e) {}
         fallback();
     });
 }
@@ -38685,12 +38715,8 @@ function ndUpdCheck() {
     ndUpdCurrentVersion().then(function (cur) {
         var curEl = document.getElementById('nd-upd-current');
         if (curEl) curEl.textContent = cur;
-        return fetch('https://api.github.com/repos/' + repo + '/releases/latest', {
-            cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' }
-        }).then(function (r) {
-            if (!r.ok) throw new Error('HTTP ' + r.status);
-            return r.json();
-        }).then(function (rel) {
+        // پردازشِ یک شیِ انتشار (release) و نمایشِ وضعیت
+        var processRel = function (rel) {
             var tag = String((rel && (rel.tag_name || rel.name)) || '').replace(/^v/i, '');
             if (!tag) { ndUpdSetStatus('نسخه‌ای در Releases پیدا نشد.', 'warn'); return; }
             var assets = (rel && rel.assets) || [];
@@ -38714,7 +38740,31 @@ function ndUpdCheck() {
             } else {
                 ndUpdSetStatus('برنامهٔ شما به‌روز است. (نسخهٔ نصب‌شده: ' + ndEsc(cur) + ')', 'ok');
             }
-        });
+        };
+        var H = { cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' } };
+        // اول releases/latest؛ اگر نبود (انتشارِ draft/pre-release یا تگِ بدونِ انتشارِ «latest»)
+        // به فهرستِ releases می‌رویم و تازه‌ترین نسخه را خودمان انتخاب می‌کنیم. این باعث می‌شود
+        // دکمهٔ بروزرسانی حتی وقتی انتشار pre-release است هم کار کند.
+        return fetch('https://api.github.com/repos/' + repo + '/releases/latest', H)
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .catch(function () { return null; })
+            .then(function (rel) {
+                if (rel && (rel.tag_name || rel.name)) { processRel(rel); return; }
+                return fetch('https://api.github.com/repos/' + repo + '/releases?per_page=30', H)
+                    .then(function (r) { return r.ok ? r.json() : []; })
+                    .catch(function () { return []; })
+                    .then(function (list) {
+                        var best = null, bestTag = '';
+                        (list || []).forEach(function (rr) {
+                            if (!rr || rr.draft) return;   // draftها نمایش داده نمی‌شوند
+                            var t = String((rr.tag_name || rr.name) || '').replace(/^v/i, '');
+                            if (t && (!best || ndUpdCmp(t, bestTag) > 0)) { best = rr; bestTag = t; }
+                        });
+                        if (best) processRel(best);
+                        else ndUpdSetStatus('نسخه‌ای در Releases پیدا نشد.' +
+                            '<br><small>مطمئن شوید یک Release (نه فقط Tag) با فایلِ نصبی منتشر شده است.</small>', 'warn');
+                    });
+            });
     }).catch(function (e) {
         ndUpdSetStatus('بررسی ناموفق بود.' +
             '<br><small>اتصالِ اینترنت را بررسی کنید و دوباره تلاش کنید.</small>', 'err');

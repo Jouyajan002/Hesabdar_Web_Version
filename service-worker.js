@@ -10,7 +10,7 @@
  *  مسیرها همه «نسبی» هستند تا روی GitHub Pages زیرِ هر زیرمسیری کار کنند.
  * ========================================================================== */
 
-var SW_VERSION = 'jouya-v1.0.3';
+var SW_VERSION = 'jouya-v1.0.5';
 var CACHE = SW_VERSION;
 
 // فهرستِ هستهٔ اپ — پیش‌ذخیره (best-effort؛ نبودِ یک فایل نصب را خراب نمی‌کند)
@@ -35,6 +35,7 @@ var CORE = [
   './assets/js/html2canvas.min.js',
   './assets/js/jspdf.umd.min.js',
   // JS اپ
+  './__jouya_dec.js',
   './database.js',
   './script.js',
   './persian-date-utils.js',
@@ -48,9 +49,11 @@ var CORE = [
   './auth-cloud.js',
   './device-guard.js',
   './capacitor-back.js',
+  './capacitor-share.js',
   './demo-mode.js',
   './mobile-fit.js',
   './jouya-selftest.js',
+  './jouya-ux-fixes.js',
   './pwa-register.js',
   // آیکن‌ها
   './assets/icons/icon-192.png',

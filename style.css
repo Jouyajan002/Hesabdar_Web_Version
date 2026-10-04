@@ -9334,7 +9334,9 @@ body.dark-mode {
     display: block !important;
 }
 #dashboard .nd-chart .weekly-chart-area { width: 100% !important; }
-#dashboard .nd-chart #weekly-sales-chart { width: 100% !important; height: 150px !important; max-height: 150px !important; }
+/* بلندیِ پیش‌فرض؛ در حالتِ «یک‌صفحه‌ای» جاوااسکریپت مقدارِ دقیق را inline می‌گذارد،
+   پس اینجا !important نداریم تا آن مقدار بتواند غالب شود. */
+#dashboard .nd-chart #weekly-sales-chart { width: 100% !important; height: 150px; max-height: none; }
 #dashboard .nd-chart .weekly-chart-legend,
 #dashboard .nd-chart .weekly-chart-footer { font-size: .7rem; }
 
@@ -9475,3 +9477,144 @@ body.dark-mode {
 body.dark-mode .nd-upd-status.ok   { color: #86efac; }
 body.dark-mode .nd-upd-status.warn { color: #fcd34d; }
 body.dark-mode .nd-upd-status.err  { color: #fca5a5; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   داشبورد در یک صفحه — فقط روی نمایشگرهای عریض (نصبی و وبِ کامپیوتر)
+   ---------------------------------------------------------------------------
+   بلندیِ .nd-grid را جاوااسکریپت دقیقاً برابرِ فضای باقی‌مانده می‌گذارد؛ این قواعد
+   آن بلندی را بینِ ستون‌ها و کارت‌ها پخش می‌کنند تا هیچ‌چیز بیرون نزند و صفحه
+   اسکرول نشود. موبایل از این بلوک بیرون است و همان رفتارِ قبلی را دارد.
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (min-width: 769px) {
+    #dashboard .nd-grid.nd-fit { overflow: hidden; }
+    #dashboard .nd-grid.nd-fit .nd-right,
+    #dashboard .nd-grid.nd-fit .nd-left { min-height: 0; height: 100%; }
+
+    /* ردیفِ برند/جستجو و نوارِ دسترسی سریع: به اندازهٔ محتوای خود */
+    #dashboard .nd-grid.nd-fit .nd-headrow,
+    #dashboard .nd-grid.nd-fit .nd-quick { flex: 0 0 auto; }
+
+    /* دو ستونِ پایین، همهٔ فضای باقی‌مانده را می‌گیرند */
+    #dashboard .nd-grid.nd-fit .nd-cols { flex: 1 1 auto; min-height: 0; }
+    #dashboard .nd-grid.nd-fit .nd-colA,
+    #dashboard .nd-grid.nd-fit .nd-colB { min-height: 0; }
+
+    /* کارت‌ها از بلندیِ ظرف بیرون نزنند */
+    #dashboard .nd-grid.nd-fit .nd-card { min-height: 0; overflow: hidden; }
+    #dashboard .nd-grid.nd-fit .nd-card > .nd-card-body { min-height: 0; overflow: hidden; }
+
+    /* سهمِ بلندی: نرخ ارز جمع‌وجور، وضعیت مالی بقیه */
+    #dashboard .nd-grid.nd-fit .nd-fx  { flex: 0 1 auto; }
+    #dashboard .nd-grid.nd-fit .nd-fx > .nd-card-body { overflow: auto; }
+    #dashboard .nd-grid.nd-fit .nd-fin { flex: 1 1 auto; }
+    #dashboard .nd-grid.nd-fit .nd-fin > .nd-card-body { overflow: auto; }
+
+    /* نمودار و کتگوری: نمودار سهمِ بیشتری می‌گیرد */
+    #dashboard .nd-grid.nd-fit .nd-chart { flex: 1.4 1 0; }
+    #dashboard .nd-grid.nd-fit .nd-cats  { flex: 1 1 0; }
+    #dashboard .nd-grid.nd-fit .nd-chart > .nd-card-body { display: flex; flex-direction: column; }
+    #dashboard .nd-grid.nd-fit .nd-chart .dashboard-charts,
+    #dashboard .nd-grid.nd-fit .nd-chart .weekly-chart-area {
+        flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column;
+    }
+    /* بلندیِ بوم را جاوااسکریپت دقیق می‌گذارد (ndFitDashboardHeight) */
+    #dashboard .nd-grid.nd-fit .nd-chart #weekly-sales-chart { flex: 0 0 auto; width: 100% !important; }
+    #dashboard .nd-grid.nd-fit .nd-chart > .nd-card-body { overflow: hidden; }
+    #dashboard .nd-grid.nd-fit .nd-chart .weekly-chart-legend,
+    #dashboard .nd-grid.nd-fit .nd-chart .weekly-chart-footer { flex: 0 0 auto; }
+
+    /* کتگوری: دونات با بلندیِ ظرف کوچک می‌شود */
+    #dashboard .nd-grid.nd-fit .nd-cats > .nd-card-body { display: flex; }
+    #dashboard .nd-grid.nd-fit .nd-cats-inner { flex: 1 1 auto; min-height: 0; }
+    #dashboard .nd-grid.nd-fit .nd-donut-wrap {
+        width: auto; height: 100%; aspect-ratio: 1 / 1; max-height: 100%; max-width: 46%;
+    }
+    #dashboard .nd-grid.nd-fit .nd-cats-legend { overflow: auto; }
+
+    /* آخرین معامله سهمِ بزرگ‌تر، لیست‌ها به اندازهٔ دکمه‌هایش */
+    #dashboard .nd-grid.nd-fit .nd-recent { flex: 1 1 auto; }
+    /* اندازهٔ قلم و بلندیِ سطرها صریح، تا هر ۸ ردیف بدونِ اسکرول جا شوند
+       (قاعده‌های عمومیِ جدول‌ها وگرنه سطرها را بلند می‌کردند) */
+    #dashboard .nd-grid.nd-fit .nd-recent-table th,
+    #dashboard .nd-grid.nd-fit .nd-recent-table td {
+        padding: 4px 4px !important; font-size: .72rem !important; line-height: 1.45 !important;
+        height: auto !important; max-height: none !important;   /* قاعدهٔ عمومیِ td با ارتفاعِ ۴۶px */
+    }
+    #dashboard .nd-grid.nd-fit .nd-recent-table tr { height: auto !important; }
+    /* پاورقی و راهنمای نمودار جمع‌وجور، تا فضای بیشتری به خودِ نمودار برسد */
+    #dashboard .nd-grid.nd-fit .nd-chart .weekly-chart-footer {
+        gap: 6px; padding: 2px 0 0 0; margin: 0; line-height: 1.25;
+    }
+    #dashboard .nd-grid.nd-fit .nd-chart .weekly-chart-footer .wk-footer-item { gap: 0; }
+    #dashboard .nd-grid.nd-fit .nd-chart .weekly-chart-footer .wk-footer-label { font-size: .6rem; margin: 0; }
+    #dashboard .nd-grid.nd-fit .nd-chart .weekly-chart-footer .wk-footer-val { font-size: .66rem; margin: 0; }
+    #dashboard .nd-grid.nd-fit .nd-chart .weekly-chart-legend { padding: 2px 0; font-size: .64rem; }
+    #dashboard .nd-grid.nd-fit .nd-chart .weekly-chart-top-row { margin: 0 0 4px 0; }
+    #dashboard .nd-grid.nd-fit .nd-chart .wk-btn { padding: 3px 10px; font-size: .66rem; }
+    #dashboard .nd-grid.nd-fit .nd-recent > .nd-card-body { overflow: auto; }
+    #dashboard .nd-grid.nd-fit .nd-lists  { flex: 0 0 auto; }
+
+    /* کمی جمع‌وجورتر تا همه‌چیز در نمایشگرهای کوتاه هم جا شود */
+    #dashboard .nd-grid.nd-fit .nd-card-head { padding: 7px 12px; }
+    #dashboard .nd-grid.nd-fit .nd-card-body { padding: 8px 10px; }
+    #dashboard .nd-grid.nd-fit .nd-fin-row { padding: 5px 2px; }
+    #dashboard .nd-grid.nd-fit .nd-lbtn { min-height: 38px; }
+    #dashboard .nd-grid.nd-fit .nd-qa { padding: 7px 4px; }
+}
+
+/* نمایشگرهای کوتاه (ارتفاع کم) — فشرده‌تر تا باز هم بدونِ اسکرول جا شود */
+@media (min-width: 769px) and (max-height: 820px) {
+    #dashboard .nd-grid.nd-fit .nd-brand { padding: 2px 4px; }
+    #dashboard .nd-grid.nd-fit .nd-brand .dsi-logo-wrap { width: 58px; height: 58px; }
+    #dashboard .nd-grid.nd-fit .nd-search-hint { font-size: .66rem; }
+    #dashboard .nd-grid.nd-fit .nd-qa { padding: 5px 3px; }
+    #dashboard .nd-grid.nd-fit .nd-qa i { font-size: 1rem; }
+    #dashboard .nd-grid.nd-fit .nd-lbtn { min-height: 33px; font-size: .7rem; }
+    #dashboard .nd-grid.nd-fit .nd-list-grid { gap: 6px; }
+    #dashboard .nd-grid.nd-fit .nd-recent-table th,
+    #dashboard .nd-grid.nd-fit .nd-recent-table td { padding: 4px 3px; }
+    #dashboard .nd-grid.nd-fit .nd-card-head { padding: 5px 11px; }
+    #dashboard .nd-grid.nd-fit .nd-card-title { font-size: .84rem; }
+}
+
+/* در داشبوردِ «یک‌صفحه‌ای»، فاصلهٔ پایینِ ناحیهٔ محتوا لازم نیست؛ خودِ شبکه تا بالای
+   نوارِ پایین بلندی می‌گیرد. (فقط وقتی کلاسِ nd-dash-fit روی body باشد — یعنی
+   نمایشگرِ عریض و بخشِ فعال، داشبورد.) */
+@media (min-width: 769px) {
+    body.nd-dash-fit .content-area { padding-bottom: 0 !important; }
+}
+
+/* ============================================================================
+ *  اصلاحاتِ افزودنیِ رابطِ کاربری (مورد a و e) — بدونِ تغییرِ قواعدِ قبلی
+ * ==========================================================================*/
+
+/* (e) داشبورد باید در هر حالت «بدونِ اسکرول» بماند و اسکرولِ لیست‌های سریع نباید
+ *     کلِ داشبورد را جابه‌جا/بریده کند. وقتی داشبوردِ فیت‌شده فعال است (کلاسِ
+ *     nd-dash-fit روی body) ناحیهٔ محتوا هرگز اسکرول نمی‌شود؛ خودِ لیست‌های سریع
+ *     به‌صورتِ داخلی اسکرول می‌شوند و اسکرولشان به بیرون «زنجیر» نمی‌شود. */
+@media (min-width: 769px) {
+    body.nd-dash-fit .content-area { overflow: hidden !important; }
+}
+/* لیست‌های سریعِ داشبورد: اسکرولِ داخلی + مهارِ زنجیرهٔ اسکرول (همهٔ سکوها) */
+.quick-list-content {
+    max-height: 38vh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+.quick-list-panel .table-container,
+.dashboard-quick-lists .table-container {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* (a) هنگامی که داشبورد در بزرگ‌ترین حالت (بزرگ‌نماییِ کامل) است، سایر بخش‌ها هنوز
+ *     بزرگ‌تر از تناسبِ داشبورد دیده می‌شدند. اینجا همهٔ بخش‌های غیرداشبورد روی
+ *     نمایشگرِ عریض (دسکتاپ/نصبی) حدودِ ۲۰٪ کوچک‌تر رندر می‌شوند تا با مقیاسِ
+ *     داشبورد هماهنگ شوند. فقط نمایش کوچک می‌شود؛ هیچ داده/چیدمانی تغییر نمی‌کند،
+ *     و موبایل (≤۷۶۸px) و خودِ داشبورد دست‌نخورده می‌مانند. */
+@media (min-width: 769px) {
+    .main-content .content-area > .section.active:not(#dashboard) {
+        zoom: 0.8;
+    }
+}

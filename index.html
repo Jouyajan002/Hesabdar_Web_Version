@@ -5101,6 +5101,11 @@
     <script src="assets/js/html2canvas.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';document.head.appendChild(s);})();"></script>
     <script src="assets/js/jspdf.umd.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';document.head.appendChild(s);})();"></script>
 
+    <!-- لایهٔ ۲ امنیتی (رمزگشا): اگر بیلد «رمزنگاری‌شده» باشد، فایل‌های JS به‌صورتِ رمزشده
+         بارگذاری و همین‌جا در حافظه رمزگشایی می‌شوند. اگر بیلد رمز نشده باشد (یا این فایل
+         نباشد)، هیچ اثری ندارد و برنامه عادی بارگذاری می‌شود. باید «پیش از» همهٔ اسکریپت‌های
+         برنامه بیاید. -->
+    <script src="__jouya_dec.js" onerror="console.warn('__jouya_dec.js not found (build may be unencrypted)')"></script>
     <!-- پلِ نسخهٔ نصبی (Tauri): electronAPI را می‌سازد تا «ذخیره در پوشهٔ دانلودها» و
          «بازکردنِ فایلِ اکسل» مثلِ نسخهٔ الکترون کار کند. در وب/موبایل بی‌اثر است. -->
     <script src="tauri-bridge.js" onerror="console.warn('tauri-bridge.js not found')"></script>
@@ -5123,10 +5128,14 @@
 <script src="device-guard.js" onerror="console.warn('device-guard.js not found')"></script>
 <!-- مدیریتِ دکمهٔ برگشتِ اندروید (فقط اندرویدِ نیتیو؛ وب/آیفون/Tauri بی‌اثر) -->
 <script src="capacitor-back.js" onerror="console.warn('capacitor-back.js not found')"></script>
+<!-- اشتراکِ فایلِ PDF در اپلیکیشنِ اندروید (فقط اندرویدِ نیتیو؛ بقیه بی‌اثر) -->
+<script src="capacitor-share.js" onerror="console.warn('capacitor-share.js not found')"></script>
 <script src="demo-mode.js" onerror="console.warn('demo-mode.js not found')"></script>
 <!-- فاز ۵: موتورِ مقیاسِ خودکارِ منعطفِ موبایل (فقط روی موبایل فعال؛ دسکتاپ دست‌نخورده) -->
 <script src="mobile-fit.js" onerror="console.warn('mobile-fit.js not found')"></script>
 <script src="jouya-selftest.js"></script>
+<!-- بهبودهای رابطِ کاربری (افزودنی): تاییدِ خروج از فرم + پاک‌شدنِ خودکارِ فیلدِ صفر در موبایل + بروزرسانیِ زندهٔ گزارش‌ها با تغییرِ نرخ -->
+<script src="jouya-ux-fixes.js" onerror="console.warn('jouya-ux-fixes.js not found')"></script>
 <!-- راه‌اندازِ PWA: ثبتِ service worker + دکمهٔ «نصب اپلیکیشن» + راهنمای iOS (افزودنی) -->
 <script src="pwa-register.js" onerror="console.warn('pwa-register.js not found')"></script>
 <!-- ====== پنل پروفایل (حذف شد - فقط آیکن باقی است) ====== -->
