@@ -6,6 +6,8 @@
  *  - ذخیره اکانت کاربر در Google Drive (appDataFolder) برای ورود از هر کامپیوتر
  *  - ثبت لیسانس در Drive به‌عنوان «استفاده‌شده»
  *  - فالبک به مرورگر در صورت نبود electronAPI (فقط برای توسعه وب)
+ *  - Tauri (ویندوز): ورودِ گوگل با دستورهای نیتیوِ Rust (hb_google_signin / hb_google_refresh_token)
+ *    با OAuth loopback و Refresh Token بلندمدت؛ Client Secret فقط در Rust است. اگر دستورها نبودند → فالبک به مسیرِ وب
  * ============================================================================= */
 
 (function () {
@@ -36,6 +38,44 @@
     function hasNativeGoogleSignIn() {
         try { return !!(window.electronAPI && typeof window.electronAPI.googleSignIn === 'function'); }
         catch (e) { return false; }
+    }
+
+    // ── دستورهای نیتیوِ Tauri برای ورودِ گوگل (OAuth loopback در Rust) ─────────────────
+    // فقط وقتی فعال است که واقعاً داخلِ Tauri باشیم و invokeِ آن موجود باشد؛ در وب/PWA و
+    // الکترون هیچ‌کدام از این‌ها اجرا نمی‌شود. اگر دستورها در باینری نبودند (نسخهٔ قدیمی)،
+    // یک‌بار علامت می‌خورد و ورود به مسیرِ وب (Google Identity Services) برمی‌گردد.
+    let _tauriGoogleBroken = false;
+    function _tauriInvoke() {
+        try {
+            if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
+                return function (cmd, args) { return window.__TAURI__.core.invoke(cmd, args); };
+            }
+            if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
+                return function (cmd, args) { return window.__TAURI_INTERNALS__.invoke(cmd, args); };
+            }
+        } catch (e) {}
+        return null;
+    }
+    // نتیجه: شیِ {success, token, userInfo} / {success:false, error}؛ یا null اگر مسیرِ نیتیوِ Tauri در دسترس نیست
+    async function tauriGoogleSignIn() {
+        const inv = _tauriInvoke();
+        if (!inv || !isTauriNative() || _tauriGoogleBroken) return null;
+        try { return await inv('hb_google_signin'); }
+        catch (e) {
+            console.warn('ورودِ نیتیوِ Tauri در دسترس نیست؛ فالبک به مسیرِ وب:', e);
+            _tauriGoogleBroken = true;
+            return null;
+        }
+    }
+    async function tauriGoogleRefresh(refreshToken) {
+        const inv = _tauriInvoke();
+        if (!inv || !isTauriNative() || _tauriGoogleBroken) return null;
+        try { return await inv('hb_google_refresh_token', { refreshToken: refreshToken }); }
+        catch (e) {
+            console.warn('رفرشِ نیتیوِ Tauri در دسترس نیست:', e);
+            _tauriGoogleBroken = true;
+            return null;
+        }
     }
 
     // =========================================================================
@@ -88,6 +128,23 @@
                 detail: { email: result.userInfo && result.userInfo.email, token: result.token }
             }));
             return result.token;
+        }
+
+        // مسیرِ نیتیوِ Tauri (ویندوز): OAuth loopback در Rust — Refresh Token بلندمدت، بدونِ Client Secret در JS
+        const tauriResult = await tauriGoogleSignIn();
+        if (tauriResult) {
+            if (!tauriResult.success) {
+                throw new Error(tauriResult.error || 'ورود ناموفق');
+            }
+            TokenStore.save(tauriResult.token);
+            if (tauriResult.userInfo && tauriResult.userInfo.email) {
+                localStorage.setItem('jouya_gdrive_email', tauriResult.userInfo.email);
+                localStorage.setItem('jouya_gdrive_name', tauriResult.userInfo.name || '');
+            }
+            window.dispatchEvent(new CustomEvent('gdrive-signed-in', {
+                detail: { email: tauriResult.userInfo && tauriResult.userInfo.email, token: tauriResult.token }
+            }));
+            return tauriResult.token;
         }
 
         // مسیرِ درونِ‌مرورگر (Tauri/ویندوز و وب): بدونِ نیاز به کدِ نیتیو، با Google Identity
@@ -182,6 +239,20 @@
                 }
             } catch (e) {
                 console.warn('رفرش توکن:', e);
+            }
+        }
+        // رفرشِ نیتیوِ Tauri (Refresh Token ذخیره‌شده؛ Client Secret فقط در Rust)
+        if (token && token.refresh_token && !hasNativeGoogleSignIn()) {
+            try {
+                const result = await tauriGoogleRefresh(token.refresh_token);
+                if (result && result.success) {
+                    // refresh_token را حفظ کن
+                    result.token.refresh_token = token.refresh_token;
+                    TokenStore.save(result.token);
+                    return result.token;
+                }
+            } catch (e) {
+                console.warn('رفرش توکن (Tauri):', e);
             }
         }
         // ورود جدید
