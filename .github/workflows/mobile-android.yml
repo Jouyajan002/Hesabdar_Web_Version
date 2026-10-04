@@ -106,22 +106,37 @@ jobs:
             const fs=require("fs"), path=require("path");
             const EXCEPT=new Set(["pwa-register.js","service-worker.js","__jouya_dec.js"]);
             const html=fs.readFileSync("www/index.html","utf8");
-            const refs=new Set();
-            const add=(re)=>{let m;while((m=re.exec(html)))refs.add(m[1]);};
-            add(/<script[^>]+src=["\x27]([^"\x27]+)["\x27]/g);
-            add(/<link[^>]+href=["\x27]([^"\x27]+)["\x27]/g);
-            const missing=[];
+            const refs=new Set();       // الزامی
+            const optional=new Set();   // اختیاری (دارای onerror → نبودنشان اشکالی ندارد)
+            // اسکریپت‌ها: اگر تگ onerror داشته باشد، عمداً اختیاری است و نبودنش بیلد را نمی‌شکند
+            let m; const sre=/<script\b[^>]*>/g;
+            while((m=sre.exec(html))){
+              const tag=m[0]; const sm=/src=["\x27]([^"\x27]+)["\x27]/.exec(tag);
+              if(!sm)continue;
+              if(/\bonerror\b/.test(tag)) optional.add(sm[1]); else refs.add(sm[1]);
+            }
+            // CSSها الزامی‌اند
+            const lre=/<link[^>]+href=["\x27]([^"\x27]+)["\x27]/g;
+            while((m=lre.exec(html))) refs.add(m[1]);
+            const isRemote=(r)=>/^(https?:)?\/\//.test(r)||r.startsWith("data:")||r.startsWith("#");
+            const missing=[], missOpt=[];
             for(const r of refs){
-              if(/^(https?:)?\/\//.test(r)||r.startsWith("data:")||r.startsWith("#"))continue;
+              if(isRemote(r))continue;
               const rel=r.replace(/^\.\//,"").split("?")[0];
               if(EXCEPT.has(rel))continue;
               if(!fs.existsSync(path.join("www",rel))) missing.push(rel);
             }
+            for(const r of optional){
+              if(isRemote(r))continue;
+              const rel=r.replace(/^\.\//,"").split("?")[0];
+              if(!fs.existsSync(path.join("www",rel))) missOpt.push(rel);
+            }
+            if(missOpt.length) console.log("::warning::فایل‌های اختیاری (onerror) که نیستند و رد شدند: "+missOpt.join(", "));
             if(missing.length){
-              console.error("::error::این فایل‌ها در بستهٔ اندروید نیستند و نسخهٔ اندروید ناقص می‌شود: "+missing.join(", "));
+              console.error("::error::این فایل‌های الزامی در بستهٔ اندروید نیستند و نسخهٔ اندروید ناقص می‌شود: "+missing.join(", "));
               process.exit(1);
             }
-            console.log("بستهٔ وب کامل است — همهٔ "+refs.size+" ارجاعِ index.html موجودند.");
+            console.log("بستهٔ وب کامل است — فایل‌های الزامی موجودند ("+refs.size+" ارجاع، "+optional.size+" اختیاری).");
           '
 
       - name: نصب Capacitor و افزونه‌ها
