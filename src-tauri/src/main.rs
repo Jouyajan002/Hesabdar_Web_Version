@@ -20,6 +20,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+// ورودِ گوگل با OAuth Desktop/Loopback (همان منطقِ main.js الکترون) — فایلِ جدا: google_oauth.rs
+mod google_oauth;
+
 // ── ابزارِ کوچک: پاک‌سازیِ نامِ فایل (هیچ مسیری از بیرون تزریق نشود) ─────────────
 fn sanitize_file_name(name: &str) -> String {
     let mut out: String = name
@@ -667,6 +670,26 @@ async fn hb_share_file_win(
     }
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+//  ورودِ گوگل (Drive) با OAuth loopback — جایگزینِ «google-oauth-signin» و
+//  «google-refresh-token» در main.js الکترون. Client Secret فقط در Rust می‌ماند.
+//  خروجی همان شکلِ قبلی است: { success, token, userInfo } / { success, error }.
+//  کارِ مسدودکننده (انتظارِ مرورگر تا ۵ دقیقه) در نخِ جدا انجام می‌شود تا UI قفل نشود.
+// ════════════════════════════════════════════════════════════════════════════
+#[tauri::command]
+async fn hb_google_signin() -> google_oauth::AuthResult {
+    tauri::async_runtime::spawn_blocking(google_oauth::sign_in)
+        .await
+        .unwrap_or_else(|e| google_oauth::AuthResult::fail(format!("join-err:{}", e)))
+}
+
+#[tauri::command]
+async fn hb_google_refresh_token(refresh_token: String) -> google_oauth::AuthResult {
+    tauri::async_runtime::spawn_blocking(move || google_oauth::refresh_token(&refresh_token))
+        .await
+        .unwrap_or_else(|e| google_oauth::AuthResult::fail(format!("join-err:{}", e)))
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -679,7 +702,9 @@ fn main() {
             hb_open_uri,
             hb_app_version,
             hb_share_file_win,
-            hb_share_text_win
+            hb_share_text_win,
+            hb_google_signin,
+            hb_google_refresh_token
         ])
         .run(tauri::generate_context!())
         .expect("error while running Hesabdar");
