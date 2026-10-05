@@ -19,6 +19,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use tauri::Emitter; // برای app.emit (رویدادِ پیشرفتِ دانلودِ بروزرسانی)
 
 // ورودِ گوگل با OAuth Desktop/Loopback (همان منطقِ main.js الکترون) — فایلِ جدا: google_oauth.rs
 mod google_oauth;
@@ -690,6 +691,112 @@ async fn hb_google_refresh_token(refresh_token: String) -> google_oauth::AuthRes
         .unwrap_or_else(|e| google_oauth::AuthResult::fail(format!("join-err:{}", e)))
 }
 
+// ════════════════════════════════════════════════════════════════════════════
+//  بروزرسانیِ درون‌برنامه‌ای: دانلودِ نصب‌کننده (با پیشرفت) → اجرای نصب‌کننده → بستنِ برنامه
+//  ---------------------------------------------------------------------------
+//  جایگزینِ «باز کردنِ لینک در مرورگر». کلیک روی «دانلود و نصب» این دستور را صدا می‌زند:
+//    ۱) نصب‌کننده را با ureq (که از قبل برای google_oauth وابسته است) دانلود می‌کند و درصدِ
+//       پیشرفت را با رویدادِ «hb-update-progress» به رابطِ کاربری می‌فرستد.
+//    ۲) نصب‌کننده را اجرا می‌کند (exe مستقیم؛ msi با msiexec).
+//    ۳) کمی بعد، خودِ برنامه را می‌بندد تا نصب‌کننده بتواند فایل‌ها را جایگزین کند.
+//  هر خطا به JS برمی‌گردد تا در صورتِ نیاز به «باز کردنِ لینک» برگردد (هیچ‌وقت بن‌بست نشود).
+// ════════════════════════════════════════════════════════════════════════════
+fn installer_name_from_url(url: &str) -> String {
+    let is_sep = |c: char| c == '/' || c == '?' || c == '#';
+    let last = url
+        .split(is_sep)
+        .find(|s| {
+            let l = s.to_lowercase();
+            l.ends_with(".exe") || l.ends_with(".msi")
+        })
+        .or_else(|| url.split('/').last())
+        .unwrap_or("hesabdar-setup.exe");
+    let n = sanitize_file_name(last);
+    if n.to_lowercase().ends_with(".exe") || n.to_lowercase().ends_with(".msi") {
+        n
+    } else {
+        format!("{}.exe", n)
+    }
+}
+
+fn download_installer(app: &tauri::AppHandle, url: &str) -> Result<String, String> {
+    use std::io::{Read, Write};
+    let resp = ureq::get(url).call().map_err(|e| format!("download: {}", e))?;
+    let total: u64 = resp
+        .header("Content-Length")
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(0);
+
+    let dir = downloads_dir().ok_or_else(|| "downloads-dir-not-found".to_string())?;
+    let full = dir.join(installer_name_from_url(url));
+    let mut reader = resp.into_reader();
+    let mut file = fs::File::create(&full).map_err(|e| format!("create: {}", e))?;
+
+    let mut buf = [0u8; 65536];
+    let mut downloaded: u64 = 0;
+    let mut last_pct: u64 = 0;
+    loop {
+        let n = reader.read(&mut buf).map_err(|e| format!("read: {}", e))?;
+        if n == 0 {
+            break;
+        }
+        file.write_all(&buf[..n]).map_err(|e| format!("write: {}", e))?;
+        downloaded += n as u64;
+        if total > 0 {
+            let pct = (downloaded.saturating_mul(100) / total).min(99);
+            if pct != last_pct {
+                last_pct = pct;
+                let _ = app.emit("hb-update-progress", pct);
+            }
+        }
+    }
+    let _ = file.flush();
+    let _ = app.emit("hb-update-progress", 100u64);
+    Ok(full.to_string_lossy().to_string())
+}
+
+fn run_installer(path: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        let low = path.to_lowercase();
+        if low.ends_with(".msi") {
+            return Command::new("msiexec")
+                .args(["/i", path])
+                .spawn()
+                .map(|_| ())
+                .map_err(|e| e.to_string());
+        }
+        return Command::new(path).spawn().map(|_| ()).map_err(|e| e.to_string());
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = path;
+        Err("installer-run-not-supported".to_string())
+    }
+}
+
+#[tauri::command]
+async fn hb_download_and_run(app: tauri::AppHandle, url: String) -> Result<String, String> {
+    // دانلود روی نخِ جدا تا UI قفل نشود (پیشرفت با رویداد فرستاده می‌شود).
+    let app_dl = app.clone();
+    let path = tauri::async_runtime::spawn_blocking(move || download_installer(&app_dl, &url))
+        .await
+        .map_err(|e| format!("join-err: {}", e))??;
+
+    // اجرای نصب‌کننده
+    run_installer(&path)?;
+
+    // کمی بعد، برنامه بسته شود تا نصب‌کننده بتواند فایل‌ها را جایگزین کند. نصب‌کننده به‌صورتِ
+    // جدا (detached) اجرا شده و پس از بسته‌شدنِ برنامه زنده می‌ماند.
+    let app_exit = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(900));
+        app_exit.exit(0);
+    });
+
+    Ok(path)
+}
+
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![
@@ -704,7 +811,8 @@ fn main() {
             hb_share_file_win,
             hb_share_text_win,
             hb_google_signin,
-            hb_google_refresh_token
+            hb_google_refresh_token,
+            hb_download_and_run
         ])
         .run(tauri::generate_context!())
         .expect("error while running Hesabdar");
