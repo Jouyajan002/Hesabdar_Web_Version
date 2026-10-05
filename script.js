@@ -24834,6 +24834,35 @@ document.addEventListener('click', function(e) {
     }
 });
 
+// ── رفعِ باگِ «فریزِ جست‌وجوی جنسِ انتخاب‌نشده» در فرم‌های خرید/فروش/برگشت ─────────
+// اگر کاربر نام جنسی را جست‌وجو کند ولی «از نتایج چیزی انتخاب نکند» و بعد روی دکمهٔ گدام
+// یا هر جای دیگرِ بیرون از همان ردیف کلیک کند، باید متنِ تایپ‌شده پاک شود و هیچ چیز
+// انتخاب‌نشده باقی نماند. این دستگیره «فقط فیلدهای انتخاب‌نشده» را خالی می‌کند:
+//   • فرم‌های اصلی: اگر input[type=hidden]ِ همان ردیف خالی باشد → انتخاب نشده.
+//   • فرم‌های برگشت: پس از انتخاب، خودِ فیلدِ جست‌وجو با نامِ قفل‌شده جایگزین می‌شود؛ پس
+//     وجودِ فیلدِ جست‌وجو یعنی هنوز انتخاب نشده.
+// هیچ منطقِ ذخیره/محاسبه‌ای تغییر نمی‌کند؛ فقط متنِ معلقِ بدونِ‌انتخاب پاک می‌شود.
+document.addEventListener('click', function (e) {
+    var t = e.target;
+    if (!t || !t.closest) return;
+    // کلیک داخلِ خودِ جست‌وجو یا دراپ‌داونِ نتایج (اصلی یا برگشت) → کاری نکن (انتخاب در جریان است)
+    if (t.closest('.product-search-wrapper') || t.closest('#_psr_body_dd')) return;
+    var inputs = document.querySelectorAll('.product-search-input, .pr-product-search, .sr-product-search');
+    for (var i = 0; i < inputs.length; i++) {
+        var inp = inputs[i];
+        if (String(inp.value || '').trim() === '') continue;          // از قبل خالی
+        var wrap = inp.closest('.product-search-wrapper');
+        var hid = wrap ? wrap.querySelector('input[type="hidden"]') : null;
+        if (hid && String(hid.value || '').trim() !== '') continue;    // فرم اصلی: انتخاب انجام شده → دست نزن
+        var rowEl = inp.closest('tr');
+        if (rowEl && rowEl.contains(t)) continue;                      // کلیک داخلِ همان ردیف → وسطِ کار پاک نکن
+        // انتخاب‌نشده و کلیکِ بیرون از ردیف → پاک‌سازیِ متن و نشانه‌ها
+        inp.value = '';
+        if (inp.dataset) { inp.dataset.matchId = ''; inp.dataset.matchName = ''; }
+        if (wrap) { var box = wrap.querySelector('.product-search-results'); if (box) { box.style.display = 'none'; box.innerHTML = ''; } }
+    }
+}, true);
+
 function updateItemPrice(hiddenInput) {
     const row = hiddenInput.closest('.item-row');
     if (!row) return;
