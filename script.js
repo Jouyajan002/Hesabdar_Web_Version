@@ -2437,6 +2437,13 @@ function showSection(sectionId) {
     //   در انتهای همین تابع، موقعیتِ ذخیره‌شدهٔ بخشِ مقصد بازگردانی می‌شود (اگر داشته باشد،
     //   وگرنه از بالا). این قاعده برای همهٔ بخش‌های اسکرول‌شونده یکسان است.
     try { _jqScrollSave(); } catch (_e) {}
+    // هر ناوبری (از جمله بازشدنِ «گدام») کارتِ شناورِ نتایجِ جست‌وجوی جنس را حذف کند تا روی
+    // صفحهٔ بعدی «فریز/شناور» نماند. (رفعِ باگِ کارتِ شناورِ قرمز در تصویر.)
+    try {
+        var _bddNav = document.getElementById('_psr_body_dd');
+        if (_bddNav) { _bddNav.style.display = 'none'; _bddNav.innerHTML = '';
+            if (_bddNav._scrollHandler) { window.removeEventListener('scroll', _bddNav._scrollHandler, true); _bddNav._scrollHandler = null; } }
+    } catch (_e) {}
     try {
         window.scrollTo(0, 0);
         var _scArea = document.querySelector('.content-area'); if (_scArea) _scArea.scrollTop = 0;
@@ -24847,6 +24854,17 @@ document.addEventListener('click', function (e) {
     if (!t || !t.closest) return;
     // کلیک داخلِ خودِ جست‌وجو یا دراپ‌داونِ نتایج (اصلی یا برگشت) → کاری نکن (انتخاب در جریان است)
     if (t.closest('.product-search-wrapper') || t.closest('#_psr_body_dd')) return;
+    // ★ کارتِ شناورِ نتایج در سطحِ body (#_psr_body_dd) حتماً مخفی شود — این همان «کارتِ فریزِ»
+    //   شناور است که هنگام زدنِ گدام روی صفحه می‌ماند (چون دکمهٔ گدام propagation را متوقف
+    //   می‌کند و دستگیره‌های bubble اجرا نمی‌شوند؛ این دستگیره در فاز capture است و همیشه اجرا می‌شود).
+    try {
+        var _bdd = document.getElementById('_psr_body_dd');
+        if (_bdd) {
+            _bdd.style.display = 'none';
+            _bdd.innerHTML = '';
+            if (_bdd._scrollHandler) { window.removeEventListener('scroll', _bdd._scrollHandler, true); _bdd._scrollHandler = null; }
+        }
+    } catch (e2) {}
     var inputs = document.querySelectorAll('.product-search-input, .pr-product-search, .sr-product-search');
     for (var i = 0; i < inputs.length; i++) {
         var inp = inputs[i];
@@ -38839,16 +38857,83 @@ function ndUpdDownload() {
             return;
         }
         if (ndUpdIsDesktopApp() && typeof __jouyaTauriInvoke === 'function') {
-            __jouyaTauriInvoke('hb_open_uri', { uri: url }).catch(function () { window.open(url, '_blank'); });
-        } else {
-            window.open(url, '_blank');
+            // دانلود + نصبِ «کاملاً درون‌برنامه‌ای»: پنجرهٔ پیشرفت → پایانِ دانلود → بستنِ خودکارِ
+            // برنامه → اجرای نصب‌کننده. (جایگزینِ بازکردنِ لینک در مرورگر.)
+            ndUpdRunInAppInstall(url);
+            return;
         }
+        window.open(url, '_blank');
         ndUpdSetStatus('دانلود آغاز شد. پس از پایانِ دانلود، فایل را اجرا کنید؛ ' +
             'نصب روی نسخهٔ فعلی انجام می‌شود و اطلاعاتِ شما دست‌نخورده می‌ماند.', 'ok');
     } catch (e) {
         ndUpdSetStatus('بازکردنِ نشانیِ دانلود ممکن نشد.', 'err');
     }
 }
+
+// ── پنجرهٔ «در حال دانلودِ بروزرسانی» + دانلود/نصبِ درون‌برنامه‌ای (فقط نسخهٔ نصبیِ Tauri) ──
+function ndUpdRunInAppInstall(url) {
+    // پنجرهٔ پیشرفت
+    var ov = document.getElementById('nd-upd-dl-overlay');
+    if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+    ov = document.createElement('div');
+    ov.id = 'nd-upd-dl-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(15,23,42,.72);' +
+        'display:flex;align-items:center;justify-content:center;direction:rtl;font-family:inherit;';
+    ov.innerHTML =
+        '<div style="background:#fff;border-radius:16px;padding:26px 28px;width:380px;max-width:92vw;box-shadow:0 18px 50px rgba(0,0,0,.35);text-align:center;">' +
+          '<div style="font-size:16px;font-weight:800;color:#1e3a5f;margin-bottom:6px;"><i class="fas fa-cloud-arrow-down"></i> در حال دانلودِ بروزرسانی…</div>' +
+          '<div style="font-size:12.5px;color:#64748b;margin-bottom:16px;">لطفاً صبر کنید؛ پس از پایان، برنامه بسته می‌شود و نصب به‌صورتِ خودکار آغاز می‌گردد.</div>' +
+          '<div style="height:12px;background:#e2e8f0;border-radius:999px;overflow:hidden;">' +
+            '<div id="nd-upd-dl-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#1de9b6,#00bfa5);transition:width .2s ease;"></div>' +
+          '</div>' +
+          '<div id="nd-upd-dl-pct" style="font-size:13px;font-weight:700;color:#0f172a;margin-top:10px;">۰٪</div>' +
+          '<div id="nd-upd-dl-note" style="font-size:11.5px;color:#94a3b8;margin-top:8px;min-height:16px;"></div>' +
+        '</div>';
+    document.body.appendChild(ov);
+    try { if (typeof applyNumberSystemToDocument === 'function') applyNumberSystemToDocument(); } catch (e) {}
+
+    var setPct = function (p) {
+        p = Math.max(0, Math.min(100, parseInt(p, 10) || 0));
+        var bar = document.getElementById('nd-upd-dl-bar');
+        var pct = document.getElementById('nd-upd-dl-pct');
+        if (bar) bar.style.width = p + '%';
+        if (pct) { pct.textContent = (typeof _toFaDigits === 'function' ? _toFaDigits(String(p)) : String(p)) + '٪'; }
+    };
+    var note = function (m) { var n = document.getElementById('nd-upd-dl-note'); if (n) n.textContent = m || ''; };
+    var closeOv = function () { try { var o = document.getElementById('nd-upd-dl-overlay'); if (o && o.parentNode) o.parentNode.removeChild(o); } catch (e) {} };
+
+    // شنیدنِ رویدادِ پیشرفت از سمتِ Rust (hb-update-progress)
+    var _unlisten = null;
+    try {
+        if (window.__TAURI__ && window.__TAURI__.event && typeof window.__TAURI__.event.listen === 'function') {
+            window.__TAURI__.event.listen('hb-update-progress', function (ev) {
+                var p = ev && (ev.payload != null ? ev.payload : ev);
+                setPct(p);
+                if (parseInt(p, 10) >= 100) note('در حال آماده‌سازیِ نصب…');
+            }).then(function (un) { _unlisten = un; });
+        }
+    } catch (e) {}
+
+    var cleanup = function () { try { if (typeof _unlisten === 'function') _unlisten(); } catch (e) {} };
+
+    // شروعِ دانلود+نصبِ نیتیو. در موفقیت، خودِ برنامه بسته می‌شود (پس نیازی به بستنِ پنجره نیست).
+    __jouyaTauriInvoke('hb_download_and_run', { url: url })
+        .then(function () {
+            setPct(100);
+            note('دانلود کامل شد — برنامه بسته می‌شود و نصب آغاز می‌گردد…');
+            // app.exit از سمتِ Rust می‌آید؛ اگر چند ثانیه نشد، پیام می‌دهیم.
+            setTimeout(function () { note('اگر نصب آغاز نشد، برنامه را ببندید و فایلِ دانلودشده را اجرا کنید.'); }, 6000);
+        })
+        .catch(function (err) {
+            cleanup(); closeOv();
+            ndUpdSetStatus('دانلودِ خودکار ناموفق بود؛ نشانیِ دانلود باز می‌شود.' +
+                '<br><small>' + ndEsc(String((err && err.message) || err || '')) + '</small>', 'err');
+            // فالبک: بازکردنِ لینک تا کاربر دستی دانلود کند
+            try { __jouyaTauriInvoke('hb_open_uri', { uri: url }).catch(function () { window.open(url, '_blank'); }); }
+            catch (e) { try { window.open(url, '_blank'); } catch (e2) {} }
+        });
+}
+if (typeof window !== 'undefined') window.ndUpdRunInAppInstall = ndUpdRunInAppInstall;
 function ndUpdSaveRepo() {
     var el = document.getElementById('nd-upd-repo');
     ndUpdSetRepo(el ? el.value : '');
