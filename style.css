@@ -5364,11 +5364,13 @@ select.bill-inline-input { cursor: pointer; }
 .person-card-name { font-weight: 700; color: var(--bill-navy-2, #1e293b); font-size: 1.18rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .person-card-balance, .person-card-debt { font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* رنگِ وضعیت‌ها (درخواستِ کاربر): طلب = سرخ ، باقیداری = سفید (فقط تغییرِ رنگ) */
-.person-card-balance { color: #ffffff; }
-.person-card-balance span { font-weight: 700; color: #ffffff; direction: ltr; display: inline-block; }
-.person-card-debt { color: #dc2626; }
-.person-card-debt span { font-weight: 700; direction: ltr; display: inline-block; color: #dc2626; }
-.person-card-debt.is-debt span { color: #dc2626; }
+/* باقیداری: حالتِ روشن → سیاه (روی کارتِ سفید خوانا) ، حالتِ تاریک → سفید (پایین‌تر) */
+.person-card-balance { color: #1e293b; }
+.person-card-balance span { font-weight: 700; color: #1e293b; direction: ltr; display: inline-block; }
+/* طلب: سرخِ روشن (حالتِ روشن درست؛ در تاریک پایین‌تر روشن‌تر می‌شود) */
+.person-card-debt { color: #ef4444; }
+.person-card-debt span { font-weight: 700; direction: ltr; display: inline-block; color: #ef4444; }
+.person-card-debt.is-debt span { color: #ef4444; }
 .person-card-actions { position: relative; justify-self: end; grid-column: -1; }
 .person-card-kebab {
     width: 34px; height: 34px; border: none; border-radius: 8px; cursor: pointer;
@@ -8644,9 +8646,9 @@ body.dark-mode .exp-c-note { color: #f1f5f9 !important; }
 /* رنگِ وضعیت‌ها در دارک‌مود هم: طلب سرخ، باقیداری سفید (درخواستِ کاربر) */
 body.dark-mode .person-card-debt,
 body.dark-mode .person-card-debt span,
-body.dark-mode .person-card-debt.is-debt span { color: #dc2626 !important; }
+body.dark-mode .person-card-debt.is-debt span { color: #f87171 !important; }   /* طلب: سرخِ روشن‌تر برای خوانایی در تاریک */
 body.dark-mode .person-card-balance,
-body.dark-mode .person-card-balance span { color: #ffffff !important; }
+body.dark-mode .person-card-balance span { color: #ffffff !important; }          /* باقیداری: سفید در تاریک */
 
 /* برچسب/مقادیرِ کم‌رنگِ متا داخلِ کارت‌ها → روشن‌تر و خوانا */
 body.dark-mode .sales-meta-label { color: #cbd5e1 !important; }
@@ -9616,10 +9618,22 @@ body.dark-mode .nd-upd-status.err  { color: #fca5a5; }
     -webkit-overflow-scrolling: touch;
 }
 
-/* (یادداشت) قانونِ قبلیِ «zoom: 0.8» برای کوچک‌کردنِ سایر بخش‌ها حذف شد، چون روی بلاکِ
- * تمام‌عرض، فضای خالی (حاشیهٔ سفید) در کنارِ محتوا ایجاد می‌کرد و هدر را ناهماهنگ می‌کرد.
- * اکنون هر چهار بخش (اجناس/اشخاص/امورمالی/گزارشات) با اندازهٔ عادی و بدونِ حاشیهٔ کناری
- * و هم‌اندازه نمایش داده می‌شوند. */
+/* ────────────────────────────────────────────────────────────────────────────
+ *  بزرگ‌نماییِ منعطفِ چهار بخشِ لیستی (اجناس/اشخاص/امورمالی/گزارشات)
+ *  ---------------------------------------------------------------------------
+ *  داشبورد و فرم‌ها دست‌نخورده می‌مانند (عمداً این چهار شناسه هدف گرفته شده‌اند).
+ *  با بزرگ‌ترشدنِ صفحه، بخش‌ها کمی کوچک‌تر می‌شوند تا تناسب حفظ شود؛ روی صفحه‌های
+ *  کوچک‌تر دست‌نخورده (۱.۰) می‌مانند. تست شد (Chromium): هدرِ sticky کلِ عرض را پر
+ *  می‌کند، اسکرولِ افقی ایجاد نمی‌شود و دکمهٔ شناورِ افزودن سرِجای خود می‌ماند. */
+@media (min-width: 1280px) and (max-width: 1599px) {
+    #products-list, #persons-list, #financial, #reports { zoom: 0.93; }
+}
+@media (min-width: 1600px) and (max-width: 1919px) {
+    #products-list, #persons-list, #financial, #reports { zoom: 0.90; }
+}
+@media (min-width: 1920px) {
+    #products-list, #persons-list, #financial, #reports { zoom: 0.86; }
+}
 
 /* ============================================================================
  *  (مورد ۱ — فقط نسخهٔ Tauri) دکمهٔ «افزودن»ِ پایین چند پیکسل بالاتر برود تا به

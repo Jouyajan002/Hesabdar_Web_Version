@@ -851,6 +851,9 @@ function loadDashboard() {
     _renderDashboardStoreInfo();
     // به‌روزرسانی کارت‌های داشبورد (فایده خالص، بیلانس، حساب‌ها) با محاسبهٔ دقیق
     if (typeof updateDashboardCards === 'function') updateDashboardCards();
+    // مُهرِ زمانیِ آخرین بارگذاریِ داشبورد — برای جلوگیری از اجرای تکراریِ loadTodayStatistics
+    // بلافاصله پس از loadDashboard هنگامِ ورود به داشبورد (بهینه‌سازیِ سرعتِ ناوبری).
+    try { window.__ndDashLoadedAt = Date.now(); } catch (e) {}
 }
 
 // ========================================================================
@@ -21691,8 +21694,12 @@ if (document.readyState === 'loading') {
 // همچنین وقتی کاربر به صفحه داشبورد می‌رود، آمار را رفرش کن
 document.addEventListener('sectionChanged', function(event) {
     if (event.detail && event.detail.sectionId === 'dashboard') {
-        console.log('📊 کاربر به صفحه داشبورد آمد');
-        setTimeout(loadTodayStatistics, 100);
+        // جلوگیری از اجرای تکراریِ آمار: loadDashboard هنگامِ ورود به داشبورد همین الان اجرا شده و
+        // کارت‌ها را تازه کرده؛ اگر کمتر از ~۱.۵ثانیه از آن گذشته باشد، اجرای دوبارهٔ loadTodayStatistics
+        // لازم نیست (بازگشت به داشبورد روان‌تر می‌شود). در بقیهٔ حالت‌ها طبقِ قبل اجرا می‌شود.
+        var _fresh = false;
+        try { _fresh = window.__ndDashLoadedAt && (Date.now() - window.__ndDashLoadedAt) < 1500; } catch (e) {}
+        if (!_fresh) setTimeout(loadTodayStatistics, 100);
     }
 });
 
@@ -38650,7 +38657,14 @@ function ndUpdSyncSidebarItem() {
 // مخزنِ رسمیِ برنامه — هاردکد است تا کاربر هیچ آدرسی وارد نکند و نشانیِ گیت‌هاب در
 // رابطِ کاربری دیده نشود. بروزرسانی همیشه از همین مخزن بررسی می‌شود.
 var ND_UPDATE_REPO = 'Jouyajan002/Hesabdar_Web_Version';
-function ndUpdGetRepo() { return ND_UPDATE_REPO; }
+// مهم: مقدار را «مستقیم» داخلِ تابع برمی‌گردانیم. اگر انتسابِ سطح‌بالای بالا به هر دلیلی
+// اجرا نشده باشد (مثلاً یک throwِ زودهنگام در جای دیگرِ فایل، که توابع به‌خاطرِ hoisting
+// کار می‌کنند ولی خطوطِ انتساب نه)، باز هم آدرسِ مخزن درست و غیرِundefined خواهد بود.
+// این دقیقاً باگی بود که در لاگِ تشخیصی دیده شد: repos/undefined/releases → 404.
+function ndUpdGetRepo() {
+    var r = (typeof ND_UPDATE_REPO === 'string' && ND_UPDATE_REPO.indexOf('/') !== -1) ? ND_UPDATE_REPO : '';
+    return r || 'Jouyajan002/Hesabdar_Web_Version';
+}
 function ndUpdSetRepo(r) { /* بی‌اثر: مخزن ثابت است */ }
 
 // نسخهٔ نصب‌شده: اول از خودِ برنامه (Tauri)، وگرنه از version.json
@@ -38762,13 +38776,17 @@ function ndUpdCheck() {
                             if (t && (!best || ndUpdCmp(t, bestTag) > 0)) { best = rr; bestTag = t; }
                         });
                         if (best) processRel(best);
-                        else ndUpdSetStatus('نسخه‌ای در Releases پیدا نشد.' +
-                            '<br><small>مطمئن شوید یک Release (نه فقط Tag) با فایلِ نصبی منتشر شده است.</small>', 'warn');
+                        else {
+                            ndUpdSetStatus('نسخه‌ای در Releases پیدا نشد.' +
+                                '<br><small>مطمئن شوید یک Release (نه فقط Tag) با فایلِ نصبی منتشر شده است. گزارشِ تشخیصی در «دانلودها» ذخیره شد.</small>', 'warn');
+                            try { if (typeof ndUpdDiag === 'function') ndUpdDiag(); } catch (e) {}   // ذخیرهٔ خودکارِ لاگ هنگام شکست
+                        }
                     });
             });
     }).catch(function (e) {
         ndUpdSetStatus('بررسی ناموفق بود.' +
-            '<br><small>اتصالِ اینترنت را بررسی کنید و دوباره تلاش کنید.</small>', 'err');
+            '<br><small>اتصالِ اینترنت را بررسی کنید و دوباره تلاش کنید. گزارشِ تشخیصی در «دانلودها» ذخیره شد.</small>', 'err');
+        try { if (typeof ndUpdDiag === 'function') ndUpdDiag(); } catch (e2) {}   // ذخیرهٔ خودکارِ لاگ هنگام شکست
     });
 }
 function ndUpdDownload() {
@@ -38819,11 +38837,6 @@ function ndUpdPanelHtml() {
         + '<button class="ssb-btn ssb-btn-primary" onclick="ndUpdCheck()">'
         +   '<i class="fas fa-rotate"></i> بررسی بروزرسانی</button>'
         + '<div id="nd-upd-status" class="nd-upd-status" style="margin-top:12px;"></div>'
-        + '<button class="ssb-btn" style="margin-top:10px;" onclick="ndUpdDiag()">'
-        +   '<i class="fas fa-bug"></i> دانلودِ گزارشِ تشخیصیِ بروزرسانی</button>'
-        + '<div style="font-size:.74rem;color:#94a3b8;margin-top:6px;line-height:1.7;">'
-        +   'اگر بروزرسانی کار نکرد، این دکمه را بزنید؛ یک فایلِ گزارش در «دانلودها» ذخیره می‌شود — همان را برای پشتیبانی بفرستید.'
-        + '</div>'
         + '</div>';
 }
 
@@ -39120,7 +39133,10 @@ function ndBindFit() {
         _fitT1 = setTimeout(measure, 60);
         _fitT2 = setTimeout(function () { try { ndFitDashboardHeight(); } catch (e) {} }, 240);
     };
-    try { window.addEventListener('resize', run); } catch (e) {}
+    // یک پاسِ سبکِ فیت برای «ناوبری» (ورود/خروجِ بخش‌ها) — سریع و بدونِ پاسِ دومِ سنگین.
+    var runOnce = function () { if (_fitT1) clearTimeout(_fitT1); _fitT1 = setTimeout(measure, 50); };
+    try { window.addEventListener('resize', run); } catch (e) {}            // resize/maximize: دو پاس (حفظِ رفعِ بریدنِ maximize)
     try { window.addEventListener('orientationchange', run); } catch (e) {}
-    try { document.addEventListener('sectionChanged', function () { setTimeout(run, 60); }); } catch (e) {}
+    // ناوبری: فقط یک پاس → بازگشت به داشبورد روان‌تر و سریع‌تر می‌شود (پاسِ دومِ ۲۴۰ms حذف شد).
+    try { document.addEventListener('sectionChanged', function () { runOnce(); }); } catch (e) {}
 }
