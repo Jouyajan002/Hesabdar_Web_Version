@@ -1,0 +1,62 @@
+[package]
+name         = "hesabdar"
+version      = "0.0.0"
+description  = "حسابدار — سیستم مدیریت فروشگاه"
+authors      = ["Hesabdar"]
+edition      = "2021"
+rust-version = "1.77"
+
+# نکته: نامِ باینری عمداً لاتین است (hesabdar) تا مسیرهای فایل/نصب هیچ‌وقت به کاراکترِ
+# غیرِاَسکی برنخورند؛ نامِ نمایشیِ برنامه در tauri.conf.json «حسابدار» است.
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri      = { version = "2", features = [] }
+serde      = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# ── وابستگی‌های ماژولِ ورودِ گوگل‌درایو (src/google_oauth.rs) ────────────────────
+# این ماژول OAuthِ نیتیو (loopback + PKCE) را برای ورودِ گوگل در نسخهٔ نصبی انجام می‌دهد.
+# نسخه‌ها مطابقِ APIهایی که در کد استفاده شده انتخاب شده‌اند:
+#   • getrandom 0.3 → چون از getrandom::fill استفاده شده (در 0.2 وجود ندارد).
+#   • ureq 2.x     → چون از ureq::AgentBuilder و ureq::Error::Status استفاده شده (API نسخهٔ ۲).
+#   • sha2 / url   → برای چالشِ PKCE (S256) و ساختِ/خواندنِ پارامترهای URL.
+sha2       = "0.10"
+url        = "2"
+ureq       = "2"
+getrandom  = "0.3"
+
+# ── فقط ویندوز: پنلِ اشتراکِ سیستم (WinRT DataTransferManager) ──────────────────
+# نسخه‌ها عمداً همان نسخه‌هایی است که خودِ Tauri 2.12 در Cargo.lock می‌آورد
+# (windows 0.62.2 و windows-collections 0.3.2)، تا نسخهٔ تکراری ساخته نشود و
+# نوعِ HWND که Tauri برمی‌گرداند دقیقاً همان نوعی باشد که اینجا استفاده می‌شود.
+[target.'cfg(windows)'.dependencies]
+# ⚠ فهرستِ فیچرها «حدسی» نیست: هر نوع و هر متدی که استفاده می‌شود در سورسِ خودِ
+#   windows 0.62.2 بررسی شده و گیتِ #[cfg(feature = …)] آن استخراج شده است.
+#   نکتهٔ غافلگیرکننده: StorageFile پشتِ فیچرِ «Storage_Streams» است، نه «Storage»
+#   (چون IStorageFile به Streams وابسته است) — و DataPackage::SetStorageItems پشتِ
+#   «Storage». نبودنِ Storage_Streams همان خطای «no StorageFile in Storage» را می‌دهد.
+windows = { version = "0.62", features = [
+    "Foundation",
+    "Foundation_Collections",
+    "Storage",
+    "Storage_Streams",
+    "ApplicationModel_DataTransfer",
+    "Win32_Foundation",
+    "Win32_UI_Shell",
+] }
+windows-collections = "0.3"
+
+# بیلدِ کم‌حجم.
+# نکته: عمداً "thin" LTO انتخاب شده و نه fat LTO. با fat LTO حجمِ نهایی تقریباً همان است
+# ولی مرحلهٔ لینک چند گیگابایت RAM می‌خواهد و روی ماشین‌های معمولی/رانرهای کوچک با خطای
+# out-of-memory (SIGKILL) شکست می‌خورد. thin LTO همان کاهشِ حجم را با مصرفِ حافظهٔ عادی می‌دهد.
+[profile.release]
+codegen-units = 1
+lto           = "thin"
+opt-level     = "s"
+panic         = "abort"
+strip         = true
+incremental   = false
