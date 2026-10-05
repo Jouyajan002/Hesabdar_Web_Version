@@ -102,6 +102,45 @@ var decoder =
 '})();\n';
 
 var decContent = aesSource + '\n' + decoder;
+
+// ── مورد امنیتی: خودِ رمزگشا (که کلید در آن است) را هم obfuscate می‌کنیم تا کلید و
+//    منطقِ دیکریپت «در دسترسِ ساده» نباشد. اگر obfuscator نبود یا خروجی نامعتبر شد،
+//    نسخهٔ سالم (غیر-obfuscate) نوشته می‌شود تا بوت هرگز نشکند.
+try {
+    var JS = require('javascript-obfuscator');
+    var vm = require('vm');
+    var obf = JS.obfuscate(decContent, {
+        compact: true, target: 'browser',
+        renameGlobals: false, renameProperties: false, transformObjectKeys: false,
+        identifierNamesGenerator: 'hexadecimal',
+        stringArray: true, stringArrayThreshold: 1,
+        stringArrayEncoding: ['rc4'], stringArrayRotate: true, stringArrayShuffle: true,
+        stringArrayIndexShift: true, stringArrayWrappersCount: 2, stringArrayWrappersType: 'function',
+        numbersToExpressions: true, simplify: true, selfDefending: true,
+        controlFlowFlattening: false, deadCodeInjection: false,
+        debugProtection: false, disableConsoleOutput: false, comments: false
+    }).getObfuscatedCode();
+    // اعتبارسنجیِ واقعی: کدِ obfuscate‌شده را در یک sandbox اجرا کن و مطمئن شو که هنوز
+    //   self.__jouyaDec و self.__JouyaAES را تعریف می‌کند (نامِ __jouyaDec ممکن است داخلِ
+    //   آرایهٔ رشتهٔ رمزشده برود، پس جست‌وجوی متنی کافی نیست — باید اجرا و بررسی شود).
+    var sandboxSelf = {};
+    var ctx = { self: sandboxSelf, globalThis: sandboxSelf, module: { exports: {} },
+                TextDecoder: (typeof TextDecoder !== 'undefined') ? TextDecoder : function () { this.decode = function () { return ''; }; },
+                atob: (typeof atob !== 'undefined') ? atob : function (b) { return Buffer.from(b, 'base64').toString('binary'); },
+                document: { createElement: function () { return {}; }, head: { appendChild: function () {} } },
+                console: { error: function () {}, log: function () {} } };
+    vm.createContext(ctx);
+    new vm.Script(obf, { filename: 'dec-check.js' }).runInContext(ctx, { timeout: 5000 });
+    if (typeof sandboxSelf.__jouyaDec === 'function' && sandboxSelf.__JouyaAES && typeof sandboxSelf.__JouyaAES.aesCtr === 'function') {
+        decContent = obf;
+        console.log('[pack] رمزگشا obfuscate شد و در sandbox تأیید شد (کلید پنهان‌تر شد).');
+    } else {
+        console.log('::warning::[pack] obfuscateِ رمزگشا در sandbox تأیید نشد → نسخهٔ ساده نوشته شد.');
+    }
+} catch (e) {
+    console.log('::warning::[pack] obfuscateِ رمزگشا انجام نشد (نسخهٔ ساده): ' + ((e && e.message) || e));
+}
+
 try {
     fs.writeFileSync(path.join(dir, DEC_FILENAME), decContent, 'utf8');
 } catch (e) {
