@@ -251,6 +251,8 @@
         __runtime: 'tauri'
     };
     window.__JOUYA_RUNTIME = 'tauri';
+    // نشانِ Tauri روی ریشهٔ سند تا CSSِ مخصوصِ نسخهٔ Tauri (مثلِ جای دکمهٔ افزودن) فقط اینجا اعمال شود.
+    try { document.documentElement.setAttribute('data-jruntime', 'tauri'); } catch (e) {}
 
     // ── فالبکِ دانلود در نسخهٔ نصبی ────────────────────────────────────────────
     // اگر اشتراکِ نیتیو به هر دلیلی اجرا نشود، کدِ برنامه به __jouyaDownloadBlob می‌رود که
