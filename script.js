@@ -38359,6 +38359,7 @@ function ndOpenBackupQuick() {
     for (var i = 0; i < cands.length; i++) {
         var o = window[cands[i]];
         if (typeof o === 'function') { try { o(); return; } catch (e) {} }
+        if (o && typeof o.openModal === 'function') { try { o.openModal(); return; } catch (e) {} }   // ← DriveBackup.openModal (گوگل‌درایو)
         if (o && typeof o.open === 'function') { try { o.open(); return; } catch (e) {} }
         if (o && typeof o.show === 'function') { try { o.show(); return; } catch (e) {} }
     }
@@ -38818,8 +38819,112 @@ function ndUpdPanelHtml() {
         + '<button class="ssb-btn ssb-btn-primary" onclick="ndUpdCheck()">'
         +   '<i class="fas fa-rotate"></i> بررسی بروزرسانی</button>'
         + '<div id="nd-upd-status" class="nd-upd-status" style="margin-top:12px;"></div>'
+        + '<button class="ssb-btn" style="margin-top:10px;" onclick="ndUpdDiag()">'
+        +   '<i class="fas fa-bug"></i> دانلودِ گزارشِ تشخیصیِ بروزرسانی</button>'
+        + '<div style="font-size:.74rem;color:#94a3b8;margin-top:6px;line-height:1.7;">'
+        +   'اگر بروزرسانی کار نکرد، این دکمه را بزنید؛ یک فایلِ گزارش در «دانلودها» ذخیره می‌شود — همان را برای پشتیبانی بفرستید.'
+        + '</div>'
         + '</div>';
 }
+
+// ── گزارشِ تشخیصیِ کاملِ بروزرسانی (برای فرستادن به پشتیبانی) ─────────────────────
+// همهٔ مراحلِ بررسی را اجرا و ثبت می‌کند: محیط، نسخهٔ نصب‌شده، پاسخِ گیت‌هاب، و نتیجهٔ مقایسه.
+// سپس در «دانلودها» ذخیره می‌کند (Tauri)، یا روی صفحه نشان می‌دهد (اندروید)، یا دانلودِ وب.
+function ndUpdDiag() {
+    var L = [];
+    var log = function (k, v) { L.push(k + (v !== undefined ? (': ' + v) : '')); };
+    var repo = (typeof ndUpdGetRepo === 'function') ? ndUpdGetRepo() : '?';
+    log('حسابدار — گزارشِ تشخیصیِ بروزرسانی');
+    log('=================================================');
+    try { log('زمان', (new Date()).toString()); } catch (e) {}
+    try { log('runtime', window.__JOUYA_RUNTIME || '(نامشخص)'); } catch (e) {}
+    try { log('isTauri', (typeof ndUpdIsDesktopApp === 'function') ? ndUpdIsDesktopApp() : '?'); } catch (e) {}
+    try { log('isAndroid', (typeof ndUpdIsAndroidApp === 'function') ? ndUpdIsAndroidApp() : '?'); } catch (e) {}
+    try { log('location', location.href); } catch (e) {}
+    try { log('userAgent', navigator.userAgent); } catch (e) {}
+    log('repo', repo);
+
+    var save = function () {
+        var txt = L.join('\n') + '\n';
+        var fname = 'hesabdar-update-diagnostic';
+        try { fname += '-' + (new Date()).toISOString().replace(/[:.]/g, '-').slice(0, 19); } catch (e) {}
+        fname += '.txt';
+        try { console.log(txt); } catch (e) {}
+        // ۱) Tauri → نوشتنِ واقعی در پوشهٔ دانلود
+        try {
+            if (window.electronAPI && typeof window.electronAPI.saveTextToDownloads === 'function') {
+                Promise.resolve(window.electronAPI.saveTextToDownloads(fname, txt))
+                    .then(function (p) { if (typeof showMessage === 'function') showMessage('گزارشِ تشخیصی ذخیره شد', 'مسیر:\n' + String(p || fname) + '\n\nهمین فایل را برای پشتیبانی بفرستید.'); })
+                    .catch(function (e) { if (typeof showMessage === 'function') showMessage('ذخیره ناموفق', String((e && e.message) || e)); });
+                return;
+            }
+        } catch (e) {}
+        // ۲) اندروید → نمایشِ روی صفحه (قابلِ کپی/اشتراک) چون دانلودِ WebView بی‌صداست
+        try {
+            if (typeof __jouyaAndIsNative === 'function' && __jouyaAndIsNative()) {
+                if (typeof __jouyaShowDiagOnScreen === 'function') { __jouyaShowDiagOnScreen(txt, fname, 'update-diagnostic'); return; }
+                if (typeof __jouyaAndWrite === 'function') { __jouyaAndWrite(fname, txt, true).then(function (r) { if (typeof showMessage === 'function') showMessage('ذخیره شد', (r && r.dir) + ' → ' + (r && r.name)); }); return; }
+            }
+        } catch (e) {}
+        // ۳) وب/دسکتاپ → دانلودِ مرورگری
+        try {
+            var blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = fname; document.body.appendChild(a); a.click();
+            document.body.removeChild(a); setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+            if (typeof showMessage === 'function') showMessage('گزارشِ تشخیصی', 'فایل در «دانلودها» ذخیره شد: ' + fname);
+        } catch (e) { if (typeof showMessage === 'function') showMessage('خطا', 'ذخیرهٔ گزارش ناموفق بود.'); }
+    };
+
+    // نسخهٔ نصب‌شده
+    var afterVer = function (cur) {
+        log('نسخهٔ نصب‌شده (cur)', cur);
+        var H = { cache: 'no-store', headers: { 'Accept': 'application/vnd.github+json' } };
+        var latestUrl = 'https://api.github.com/repos/' + repo + '/releases/latest';
+        log('', ''); log('— درخواستِ releases/latest —'); log('URL', latestUrl);
+        fetch(latestUrl, H).then(function (r) {
+            log('HTTP status', r.status + ' ' + (r.ok ? 'OK' : 'NOT-OK'));
+            return r.text();
+        }).then(function (body) {
+            var rel = null; try { rel = JSON.parse(body); } catch (e) {}
+            if (rel && (rel.tag_name || rel.name)) {
+                log('tag_name', rel.tag_name || rel.name);
+                log('prerelease', rel.prerelease); log('draft', rel.draft);
+                var assets = (rel.assets || []).map(function (a) { return a.name; });
+                log('assets', assets.length ? assets.join(', ') : '(هیچ فایلِ نصبی پیوست نشده!)');
+                try { log('مقایسه (tag vs cur)', ndUpdCmp(String((rel.tag_name || rel.name)).replace(/^v/i, ''), cur)); } catch (e) {}
+                save();
+            } else {
+                log('نتیجه', 'releases/latest نسخه‌ای نداد (شاید draft/pre-release یا فقط Tag بدونِ Release). تلاشِ فهرست…');
+                var listUrl = 'https://api.github.com/repos/' + repo + '/releases?per_page=30';
+                log('URL2', listUrl);
+                fetch(listUrl, H).then(function (r2) { log('HTTP2 status', r2.status); return r2.text(); })
+                    .then(function (b2) {
+                        var list = []; try { list = JSON.parse(b2); } catch (e) {}
+                        if (Array.isArray(list) && list.length) {
+                            log('تعداد انتشارها', list.length);
+                            list.slice(0, 8).forEach(function (rr, i) {
+                                log('  [' + i + ']', (rr.tag_name || rr.name) + ' | draft=' + rr.draft + ' | prerelease=' + rr.prerelease + ' | assets=' + ((rr.assets || []).map(function (a) { return a.name; }).join('/') || 'هیچ'));
+                            });
+                        } else {
+                            log('نتیجه', 'هیچ Releaseای پیدا نشد — آیا واقعاً یک Release (نه فقط Tag) منتشر کرده‌اید؟');
+                        }
+                        save();
+                    }).catch(function (e) { log('خطای فهرست', (e && e.message) || e); save(); });
+            }
+        }).catch(function (e) {
+            log('خطای شبکه/درخواست', (e && e.message) || e);
+            log('نکته', 'اگر خطای شبکه است: دسترسیِ اینترنت یا CSP/مجوزِ دامنهٔ api.github.com را بررسی کنید.');
+            save();
+        });
+    };
+    try {
+        if (typeof ndUpdCurrentVersion === 'function') ndUpdCurrentVersion().then(afterVer).catch(function () { afterVer('?'); });
+        else afterVer('?');
+    } catch (e) { afterVer('?'); }
+}
+if (typeof window !== 'undefined') window.ndUpdDiag = ndUpdDiag;
 
 /* ══════════════════════════════════════════════════════════════════════════════
    جاشدنِ کاملِ داشبورد در یک صفحه (نسخهٔ نصبی و وبِ کامپیوتر)

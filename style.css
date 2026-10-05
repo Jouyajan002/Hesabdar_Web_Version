@@ -5363,11 +5363,12 @@ select.bill-inline-input { cursor: pointer; }
 }
 .person-card-name { font-weight: 700; color: var(--bill-navy-2, #1e293b); font-size: 1.18rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .person-card-balance, .person-card-debt { font-size: 1.05rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.person-card-balance { color: #dc2626; }
-.person-card-balance span { font-weight: 700; color: #dc2626; direction: ltr; display: inline-block; }
-.person-card-debt { color: #1e293b; }
-.person-card-debt span { font-weight: 700; direction: ltr; display: inline-block; color: #1e293b; }
-.person-card-debt.is-debt span { color: #1e293b; }
+/* رنگِ وضعیت‌ها (درخواستِ کاربر): طلب = سرخ ، باقیداری = سفید (فقط تغییرِ رنگ) */
+.person-card-balance { color: #ffffff; }
+.person-card-balance span { font-weight: 700; color: #ffffff; direction: ltr; display: inline-block; }
+.person-card-debt { color: #dc2626; }
+.person-card-debt span { font-weight: 700; direction: ltr; display: inline-block; color: #dc2626; }
+.person-card-debt.is-debt span { color: #dc2626; }
 .person-card-actions { position: relative; justify-self: end; grid-column: -1; }
 .person-card-kebab {
     width: 34px; height: 34px; border: none; border-radius: 8px; cursor: pointer;
@@ -8640,6 +8641,13 @@ body.dark-mode .exp-cell,
 body.dark-mode .exp-c-type,
 body.dark-mode .exp-c-note { color: #f1f5f9 !important; }
 
+/* رنگِ وضعیت‌ها در دارک‌مود هم: طلب سرخ، باقیداری سفید (درخواستِ کاربر) */
+body.dark-mode .person-card-debt,
+body.dark-mode .person-card-debt span,
+body.dark-mode .person-card-debt.is-debt span { color: #dc2626 !important; }
+body.dark-mode .person-card-balance,
+body.dark-mode .person-card-balance span { color: #ffffff !important; }
+
 /* برچسب/مقادیرِ کم‌رنگِ متا داخلِ کارت‌ها → روشن‌تر و خوانا */
 body.dark-mode .sales-meta-label { color: #cbd5e1 !important; }
 body.dark-mode .sales-meta-val   { color: #e2e8f0 !important; }
@@ -9608,13 +9616,17 @@ body.dark-mode .nd-upd-status.err  { color: #fca5a5; }
     -webkit-overflow-scrolling: touch;
 }
 
-/* (a) هنگامی که داشبورد در بزرگ‌ترین حالت (بزرگ‌نماییِ کامل) است، سایر بخش‌ها هنوز
- *     بزرگ‌تر از تناسبِ داشبورد دیده می‌شدند. اینجا همهٔ بخش‌های غیرداشبورد روی
- *     نمایشگرِ عریض (دسکتاپ/نصبی) حدودِ ۲۰٪ کوچک‌تر رندر می‌شوند تا با مقیاسِ
- *     داشبورد هماهنگ شوند. فقط نمایش کوچک می‌شود؛ هیچ داده/چیدمانی تغییر نمی‌کند،
- *     و موبایل (≤۷۶۸px) و خودِ داشبورد دست‌نخورده می‌مانند. */
-@media (min-width: 769px) {
-    .main-content .content-area > .section.active:not(#dashboard) {
-        zoom: 0.8;
-    }
+/* (یادداشت) قانونِ قبلیِ «zoom: 0.8» برای کوچک‌کردنِ سایر بخش‌ها حذف شد، چون روی بلاکِ
+ * تمام‌عرض، فضای خالی (حاشیهٔ سفید) در کنارِ محتوا ایجاد می‌کرد و هدر را ناهماهنگ می‌کرد.
+ * اکنون هر چهار بخش (اجناس/اشخاص/امورمالی/گزارشات) با اندازهٔ عادی و بدونِ حاشیهٔ کناری
+ * و هم‌اندازه نمایش داده می‌شوند. */
+
+/* ============================================================================
+ *  (مورد ۱ — فقط نسخهٔ Tauri) دکمهٔ «افزودن»ِ پایین چند پیکسل بالاتر برود تا به
+ *  نوارِ پایین نچسبد. فقط وقتی data-jruntime=tauri روی <html> باشد اعمال می‌شود،
+ *  پس موبایل/وب دست‌نخورده می‌مانند.
+ * ==========================================================================*/
+html[data-jruntime="tauri"] .floating-add-btn-bottom,
+html[data-jruntime="tauri"] .person-fab-add {
+    bottom: 114px;
 }
