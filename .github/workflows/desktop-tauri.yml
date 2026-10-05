@@ -136,8 +136,12 @@ jobs:
           # فقط «مقدارِ version» در tauri.conf.json عوض می‌شود (بقیهٔ فایل دست‌نخورده)
           $p = 'src-tauri/tauri.conf.json'
           (Get-Content $p -Raw) -replace '("version"\s*:\s*")[^"]*(")', ('${1}' + $v + '${2}') | Set-Content -Encoding UTF8 $p
-          Write-Host "— خطِ version در tauri.conf.json —"
+          # نسخهٔ باینری (Cargo.toml) هم از تگ گرفته شود تا hb_app_version دقیقاً همان تگ باشد.
+          $c = 'src-tauri/Cargo.toml'
+          (Get-Content $c -Raw) -replace '(?m)^(version\s*=\s*")[^"]*(")', ('${1}' + $v + '${2}') | Set-Content -Encoding UTF8 $c
+          Write-Host "— خطِ version در tauri.conf.json و Cargo.toml —"
           Select-String -Path $p -Pattern '"version"' | Select-Object -First 1
+          Select-String -Path $c -Pattern '^version' | Select-Object -First 1
 
       - name: راه‌اندازیِ Node (برای محافظتِ سورس)
         uses: actions/setup-node@v4
@@ -159,9 +163,6 @@ jobs:
       # را درست پیدا کند (رفعِ خطای «failed to watch ...Cargo.toml» وقتی از ریشه اجرا شود).
       - name: ساخت نصب‌کننده
         working-directory: src-tauri
-        env:
-          # Client Secret ورودِ گوگل: از GitHub Secrets خوانده و فقط داخلِ باینریِ Rust قرار می‌گیرد
-          HESABDAR_GOOGLE_CLIENT_SECRET: ${{ secrets.HESABDAR_GOOGLE_CLIENT_SECRET }}
         run: cargo tauri build
 
       - name: فهرستِ خروجی‌ها
