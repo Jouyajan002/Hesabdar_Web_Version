@@ -17,6 +17,17 @@ tauri      = { version = "2", features = [] }
 serde      = { version = "1", features = ["derive"] }
 serde_json = "1"
 
+# ── وابستگی‌های ماژولِ ورودِ گوگل‌درایو (src/google_oauth.rs) ────────────────────
+# این ماژول OAuthِ نیتیو (loopback + PKCE) را برای ورودِ گوگل در نسخهٔ نصبی انجام می‌دهد.
+# نسخه‌ها مطابقِ APIهایی که در کد استفاده شده انتخاب شده‌اند:
+#   • getrandom 0.3 → چون از getrandom::fill استفاده شده (در 0.2 وجود ندارد).
+#   • ureq 2.x     → چون از ureq::AgentBuilder و ureq::Error::Status استفاده شده (API نسخهٔ ۲).
+#   • sha2 / url   → برای چالشِ PKCE (S256) و ساختِ/خواندنِ پارامترهای URL.
+sha2       = "0.10"
+url        = "2"
+ureq       = "2"
+getrandom  = "0.3"
+
 # ── فقط ویندوز: پنلِ اشتراکِ سیستم (WinRT DataTransferManager) ──────────────────
 # نسخه‌ها عمداً همان نسخه‌هایی است که خودِ Tauri 2.12 در Cargo.lock می‌آورد
 # (windows 0.62.2 و windows-collections 0.3.2)، تا نسخهٔ تکراری ساخته نشود و
