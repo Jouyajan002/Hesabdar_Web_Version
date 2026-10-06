@@ -20,6 +20,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tauri::Emitter; // برای app.emit (رویدادِ پیشرفتِ دانلودِ بروزرسانی)
+use tauri::Manager; // برای get_webview_window (failsafeِ نمایشِ پنجره هنگامِ شروع)
 
 // ورودِ گوگل با OAuth Desktop/Loopback (همان منطقِ main.js الکترون) — فایلِ جدا: google_oauth.rs
 mod google_oauth;
@@ -799,6 +800,22 @@ async fn hb_download_and_run(app: tauri::AppHandle, url: String) -> Result<Strin
 
 fn main() {
     tauri::Builder::default()
+        // ── نمایشِ پنجره بعد از آماده‌شدنِ صفحه (رفعِ «صفحهٔ سفیدِ چندثانیه‌ای» هنگامِ شروع) ──
+        // پنجره در tauri.conf.json با visible:false آغاز می‌شود تا کاربر پیش از رندرِ WebView
+        // یک مستطیلِ سفیدِ خالی نبیند؛ خودِ صفحه به‌محضِ کشیده‌شدنِ لودر، پنجره را نشان می‌دهد.
+        // این تایمر فقط «failsafeِ سخت» است: اگر به هر دلیلی JS اجرا نشد، پنجره بعد از ۴ ثانیه
+        // به‌هر‌حال نمایش داده می‌شود تا هرگز نامرئی نماند. هیچ منطقِ دیگری تغییر نمی‌کند.
+        .setup(|app| {
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(4000));
+                if let Some(w) = handle.get_webview_window("main") {
+                    let _ = w.show();
+                    let _ = w.set_focus();
+                }
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             hb_downloads_dir,
             hb_temp_dir,
