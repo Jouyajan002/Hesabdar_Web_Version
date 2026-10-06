@@ -119,28 +119,64 @@
                         setTimeout(function () { try { d.classList.remove('jouya-show-loader'); } catch (e) {} }, 450);
                     } catch (e) {}
                 }
+
+                // ── (نسخهٔ نصبیِ ویندوز) نمایشِ پنجره بعد از کشیده‌شدنِ لودر ─────────────────
+                // پنجره با visible:false آغاز می‌شود تا کاربر پیش از رندرِ WebView یک صفحهٔ
+                // سفیدِ خالی نبیند. همین‌که لودر روی صفحه نشست، پنجره نشان داده می‌شود؛ پس
+                // اولین چیزی که کاربر می‌بیند خودِ صفحهٔ «در حال پردازش اطلاعات» است.
+                // چند failsafe تضمین می‌کنند پنجره هرگز پنهان نماند (در main.rs هم یک
+                // failsafeِ ۴ ثانیه‌ای هست). در وب و اندروید این بخش بی‌اثر است.
+                var winShown = false;
+                function showAppWindow() {
+                    if (winShown) return;
+                    try {
+                        var T = window.__TAURI__;
+                        if (!T || !T.window) return;          // وب/اندروید → کاری لازم نیست
+                        var get = T.window.getCurrentWindow || T.window.getCurrent;
+                        if (typeof get !== 'function') return;
+                        var W = get.call(T.window);
+                        if (!W || typeof W.show !== 'function') return;
+                        winShown = true;
+                        W.show();
+                        if (typeof W.setFocus === 'function') W.setFocus();
+                    } catch (e) {}
+                }
+                try { requestAnimationFrame(function () { requestAnimationFrame(showAppWindow); }); } catch (e) {}
+                document.addEventListener('DOMContentLoaded', function () { setTimeout(showAppWindow, 0); });
+                window.addEventListener('load', showAppWindow);
+                setTimeout(showAppWindow, 1200);
+                setTimeout(showAppWindow, 2500);
                 // ── لودر دقیقاً وقتی کنار می‌رود که «صفحهٔ نهایی» آماده شده باشد ──
                 // این تضمین می‌کند: نه فلشِ امور مالی، نه فلشِ فرمِ ورود، و نه پنهان‌ماندنِ
                 // صفحهٔ درست. منطقِ تصمیم‌گیری (قفل/ورود/داشبورد) کاملاً در auth-system.js و
                 // script.js است و اینجا هیچ تغییری نمی‌کند؛ لودر فقط «روی» آن می‌نشیند و کنار می‌رود.
+                var authSeenAt = 0;
                 function readyThenReveal() {
                     try {
                         // ۱) اگر صفحهٔ قفل نمایش داده شده (کاربر باید رمز بزند) → آماده است
                         var lock = document.getElementById('app-lock-overlay');
                         if (lock && lock.style && lock.style.display && lock.style.display !== 'none') { reveal(); return true; }
-                        // ۲) اگر صفحهٔ ورود ساخته شده (کاربر لاگ‌این نیست) → آماده است
-                        if (document.getElementById('auth-screen-overlay')) { reveal(); return true; }
-                        // ۳) اگر «داشبورد» واقعاً فعال شده (کاربر لاگ‌این است و showSection اجرا شده)
-                        //    → آماده است. عمداً فقط #dashboard بررسی می‌شود، نه هر .section.active،
-                        //    چون ممکن است بخشِ دیگری در HTML به‌طورِ پیش‌فرض active مانده باشد و باعثِ
-                        //    «پرش/چشمک» پیش از نشستنِ داشبورد شود.
+                        // ۲) اگر «داشبورد» واقعاً فعال شده → آماده است. عمداً پیش از بررسیِ فرمِ
+                        //    ورود چک می‌شود تا برای کاربری که از قبل وارد شده، مستقیم از صفحهٔ
+                        //    پردازش به داشبورد برود. عمداً فقط #dashboard بررسی می‌شود، نه هر
+                        //    .section.active، چون ممکن است بخشِ دیگری پیش‌فرض active مانده باشد.
                         var dash = document.getElementById('dashboard');
                         if (dash && dash.classList.contains('active')) { reveal(); return true; }
+                        // ۳) فرمِ ورود — فقط اگر «پایدار» باشد. برای کاربری که از قبل وارد شده،
+                        //    این فرم لحظه‌ای ساخته می‌شود و بلافاصله داشبورد می‌نشیند؛ پس یک مهلتِ
+                        //    کوتاه می‌دهیم تا آن چشمکِ فرمِ ورود اصلاً دیده نشود. کاربرِ واقعاً
+                        //    خارج‌شده بعد از همین مهلتِ کوتاه فرمِ ورود را می‌بیند.
+                        if (document.getElementById('auth-screen-overlay')) {
+                            if (!authSeenAt) { authSeenAt = Date.now(); return false; }
+                            if (Date.now() - authSeenAt >= 1200) { reveal(); return true; }
+                            return false;
+                        }
+                        authSeenAt = 0;
                     } catch (e) {}
                     return false;
                 }
                 // رویدادِ خودِ برنامه هنگام سوییچ به بخشِ اولیه (پس از تصمیمِ initApp/showSection)
-                try { document.addEventListener('sectionChanged', function () { setTimeout(reveal, 0); }); } catch (e) {}
+                try { document.addEventListener('sectionChanged', function () { setTimeout(readyThenReveal, 0); }); } catch (e) {}
                 // پس از DOMContentLoaded چند بار وضعیتِ آماده‌بودن را چک کن (سبک و کوتاه)
                 document.addEventListener('DOMContentLoaded', function () {
                     if (readyThenReveal()) return;

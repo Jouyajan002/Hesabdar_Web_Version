@@ -26315,6 +26315,13 @@ function ssbLoadSubContent(key) {
                 <button class="ssb-btn ssb-btn-danger" onclick="ssbFullReset()">
                     <i class="fas fa-power-off"></i> ریسیت کامل برنامه
                 </button>
+            </div>
+            <div class="ssb-card">
+                <h4><i class="fas fa-broom"></i> پاکسازی پیشرفته</h4>
+                <p style="font-size:0.85rem;color:#f87171;margin-bottom:10px;">تمام داده‌های شما هم روی این دستگاه و هم در فضای ابری پاک می‌شود. حساب کاربری و لایسنس شما باقی می‌ماند.</p>
+                <button class="ssb-btn ssb-btn-danger" onclick="ssbAdvancedCleanup()">
+                    <i class="fas fa-broom"></i> پاکسازی پیشرفته
+                </button>
             </div>`;
 
         case 'datasettings':
@@ -27115,6 +27122,58 @@ function ssbFullReset() {
     }
 }
 if (typeof window !== 'undefined') window.ssbFullReset = ssbFullReset;
+
+// ── «پاکسازی پیشرفته» ─────────────────────────────────────────────────────────
+//  داده‌های کسب‌وکار هم از این دستگاه و هم از فضای ابریِ همین کاربر پاک می‌شود، ولی
+//  اکانت، لایسنسِ فعال‌سازی و workspaceِ ساخته‌شده در سرور دست‌نخورده می‌مانند؛ پس کاربر
+//  بدونِ ورودِ دوباره، با یک حسابِ خالی ادامه می‌دهد. منطق‌های دیگر دست نمی‌خورند.
+function ssbAdvancedCleanup() {
+    var _run = function () {
+        var S = (typeof window !== 'undefined') ? window.JouyaSync : null;
+        var keys = (S && S.ALL_BUSINESS_KEYS) ? S.ALL_BUSINESS_KEYS : null;
+        var finishLocal = function (cloudMsg) {
+            var after = function () {
+                ssbShowMsg(cloudMsg);
+                setTimeout(function () { try { location.reload(); } catch (e) {} }, 1200);
+            };
+            if (S && typeof S.localOnlyWipe === 'function' && keys) {
+                S.localOnlyWipe(keys).then(after).catch(after);
+            } else {
+                try {
+                    ['persons','products','transactions','expenses','cashboxes','cashboxTransactions',
+                     'returns','warehouses','warehouseTransfers','services','jouya-currencies',
+                     'jouya-exchange-rates','jouya-reference-rates','backupHistory','dashboardStats',
+                     'activeWarehouseId','cashboxTypes'].forEach(function (k) { localStorage.removeItem(k); });
+                } catch (e) {}
+                after();
+            }
+        };
+        ssbShowMsg('در حال پاکسازی…');
+        if (S && typeof S.cloudWipe === 'function') {
+            S.cloudWipe().then(function (r) {
+                finishLocal((r && r.ok)
+                    ? 'پاکسازی پیشرفته انجام شد ✓'
+                    : 'داده‌های این دستگاه پاک شد؛ پاک‌سازیِ فضای ابری کامل نشد — پس از اتصال به اینترنت دوباره تلاش کنید.');
+            }).catch(function () {
+                finishLocal('داده‌های این دستگاه پاک شد؛ پاک‌سازیِ فضای ابری کامل نشد — پس از اتصال به اینترنت دوباره تلاش کنید.');
+            });
+        } else {
+            finishLocal('داده‌های این دستگاه پاک شد ✓');
+        }
+    };
+    var _q1 = 'تمام داده‌های شما روی این دستگاه و در فضای ابری برای همیشه پاک می‌شود. حساب کاربری و لایسنس شما باقی می‌ماند. ادامه می‌دهید؟';
+    var _q2 = 'این عمل برگشت‌پذیر نیست. برای تایید نهایی دوباره تایید کنید.';
+    if (typeof showConfirm === 'function') {
+        showConfirm('پاکسازی پیشرفته', _q1, function () {
+            showConfirm('تایید نهایی', _q2, _run);
+        });
+    } else {
+        if (!confirm(_q1)) return;
+        if (!confirm(_q2)) return;
+        _run();
+    }
+}
+if (typeof window !== 'undefined') window.ssbAdvancedCleanup = ssbAdvancedCleanup;
 
 
 function ssbCreateBackup() {
@@ -39370,19 +39429,9 @@ function ndUpdDownload() {
     if (!url) { ndUpdSetStatus('نشانیِ فایلِ نصب در دسترس نیست.', 'err'); return; }
     try {
         if (ndUpdIsAndroidApp()) {
-            // اندروید: APK در مرورگرِ سیستم باز می‌شود؛ پس از دانلود، کاربر روی فایل می‌زند و
-            // نصب‌کنندهٔ اندروید روی نسخهٔ قبلی نصبش می‌کند (داده‌ها دست‌نخورده می‌مانند).
-            var opened = false;
-            try {
-                if (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser
-                    && typeof window.Capacitor.Plugins.Browser.open === 'function') {
-                    window.Capacitor.Plugins.Browser.open({ url: url }); opened = true;
-                }
-            } catch (e2) {}
-            if (!opened) { try { window.open(url, '_blank'); } catch (e3) { location.href = url; } }
-            ndUpdSetStatus('دانلودِ فایلِ نصبِ اندروید آغاز شد. پس از پایان، روی فایلِ APK بزنید و ' +
-                '«نصب» را تأیید کنید؛ روی نسخهٔ فعلی نصب می‌شود و اطلاعاتِ شما دست‌نخورده می‌ماند.<br>' +
-                '<small>اگر اجازهٔ نصب خواسته شد، «نصب برنامه‌های ناشناس» را برای مرورگر فعال کنید.</small>', 'ok');
+            // اندروید: دانلودِ درون‌برنامه‌ای با نوارِ پیشرفت، سپس بازشدنِ نصب‌کنندهٔ اندروید
+            // (مثلِ نسخهٔ نصبیِ ویندوز). در صورتِ شکست، خودِ تابع به رفتارِ قبلی برمی‌گردد.
+            ndUpdRunWebAndroidInstall(url);
             return;
         }
         if (ndUpdIsDesktopApp() && typeof __jouyaTauriInvoke === 'function') {
@@ -39391,9 +39440,8 @@ function ndUpdDownload() {
             ndUpdRunInAppInstall(url);
             return;
         }
-        window.open(url, '_blank');
-        ndUpdSetStatus('دانلود آغاز شد. پس از پایانِ دانلود، فایل را اجرا کنید؛ ' +
-            'نصب روی نسخهٔ فعلی انجام می‌شود و اطلاعاتِ شما دست‌نخورده می‌ماند.', 'ok');
+        // وب: همان تجربهٔ درون‌برنامه‌ای — نوارِ پیشرفت و در پایان تحویلِ فایلِ نصب
+        ndUpdRunWebAndroidInstall(url);
     } catch (e) {
         ndUpdSetStatus('بازکردنِ نشانیِ دانلود ممکن نشد.', 'err');
     }
@@ -39409,7 +39457,7 @@ function ndUpdRunInAppInstall(url) {
     ov.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(15,23,42,.72);' +
         'display:flex;align-items:center;justify-content:center;direction:rtl;font-family:inherit;';
     ov.innerHTML =
-        '<div style="background:#fff;border-radius:16px;padding:26px 28px;width:380px;max-width:92vw;box-shadow:0 18px 50px rgba(0,0,0,.35);text-align:center;">' +
+        '<div class="nd-upd-dl-card" style="background:#fff;border-radius:16px;padding:26px 28px;width:380px;max-width:92vw;box-shadow:0 18px 50px rgba(0,0,0,.35);text-align:center;">' +
           '<div style="font-size:16px;font-weight:800;color:#1e3a5f;margin-bottom:6px;"><i class="fas fa-cloud-arrow-down"></i> در حال دانلودِ بروزرسانی…</div>' +
           '<div style="font-size:12.5px;color:#64748b;margin-bottom:16px;">لطفاً صبر کنید؛ پس از پایان، برنامه بسته می‌شود و نصب به‌صورتِ خودکار آغاز می‌گردد.</div>' +
           '<div style="height:12px;background:#e2e8f0;border-radius:999px;overflow:hidden;">' +
@@ -39463,6 +39511,162 @@ function ndUpdRunInAppInstall(url) {
         });
 }
 if (typeof window !== 'undefined') window.ndUpdRunInAppInstall = ndUpdRunInAppInstall;
+
+// ── دانلود + نصبِ درون‌برنامه‌ای برای «وب» و «اندروید» ─────────────────────────────
+//  همان تجربهٔ نسخهٔ نصبی: نوارِ پیشرفتِ واقعی داخلِ خودِ برنامه و در پایان مرحلهٔ نصب.
+//  در اندروید فایل APK داخلِ برنامه دانلود و روی دستگاه ذخیره می‌شود و سپس نصب‌کنندهٔ
+//  اندروید باز می‌گردد (تاییدِ نصب را خودِ اندروید می‌پرسد — این یک قاعدهٔ سیستم‌عامل است).
+//  در وب فایل در پایانِ دانلود تحویلِ مرورگر می‌شود تا کاربر اجرایش کند.
+//  اگر هر مرحله ممکن نشد، دقیقاً به رفتارِ قبلی (بازکردنِ نشانیِ دانلود) برمی‌گردیم تا
+//  هیچ عملکردی از بین نرود. منطقِ بررسیِ نسخه و بقیهٔ مسیرها دست‌نخورده‌اند.
+function ndUpdRunWebAndroidInstall(url) {
+    var isAndroid = (typeof ndUpdIsAndroidApp === 'function') && ndUpdIsAndroidApp();
+
+    var ov = document.getElementById('nd-upd-dl-overlay');
+    if (ov && ov.parentNode) ov.parentNode.removeChild(ov);
+    ov = document.createElement('div');
+    ov.id = 'nd-upd-dl-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(15,23,42,.72);' +
+        'display:flex;align-items:center;justify-content:center;direction:rtl;font-family:inherit;';
+    ov.innerHTML =
+        '<div class="nd-upd-dl-card" style="background:#fff;border-radius:16px;padding:26px 28px;width:380px;max-width:92vw;box-shadow:0 18px 50px rgba(0,0,0,.35);text-align:center;">' +
+          '<div style="font-size:16px;font-weight:800;color:#1e3a5f;margin-bottom:6px;"><i class="fas fa-cloud-arrow-down"></i> در حال دانلودِ بروزرسانی…</div>' +
+          '<div style="font-size:12.5px;color:#64748b;margin-bottom:16px;">لطفاً صبر کنید؛ پس از پایانِ دانلود، مرحلهٔ نصب آغاز می‌شود.</div>' +
+          '<div style="height:12px;background:#e2e8f0;border-radius:999px;overflow:hidden;">' +
+            '<div id="nd-upd-dl-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#1de9b6,#00bfa5);transition:width .2s ease;"></div>' +
+          '</div>' +
+          '<div id="nd-upd-dl-pct" style="font-size:13px;font-weight:700;color:#0f172a;margin-top:10px;">۰٪</div>' +
+          '<div id="nd-upd-dl-note" style="font-size:11.5px;color:#94a3b8;margin-top:8px;min-height:16px;"></div>' +
+        '</div>';
+    document.body.appendChild(ov);
+    try { if (typeof applyNumberSystemToDocument === 'function') applyNumberSystemToDocument(); } catch (e) {}
+
+    var setPct = function (p) {
+        p = Math.max(0, Math.min(100, parseInt(p, 10) || 0));
+        var bar = document.getElementById('nd-upd-dl-bar');
+        var pct = document.getElementById('nd-upd-dl-pct');
+        if (bar) bar.style.width = p + '%';
+        if (pct) { pct.textContent = (typeof _toFaDigits === 'function' ? _toFaDigits(String(p)) : String(p)) + '٪'; }
+    };
+    var note = function (m) { var n = document.getElementById('nd-upd-dl-note'); if (n) n.textContent = m || ''; };
+    var closeOv = function () { try { var o = document.getElementById('nd-upd-dl-overlay'); if (o && o.parentNode) o.parentNode.removeChild(o); } catch (e) {} };
+
+    // در صورتِ شکست، همان رفتارِ قبلی (بازکردنِ نشانی) اجرا می‌شود تا کاربر بدونِ راه نماند
+    var legacyFallback = function (msg) {
+        closeOv();
+        try {
+            if (isAndroid && window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Browser
+                && typeof window.Capacitor.Plugins.Browser.open === 'function') {
+                window.Capacitor.Plugins.Browser.open({ url: url });
+            } else { window.open(url, '_blank'); }
+        } catch (e) { try { location.href = url; } catch (e2) {} }
+        ndUpdSetStatus(msg || 'دانلود از مرورگر ادامه می‌یابد؛ پس از پایان، فایل را اجرا کنید.', 'warn');
+    };
+
+    var fileName = '';
+    try { fileName = decodeURIComponent(String(url).split('?')[0].split('/').pop() || ''); } catch (e) { fileName = ''; }
+    if (!fileName) fileName = isAndroid ? 'hesabdar-update.apk' : 'hesabdar-setup.exe';
+
+    var blobToBase64 = function (blob) {
+        return new Promise(function (resolve, reject) {
+            try {
+                var fr = new FileReader();
+                fr.onload = function () {
+                    var s = String(fr.result || '');
+                    var i = s.indexOf(',');
+                    resolve(i >= 0 ? s.slice(i + 1) : s);
+                };
+                fr.onerror = function () { reject(new Error('خواندنِ فایل ممکن نشد')); };
+                fr.readAsDataURL(blob);
+            } catch (e) { reject(e); }
+        });
+    };
+
+    // ذخیرهٔ APK روی دستگاه و بازکردنِ نصب‌کنندهٔ اندروید
+    var androidInstall = function (blob) {
+        note('در حال آماده‌سازیِ نصب…');
+        return blobToBase64(blob).then(function (b64) {
+            var dirs = ['EXTERNAL', 'DOCUMENTS', 'CACHE', 'DATA'];
+            var step = function (i) {
+                if (i >= dirs.length) return Promise.reject(new Error('ذخیرهٔ فایل ممکن نشد'));
+                return __jouyaAndCall('Filesystem', 'writeFile', { path: fileName, data: b64, directory: dirs[i], recursive: true })
+                    .then(function () { return __jouyaAndCall('Filesystem', 'getUri', { path: fileName, directory: dirs[i] }); })
+                    .then(function (r) {
+                        var uri = r && (r.uri || r.path);
+                        if (!uri) throw new Error('بدونِ uri');
+                        return uri;
+                    })
+                    .catch(function () { return step(i + 1); });
+            };
+            return step(0);
+        }).then(function (uri) {
+            // تلاش برای بازکردنِ نصب‌کننده
+            return __jouyaAndCall('Browser', 'open', { url: uri }).then(function () { return uri; });
+        }).then(function () {
+            setPct(100);
+            note('فایل آماده شد؛ «نصب» را تایید کنید.');
+            setTimeout(function () {
+                closeOv();
+                ndUpdSetStatus('فایلِ بروزرسانی دانلود شد و مرحلهٔ نصب آغاز شد. «نصب» را تایید کنید؛ ' +
+                    'روی نسخهٔ فعلی نصب می‌شود و اطلاعاتِ شما دست‌نخورده می‌ماند.' +
+                    '<br><small>اگر پنجرهٔ نصب باز نشد، فایلِ «' + ndEsc(fileName) + '» را از پوشهٔ دانلود/اسناد اجرا کنید.</small>', 'ok');
+            }, 900);
+        });
+    };
+
+    // تحویلِ فایل به مرورگر در نسخهٔ وب
+    var webDeliver = function (blob) {
+        var objUrl = URL.createObjectURL(blob);
+        try {
+            var a = document.createElement('a');
+            a.href = objUrl; a.download = fileName;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        } catch (e) { try { window.open(objUrl, '_blank'); } catch (e2) {} }
+        setTimeout(function () { try { URL.revokeObjectURL(objUrl); } catch (e) {} }, 60000);
+        setPct(100);
+        note('دانلود کامل شد.');
+        setTimeout(function () {
+            closeOv();
+            ndUpdSetStatus('فایلِ نصب دانلود شد. آن را اجرا کنید؛ نصب روی نسخهٔ فعلی انجام می‌شود ' +
+                'و اطلاعاتِ شما دست‌نخورده می‌ماند.', 'ok');
+        }, 800);
+    };
+
+    // ── دانلود با نمایشِ پیشرفتِ واقعی ──
+    var started = false;
+    try {
+        fetch(url, { cache: 'no-store' }).then(function (res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            started = true;
+            var total = parseInt(res.headers.get('content-length') || '0', 10) || 0;
+            if (!res.body || typeof res.body.getReader !== 'function') return res.blob();
+            var reader = res.body.getReader(), chunks = [], got = 0;
+            var pump = function () {
+                return reader.read().then(function (r) {
+                    if (r.done) return new Blob(chunks);
+                    chunks.push(r.value);
+                    got += (r.value && r.value.length) || 0;
+                    if (total > 0) setPct(Math.round(got * 100 / total));
+                    else note('دریافت‌شده: ' + Math.round(got / 1048576) + ' مگابایت');
+                    return pump();
+                });
+            };
+            return pump();
+        }).then(function (blob) {
+            setPct(100);
+            return isAndroid ? androidInstall(blob) : webDeliver(blob);
+        }).catch(function (err) {
+            try { console.warn('[nd-upd] web/android install fallback:', err && err.message); } catch (e) {}
+            legacyFallback(started
+                ? 'آماده‌سازیِ نصب ممکن نشد؛ دانلود از مرورگر ادامه می‌یابد.'
+                : 'دانلودِ درون‌برنامه‌ای ممکن نشد؛ دانلود از مرورگر ادامه می‌یابد.');
+        });
+    } catch (e) {
+        legacyFallback();
+    }
+    return true;
+}
+if (typeof window !== 'undefined') window.ndUpdRunWebAndroidInstall = ndUpdRunWebAndroidInstall;
 function ndUpdSaveRepo() {
     var el = document.getElementById('nd-upd-repo');
     ndUpdSetRepo(el ? el.value : '');

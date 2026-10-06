@@ -1308,3 +1308,63 @@ body:has(#dashboard.section.active) #financial.section.active { display: none !i
     #dashboard .nd-brand .dsi-name { font-size: .92rem; }
     #dashboard .nd-lbtn { font-size: .56rem !important; }
 }
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (امور مالی — حساب‌ها) حذفِ «کانتینرِ اسکرولِ داخلی» روی موبایل/تبلت
+   ریشهٔ مشکل: در style.css قاعدهٔ «#financial .fin-panel» به خودِ پنل
+   max-height + overflow-y:auto می‌دهد، پس وقتی تعدادِ حساب‌ها زیاد می‌شد داخلِ یک
+   جعبهٔ جداگانه اسکرول می‌خوردند، نه مثلِ اجناس/اشخاص با خودِ صفحه.
+   اینجا فقط برای پنلِ «حساب‌ها» آن اسکرولِ داخلی خنثی می‌شود تا تنها اسکرولِ
+   موجود همان financial-content-wrapper (اسکرولِ خودِ صفحه) باشد.
+   هیچ منطق، چیدمان، رنگ یا فاصله‌ای تغییر نمی‌کند — فقط اسکرولِ تودرتو برداشته شد.
+   ─────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+    #financial #fin-cashbox,
+    #fin-cashbox .table-container,
+    #fin-cashbox .cash-boxes-list,
+    #fin-cashbox .cash-boxes-grid,
+    #cash-boxes-list {
+        max-height: none !important;
+        overflow: visible !important;
+        overflow-y: visible !important;
+    }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (سایدبارِ تنظیمات — موبایل) کمی جمع‌وجورتر
+   درخواستِ کاربر: اندازهٔ بخش‌های سایدبار روی گوشی زیادی بزرگ بود. اینجا فقط
+   اندازه‌ها (فاصله/فونت/ارتفاع) حدودِ ۱۰٪ کم می‌شود؛ رنگ‌بندی، چیدمان، ترتیب و
+   هیچ منطقی تغییر نمی‌کند.
+   ─────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 600px) {
+    .settings-sidebar { padding: 16px !important; }
+    .ssb-header { padding: 14px 12px 11px !important; }
+    .ssb-main-list li { padding: 11px 12px !important; font-size: 0.88rem !important; gap: 10px !important; }
+    .ssb-item-icon { width: 28px !important; height: 28px !important; font-size: 0.82rem !important; }
+    .ssb-sub-content { padding: 8px 10px !important; }
+    .ssb-card { padding: 13px !important; margin-bottom: 10px !important; }
+    .ssb-card h4 { font-size: 0.84rem !important; margin-bottom: 10px !important; padding-bottom: 7px !important; }
+    .ssb-card label { font-size: 0.78rem !important; }
+    .ssb-card input, .ssb-card select, .ssb-card textarea {
+        padding: 8px 10px !important; font-size: 0.83rem !important; margin-bottom: 8px !important;
+    }
+    .ssb-btn { padding: 9px 12px !important; font-size: 0.84rem !important; }
+}
+
+/* ───────────────────────────────────────────────────────────────────────────
+   (امور مالی — حساب‌ها) نوارِ «موجودی تمامی حساب‌ها» بالا ثابت بماند
+   درخواستِ کاربر: وقتی تعدادِ حساب‌ها زیاد شد، فقط کارت‌های حساب اسکرول شوند و
+   این نوار سرِ جایش بماند — دقیقاً مثلِ هدرِ چسبانِ بخش‌های اجناس و اشخاص.
+   اسکرولِ اصلی همان financial-content-wrapper است و چون پنلِ حساب‌ها (در قاعدهٔ
+   بالاتر) overflow:visible شده، sticky درست نسبت به همان اسکرولر عمل می‌کند.
+   نوار پس‌زمینهٔ مات دارد، پس کارت‌ها تمیز از زیرِ آن رد می‌شوند.
+   فقط چیدمانِ نمایشی است؛ هیچ منطق، رنگ یا onclick تغییر نمی‌کند.
+   ─────────────────────────────────────────────────────────────────────────── */
+@media (max-width: 1024px) {
+    #fin-cashbox .fin-balance-bar {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 20 !important;
+        margin-top: 0 !important;
+    }
+}

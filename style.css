@@ -9691,7 +9691,37 @@ body:not(:has(#dashboard.section.active)) .content-area { zoom: 0.90; }
  *  تا ظاهرش هیچ تفاوتی با سایر گزینه‌های سایدبار نداشته باشد و در حالتِ روشن و
  *  تاریک دقیقاً هماهنگ بماند.
  * ==========================================================================*/
-.jann-list { max-height: 340px; overflow-y: auto; padding: 2px; }
+/* فهرستِ اعلانات: پیش‌فرضِ امن برای وب‌ویوهای قدیمی (بدونِ :has) */
+.jann-list { max-height: 60vh; overflow-y: auto; padding: 2px; }
+
+/* کشیده‌شدنِ کارتِ «مرکز اعلانات» تا انتهای پنلِ سایدبار.
+   فقط وقتی همین پنل باز است اعمال می‌شود (با :has)، پس بقیهٔ بخش‌های سایدبار
+   ذره‌ای تغییر نمی‌کنند. اعلانات تا پایین کشیده می‌شوند و وقتی از فضا بیشتر
+   شدند، خودِ فهرست اسکرول می‌خورد (نه کلِ سایدبار). */
+.settings-sidebar:has(#ssb-announcements-list) {
+    display: flex;
+    flex-direction: column;
+    overflow-y: hidden;
+}
+.settings-sidebar:has(#ssb-announcements-list) .ssb-sub-content {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+.settings-sidebar:has(#ssb-announcements-list) .ssb-sub-content > .ssb-card {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 0;
+}
+.settings-sidebar:has(#ssb-announcements-list) #ssb-announcements-list.jann-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+}
 .jann-empty {
     color: #94a3b8; text-align: center; padding: 16px 8px;
     font-size: 0.85rem; line-height: 1.9;
@@ -9734,4 +9764,22 @@ body:not(:has(#dashboard.section.active)) .content-area { zoom: 0.90; }
 html[data-jruntime="tauri"] .floating-add-btn-bottom,
 html[data-jruntime="tauri"] .person-fab-add {
     bottom: 114px;
+}
+
+/* ============================================================================
+ *  پنجرهٔ پیشرفتِ دانلود/بروزرسانی — جمع‌وجورتر روی موبایل
+ *  (درخواستِ کاربر: روی صفحهٔ گوشی زیادی بزرگ نباشد). فقط اندازه‌ها کم می‌شود؛
+ *  رنگ، چیدمان و منطق دست‌نخورده می‌ماند.
+ * ==========================================================================*/
+@media (max-width: 600px) {
+    .nd-upd-dl-card {
+        width: 300px !important;
+        max-width: 88vw !important;
+        padding: 18px 18px !important;
+        border-radius: 14px !important;
+    }
+    .nd-upd-dl-card > div:first-child { font-size: 14px !important; }
+    .nd-upd-dl-card > div:nth-child(2) { font-size: 11.5px !important; margin-bottom: 12px !important; }
+    #nd-upd-dl-pct { font-size: 12px !important; }
+    #nd-upd-dl-note { font-size: 10.5px !important; }
 }

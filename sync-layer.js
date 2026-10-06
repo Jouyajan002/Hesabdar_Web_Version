@@ -567,6 +567,50 @@
     // preview فقط شمارشِ unsynced را می‌دهد (بدونِ تغییر). UI پیش از Wipe هشدار می‌دهد.
     function previewLocalOnlyWipe(keys) { return { unsynced: countUnsyncedForKeys(keys || []) }; }
 
+    // ===========================================================================
+    //  «پاکسازی پیشرفته» — خالی‌کردنِ کاملِ دادهٔ کسب‌وکارِ کاربر از فضای ابری
+    //  ---------------------------------------------------------------------------
+    //  همهٔ ردیف‌های دادهٔ این workspace به «tombstone» تبدیل می‌شوند: data خالی می‌شود و
+    //  deleted_at زمان می‌خورد. چرا tombstone و نه حذفِ فیزیکی؟ چون pull فقط ردیف‌هایی را
+    //  می‌بیند که وجود دارند؛ اگر ردیف فیزیکی حذف شود، دستگاهِ دومِ کاربر هرگز خبردار
+    //  نمی‌شود و همان داده را دوباره آپلود می‌کند. با tombstone، دستگاه‌های دیگر هم
+    //  داده‌شان را پاک می‌کنند. خالی‌کردنِ data تضمین می‌کند محتوایی از کاربر در ابر نماند.
+    //
+    //  دست‌نخورده می‌ماند: اکانت، لایسنس، خودِ workspace و عضویتِ کاربر، و تنظیماتِ فروشگاه
+    //  (store_settings) که پیکربندیِ برنامه است نه دادهٔ کسب‌وکار.
+    // ===========================================================================
+    function cloudWipe() {
+        if (!workspaceId) return Promise.resolve({ ok: false, error: 'workspace موجود نیست' });
+        return ensureToken().then(function () {
+            var stamp = nowIso(), dk = shortDevice();
+            var tables = COLLECTIONS.map(function (c) { return c.table; });
+            var done = 0, failed = [];
+            var step = function (i) {
+                if (i >= tables.length) return Promise.resolve();
+                var t = tables[i];
+                var q = '/rest/v1/' + t + '?workspace_id=eq.' + encodeURIComponent(workspaceId) + '&deleted_at=is.null';
+                return Sb.req(q, {
+                    method: 'PATCH',
+                    headers: { 'Prefer': 'return=minimal' },
+                    body: { data: {}, deleted_at: stamp, device_key: dk }
+                }).then(function () { done++; })
+                  .catch(function (e) { failed.push(t + ' (' + ((e && e.message) || e) + ')'); })
+                  .then(function () { return step(i + 1); });
+            };
+            return step(0).then(function () {
+                // لاگِ تعارض‌های ابری هم نسخه‌هایی از رکوردهای مالیِ کاربر را نگه می‌دارد → پاک شود
+                return Sb.req('/rest/v1/' + CONFLICT_TABLE + '?workspace_id=eq.' + encodeURIComponent(workspaceId),
+                    { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } }).catch(function () {});
+            }).then(function () {
+                log('پاکسازی پیشرفته: ' + done + ' جدول در ابر خالی شد؛ ناموفق: ' + (failed.length || 0));
+                return { ok: failed.length === 0, tables: done, failed: failed };
+            });
+        }).catch(function (e) {
+            warn('پاکسازی پیشرفته ناموفق:', e && e.message);
+            return { ok: false, error: (e && e.message) || String(e) };
+        });
+    }
+
     // عملیاتِ اصلی. opts.flushFirst=true → ابتدا unsynced به Cloud push شود (Cloud تغییر می‌کند)،
     // سپس Wipe. پیش‌فرض false = Wipeِ خالص (Cloud دست‌نخورده؛ unsynced محلی از بین می‌رود — با هشدار).
     function localOnlyWipe(keys, opts) {
@@ -1115,6 +1159,8 @@
         // Local-Only Wipe (پاک‌کردنِ Localِ همین دستگاه، بدونِ Delete در Cloud)
         localOnlyWipe: localOnlyWipe,
         previewLocalOnlyWipe: previewLocalOnlyWipe,
+        // پاکسازی پیشرفته (خالی‌کردنِ دادهٔ کسب‌وکار از فضای ابری؛ اکانت/لایسنس/workspace می‌مانند)
+        cloudWipe: cloudWipe,
         // مجموعه‌های آمادهٔ کلیدها (منبعِ واحدِ حقیقت برای دکمه‌های سایدبار):
         ALL_BUSINESS_KEYS: COLLECTIONS.map(function (c) { return c.key; }).concat(['jouya-reference-rates', 'dashboardStats', 'backupHistory', 'activeWarehouseId', 'cashboxTypes']),
         PERSONS_KEYS: ['persons'],
