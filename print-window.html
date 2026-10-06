@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="fa">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>چاپ</title>
+<!--
+  print-window.html — پنجرهٔ چاپِ جداگانه (فقط نسخهٔ نصبیِ ویندوز / Tauri)
+  ---------------------------------------------------------------------------
+  چرا این فایل وجود دارد؟
+  پنجرهٔ «تنظیماتِ چاپ» را خودِ WebView2 می‌سازد و همیشه به اندازهٔ پنجره‌ای که چاپ از آن
+  شروع شده کشیده می‌شود. وقتی برنامه تمام‌صفحه است، آن پنجره هم تمام‌قد و بزرگ می‌شود.
+  راهِ حل: چاپ از یک پنجرهٔ متوسطِ وسط‌چین انجام می‌شود؛ پس پیش‌نمایش و تنظیماتِ چاپ هم
+  به اندازهٔ همین پنجره، جمع‌وجور و کامل دیده می‌شوند و پنجرهٔ اصلیِ برنامه هیچ تغییری
+  نمی‌کند. پیش‌نمایشِ اورلیِ داخلِ برنامه هم سرِ جای خودش باقی است.
+
+  محتوا از پنجرهٔ اصلی با رویدادِ Tauri می‌آید (نه localStorage) تا دادهٔ حجیمِ بل هرگز
+  وارد حافظهٔ محلیِ برنامه نشود. یک «توکن» در نشانیِ همین صفحه هست تا اگر چند بار پشتِ‌سرِهم
+  چاپ بزنید، هیچ‌وقت محتوای بلِ قبلی به پنجرهٔ تازه نرسد.
+
+  این فایل هیچ اسکریپتِ بیرونی‌ای از برنامه بار نمی‌کند، پس مراحلِ درهم‌ریزی/رمزنگاریِ
+  بیلد (که فقط فایل‌های .js را پردازش می‌کنند) به آن کاری ندارند.
+-->
+<link rel="stylesheet" href="assets/fonts/vazirmatn.css">
+<link rel="stylesheet" href="assets/css/all.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    display: flex; flex-direction: column;
+    font-family: Vazirmatn, Tahoma, sans-serif;
+    background: #eef2f7; direction: rtl; overflow: hidden;
+  }
+  #hb-bar {
+    flex: 0 0 auto; display: flex; align-items: center; gap: 10px;
+    padding: 10px 14px; background: #1e3a5f; color: #fff;
+    box-shadow: 0 2px 8px rgba(0,0,0,.18);
+  }
+  #hb-bar .hb-title { font-size: 13.5px; font-weight: 700; margin-right: auto; opacity: .92; }
+  #hb-bar button {
+    cursor: pointer; border: none; border-radius: 8px; padding: 8px 16px;
+    font-size: 13px; font-weight: 700; font-family: inherit;
+    display: inline-flex; align-items: center; gap: 7px; transition: filter .15s;
+  }
+  #hb-bar button:hover { filter: brightness(1.08); }
+  .hb-b-print { background: #1de9b6; color: #0f172a; }
+  .hb-b-close { background: rgba(255,255,255,.14); color: #fff; }
+  #hb-wrap {
+    flex: 1 1 auto; overflow: auto; padding: 14px;
+    display: flex; justify-content: center; align-items: stretch;
+  }
+  #hb-frame {
+    width: 100%; max-width: 840px; min-height: 360px;
+    border: 1px solid #d7dfea; border-radius: 10px; background: #fff;
+    box-shadow: 0 6px 20px rgba(15,23,42,.10);
+  }
+  #hb-msg { margin: auto; color: #64748b; font-size: 14px; }
+  /* نوارِ بالا هرگز چاپ نشود (چاپ از داخلِ iframe انجام می‌شود، ولی محضِ احتیاط) */
+  @media print { #hb-bar { display: none !important; } }
+</style>
+</head>
+<body>
+
+  <div id="hb-bar">
+    <button type="button" class="hb-b-print" onclick="hbPrint()"><i class="fas fa-print"></i> چاپ</button>
+    <button type="button" class="hb-b-close" onclick="hbClose()"><i class="fas fa-xmark"></i> بستن</button>
+    <span class="hb-title">پیش‌نمایش چاپ</span>
+  </div>
+
+  <div id="hb-wrap"><div id="hb-msg">در حال آماده‌سازی…</div></div>
+
+<script>
+(function () {
+  'use strict';
+  var T = (typeof window !== 'undefined') ? (window.__TAURI__ || null) : null;
+  var rendered = false;
+
+  // توکنِ این پنجره — جلوی رسیدنِ محتوای بلِ قبلی را می‌گیرد
+  var tok = '';
+  try { tok = (new URLSearchParams(location.search)).get('t') || ''; } catch (e) { tok = ''; }
+  var EV_READY = 'hb-print-ready' + (tok ? ('-' + tok) : '');
+  var EV_HTML  = 'hb-print-html'  + (tok ? ('-' + tok) : '');
+
+  function render(html) {
+    if (rendered) return;
+    rendered = true;
+    var wrap = document.getElementById('hb-wrap');
+    wrap.innerHTML = '';
+    var f = document.createElement('iframe');
+    f.id = 'hb-frame';
+    f.setAttribute('title', 'پیش‌نمایش چاپ');
+    wrap.appendChild(f);
+    try {
+      var d = f.contentWindow.document;
+      d.open(); d.write(html); d.close();
+    } catch (e) {
+      try { f.srcdoc = html; } catch (_) {}
+    }
+    // کمی مکث تا فونت/تصویرها بیایند، سپس پنجرهٔ تنظیماتِ چاپ باز شود
+    setTimeout(hbPrint, 500);
+  }
+
+  window.hbPrint = function () {
+    var f = document.getElementById('hb-frame');
+    if (!f) { try { window.print(); } catch (e) {} return; }
+    try { f.contentWindow.focus(); f.contentWindow.print(); }
+    catch (e) { try { window.print(); } catch (_) {} }
+  };
+
+  window.hbClose = function () {
+    try {
+      if (T && T.window) {
+        var get = T.window.getCurrentWindow || T.window.getCurrent;
+        if (typeof get === 'function') {
+          var W = get.call(T.window);
+          if (W && typeof W.close === 'function') { W.close(); return; }
+        }
+      }
+    } catch (e) {}
+    try { window.close(); } catch (e) {}
+  };
+
+  if (T && T.event && typeof T.event.listen === 'function') {
+    // دریافتِ محتوای بل از پنجرهٔ اصلی
+    T.event.listen(EV_HTML, function (ev) {
+      var h = ev && (ev.payload != null ? ev.payload : ev);
+      if (typeof h === 'string' && h) render(h);
+    });
+    // اعلامِ آمادگی — چند بار تکرار می‌شود تا اگر پنجرهٔ اصلی هنوز شنونده نگذاشته بود از دست نرود
+    var tries = 0;
+    var ping = setInterval(function () {
+      tries++;
+      try { T.event.emit(EV_READY, Date.now()); } catch (e) {}
+      if (rendered || tries > 25) clearInterval(ping);
+    }, 150);
+    try { T.event.emit(EV_READY, Date.now()); } catch (e) {}
+  } else {
+    var m = document.getElementById('hb-msg');
+    if (m) m.textContent = 'این پنجره فقط در نسخهٔ نصبیِ ویندوز کار می‌کند.';
+  }
+})();
+</script>
+
+</body>
+</html>

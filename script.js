@@ -856,6 +856,8 @@ function loadDashboard() {
     try { window.__ndDashLoadedAt = Date.now(); } catch (e) {}
     // متنِ بالای جستجوی داشبورد از سرور (قابلِ‌تنظیم توسطِ ادمین) — یک‌بار در هر نشست.
     try { if (typeof jouyaAnnApplyTagline === 'function') jouyaAnnApplyTagline(); } catch (e) {}
+    // نشانهٔ «اعلانِ خوانده‌نشده» روی آیکنِ مرکز اعلانات (حداکثر هر ۶۰ ثانیه یک بررسی)
+    try { if (typeof jouyaAnnCheckUnread === 'function') jouyaAnnCheckUnread(); } catch (e) {}
 }
 
 // ========================================================================
@@ -6976,7 +6978,9 @@ function loadProductsList(productsArg) {
             var _pj = JSON.stringify({ id: product.id, name: product.name }).replace(/"/g, '&quot;');
             actionsHtml = '<button class="btn-primary" style="padding:5px 14px;font-size:12px;" onclick="event.stopPropagation();_selectProductForPicker(' + _pj + ')">انتخاب</button>';
         } else {
-            actionsHtml = '<button class="product-card-kebab action-trigger-btn" type="button" onmouseenter="showProductActionBar(event, ' + product.id + ')" onmouseleave="handleProductActionBtnLeave(event)"><i class="fas fa-ellipsis-v"></i></button>';
+            // onclick برای لمس لازم است: روی اندروید باز شدن با هاورِ ساختگی غیرفعال شده،
+            // پس نوار فقط با لمسِ خودِ این دکمه باز می‌شود. روی دسکتاپ هاور مثلِ قبل کار می‌کند.
+            actionsHtml = '<button class="product-card-kebab action-trigger-btn" type="button" onmouseenter="showProductActionBar(event, ' + product.id + ')" onmouseleave="handleProductActionBtnLeave(event)" onclick="event.stopPropagation();showProductActionBar(event, ' + product.id + ')"><i class="fas fa-ellipsis-v"></i></button>';
         }
 
         var cardCls = 'product-card' + (showPurchase ? ' with-purchase' : '');
@@ -12396,6 +12400,98 @@ function __openPrintPreview(rawHtml, opts) {
 }
 
 // =============================================================================
+//  __hbOpenTauriPrintWindow — پنجرهٔ چاپِ جداگانه (فقط نسخهٔ نصبیِ ویندوز / Tauri)
+//  ---------------------------------------------------------------------------
+//  پنجرهٔ «تنظیماتِ چاپ» را خودِ WebView2 می‌سازد و همیشه به اندازهٔ پنجره‌ای که چاپ از آن
+//  شروع شده کشیده می‌شود؛ پس وقتی برنامه تمام‌صفحه است آن هم تمام‌قد می‌شود. اینجا چاپ از
+//  یک پنجرهٔ متوسطِ وسط‌چین (print-window.html) انجام می‌گیرد تا پیش‌نمایش و تنظیماتِ چاپ
+//  جمع‌وجور و کامل دیده شوند و پنجرهٔ اصلیِ برنامه هیچ تغییری نکند.
+//
+//  اگر هر چیزی در دسترس نبود false برمی‌گرداند تا مسیرِ قبلی (چاپِ مستقیم) اجرا شود؛
+//  در وب و اندروید هم اصلاً وارد این مسیر نمی‌شویم. پس هیچ نسخه‌ای آسیب نمی‌بیند.
+//  نکته: تابعِ «declaration» است تا با throwِ عمدیِ سطحِ بالای این فایل از بین نرود.
+// =============================================================================
+function __hbOpenTauriPrintWindow(docHtml, title) {
+    try {
+        if (!docHtml) return false;
+        if (!(typeof __jouyaIsTauri === 'function' && __jouyaIsTauri())) return false;
+        var T = window.__TAURI__;
+        if (!T || !T.event || typeof T.event.listen !== 'function' || typeof T.event.emit !== 'function') return false;
+        if (!T.webviewWindow || typeof T.webviewWindow.WebviewWindow !== 'function') return false;
+
+        var WVW = T.webviewWindow.WebviewWindow;
+        var LABEL = 'hb-print';
+        // توکنِ یکتا: اگر چند بار پشتِ‌سرِهم چاپ بزنند، محتوای بلِ قبلی به پنجرهٔ تازه نرسد
+        var tok = 'p' + Date.now() + Math.floor(Math.random() * 1000);
+        var EV_READY = 'hb-print-ready-' + tok;
+        var EV_HTML  = 'hb-print-html-'  + tok;
+
+        // تا وقتی پنجرهٔ چاپ «آماده‌ام» می‌گوید، محتوا را برایش می‌فرستیم
+        var _un = null;
+        T.event.listen(EV_READY, function () {
+            try { T.event.emit(EV_HTML, docHtml); } catch (e) {}
+        }).then(function (un) {
+            _un = un;
+            setTimeout(function () { try { if (typeof _un === 'function') _un(); } catch (e) {} }, 15000);
+        }).catch(function () {});
+
+        var open = function () {
+            try {
+                var w = new WVW(LABEL, {
+                    url: 'print-window.html?t=' + encodeURIComponent(tok),
+                    title: 'چاپ' + (title ? (' — ' + title) : ''),
+                    width: 980,
+                    height: 720,
+                    minWidth: 620,
+                    minHeight: 480,
+                    center: true,
+                    resizable: true,
+                    decorations: true,
+                    focus: true
+                });
+                try {
+                    w.once('tauri://error', function (e) {
+                        try { console.warn('[hb-print] خطای ساختِ پنجره:', e); } catch (_) {}
+                    });
+                } catch (e) {}
+            } catch (e) {
+                try { console.warn('[hb-print] ساختِ پنجره ممکن نشد:', e && e.message); } catch (_) {}
+            }
+        };
+
+        // اگر پنجرهٔ چاپ از قبل باز مانده، اول بسته و بعد تازه ساخته می‌شود
+        var reopened = false;
+        try {
+            if (typeof WVW.getByLabel === 'function') {
+                var p = WVW.getByLabel(LABEL);
+                if (p && typeof p.then === 'function') {
+                    reopened = true;
+                    p.then(function (ex) {
+                        if (ex && typeof ex.close === 'function') {
+                            try {
+                                var c = ex.close();
+                                if (c && typeof c.then === 'function') c.then(function () { setTimeout(open, 200); }).catch(function () { setTimeout(open, 200); });
+                                else setTimeout(open, 200);
+                            } catch (e) { setTimeout(open, 200); }
+                        } else { open(); }
+                    }).catch(function () { open(); });
+                } else if (p && typeof p.close === 'function') {
+                    reopened = true;
+                    try { p.close(); } catch (e) {}
+                    setTimeout(open, 200);
+                }
+            }
+        } catch (e) { reopened = false; }
+        if (!reopened) open();
+
+        return true;
+    } catch (e) {
+        try { console.warn('[hb-print] بازگشت به چاپِ مستقیم:', e && e.message); } catch (_) {}
+        return false;
+    }
+}
+
+// =============================================================================
 //  __ppOpenMobileOverlay — پیش‌نمایشِ درون‌برنامه‌ایِ چاپ/گزارش/بل برای موبایل
 //  ‑ محتوای اصلی را در یک iframe درونِ اورلیِ تمام‌صفحه نشان می‌دهد.
 //  ‑ «زوم‌اوت»: محتوا با مقیاسِ خودکار در عرضِ صفحه جا می‌شود (حاشیهٔ دو طرف حفظ).
@@ -12591,66 +12687,19 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
             var pt = b ? b.style.transform : '', pw = b ? b.style.width : '';
             if (b) { b.style.transform = ''; b.style.width = ''; }
             try { if (pdfName) d.title = pdfName; } catch (e) {}
-            // ── (نسخهٔ Tauri) پنجرهٔ «تنظیماتِ چاپ» را خودِ WebView2 می‌سازد و دقیقاً به اندازهٔ
-            //    پنجرهٔ برنامه کشیده می‌شود؛ پس وقتی برنامه تمام‌صفحه است آن پنجره هم بلند و
-            //    بزرگ می‌شود. برای اینکه جمع‌وجور شود و دکمه‌های پایینش (Print/Cancel = بستن)
-            //    کاملاً دیده شوند، پیش از چاپ پنجرهٔ برنامه را به یک اندازهٔ متناسب کوچک
-            //    می‌کنیم و بعد از بسته‌شدنِ چاپ، دقیقاً به حالتِ قبلی برمی‌گردانیم.
-            var _restoreWin = null;
-            var _doRealPrint = function () {
-                try { frame.contentWindow.print(); }
-                catch (_) { try { window.print(); } catch (__) {} }
-                // بازگرداندنِ اندازهٔ پنجره پس از بسته‌شدنِ پنجرهٔ چاپ
-                if (_restoreWin) {
-                    var _done = false;
-                    var _fin = function () { if (_done) return; _done = true; try { _restoreWin(); } catch (e) {} };
-                    try { frame.contentWindow.addEventListener('afterprint', _fin, { once: true }); } catch (e) {}
-                    setTimeout(_fin, 60000);   // تورِ ایمنی اگر afterprint نیامد
-                }
-                setTimeout(function () { if (b) { b.style.transform = pt; b.style.width = pw; } }, 450);
-                try { console.log('[jouya-preview] print invoked'); } catch (_) {}
-            };
-
-            var _fitting = false;
-            try {
-                if ((typeof __jouyaIsTauri === 'function') && __jouyaIsTauri() &&
-                    window.__TAURI__ && window.__TAURI__.window && window.__TAURI__.dpi &&
-                    window.__TAURI__.dpi.LogicalSize) {
-                    var _WW = window.__TAURI__.window;
-                    var _LS = window.__TAURI__.dpi.LogicalSize;
-                    var _w = (typeof _WW.getCurrentWindow === 'function') ? _WW.getCurrentWindow()
-                           : (typeof _WW.getCurrent === 'function') ? _WW.getCurrent() : null;
-                    if (_w && typeof _w.setSize === 'function' && typeof _w.isMaximized === 'function') {
-                        // اندازهٔ جمع‌وجور: کفِ امن ۷۶۰px ارتفاع تا پنلِ تنظیماتِ چاپ هرگز بریده نشود
-                        var _aw = (window.screen && window.screen.availWidth)  || 1280;
-                        var _ah = (window.screen && window.screen.availHeight) || 860;
-                        var _tw = Math.max(1000, Math.min(1200, Math.round(_aw * 0.75)));
-                        var _th = Math.max(760,  Math.min(880,  Math.round(_ah * 0.80)));
-                        _fitting = true;
-                        _w.isMaximized().then(function (wasMax) {
-                            return _w.outerSize().then(function (prevSize) {
-                                _restoreWin = function () {
-                                    try {
-                                        if (wasMax) { _w.maximize(); }
-                                        else if (prevSize) { _w.setSize(prevSize); _w.center(); }
-                                    } catch (e) {}
-                                };
-                                if (wasMax) { try { _w.unmaximize(); } catch (e) {} }
-                                return _w.setSize(new _LS(_tw, _th));
-                            });
-                        }).then(function () {
-                            try { _w.center(); } catch (e) {}
-                            // کمی مکث تا WebView اندازهٔ تازه را بگیرد، سپس چاپ
-                            setTimeout(function () { try { frame.contentWindow.focus(); } catch (e) {} _doRealPrint(); }, 340);
-                        }).catch(function () { _restoreWin = null; _doRealPrint(); });
-                    }
-                }
-            } catch (e) { _fitting = false; }
-
-            if (!_fitting) {
-                frame.contentWindow.focus();
-                _doRealPrint();
+            // نسخهٔ نصبیِ ویندوز: چاپ از یک «پنجرهٔ متوسطِ وسط‌چین» انجام می‌شود تا پنجرهٔ
+            // تنظیماتِ چاپ جمع‌وجور و کامل دیده شود و پنجرهٔ اصلیِ برنامه هیچ تغییری نکند.
+            // پیش‌نمایشِ اورلیِ داخلِ برنامه سرِ جای خودش باز می‌ماند.
+            // در وب و اندروید اصلاً وارد این مسیر نمی‌شویم و رفتار دقیقاً مثلِ قبل است.
+            if (typeof __hbOpenTauriPrintWindow === 'function' && __hbOpenTauriPrintWindow(doc, pdfName)) {
+                if (b) { b.style.transform = pt; b.style.width = pw; }
+                try { console.log('[jouya-preview] print window opened'); } catch (_) {}
+                return;
             }
+            frame.contentWindow.focus();
+            frame.contentWindow.print();
+            setTimeout(function () { if (b) { b.style.transform = pt; b.style.width = pw; } }, 400);
+            try { console.log('[jouya-preview] print invoked'); } catch (_) {}
         } catch (e) {
             try { console.warn('[jouya-preview] print error:', e && e.message); } catch (_) {}
             try { window.print(); } catch (_) {}
@@ -25748,7 +25797,8 @@ function ssbOpenSub(key) {
 //    app_config(key text primary key, value text)   -- ردیفِ key='dashboard_tagline'
 //  و در RLS هر دو جدول، SELECT برای نقشِ anon مجاز شود.
 // ============================================================================
-var _jouyaTaglineTried;   // فقط «اعلانِ» var (مقداردهی داخلِ تابع انجام می‌شود تا throw بالا مانعش نشود)
+var _jouyaTaglineTried;    // فقط «اعلانِ» var (مقداردهی داخلِ تابع انجام می‌شود تا throw بالا مانعش نشود)
+var _jouyaAnnLastCheck;    // مُهرِ زمانیِ آخرین بررسیِ اعلانِ خوانده‌نشده (برای جلوگیری از درخواستِ پی‌درپی)
 
 function _jouyaAnnGet(path) {
     var c = null;
@@ -25788,6 +25838,51 @@ function _jouyaAnnDate(s) {
     return _jouyaAnnEsc(s);
 }
 
+// ── نشانهٔ «اعلانِ خوانده‌نشده» روی آیکنِ مرکز اعلانات ──────────────────────────────
+//  نشانهٔ تازه‌ترین اعلانی که کاربر دیده در localStorage نگه داشته می‌شود؛ اگر تازه‌ترین
+//  اعلانِ سرور با آن فرق داشته باشد، نقطهٔ قرمز روی آیکن روشن می‌شود و به‌محضِ بازکردنِ
+//  «مرکز اعلانات» دوباره خاموش می‌گردد.
+function _jouyaAnnMarker(row) {
+    if (!row) return '';
+    return String(row.created_at || row.id || '');
+}
+
+function jouyaAnnSetBadge(show) {
+    try {
+        var d = document.getElementById('nd-bell-dot');
+        if (d) d.style.display = show ? 'block' : 'none';
+    } catch (e) {}
+}
+
+/** بررسی می‌کند آیا اعلانِ خوانده‌نشده‌ای هست و نشانهٔ روی آیکن را روشن/خاموش می‌کند */
+function jouyaAnnCheckUnread(force) {
+    try {
+        if (!force && _jouyaAnnLastCheck && (Date.now() - _jouyaAnnLastCheck) < 60000) return;
+    } catch (e) {}
+    _jouyaAnnLastCheck = Date.now();
+    _jouyaAnnGet('announcements?select=id,created_at,is_active&is_active=eq.true&order=created_at.desc&limit=1')
+        .catch(function () { return _jouyaAnnGet('announcements?select=*&order=created_at.desc&limit=1'); })
+        .then(function (rows) {
+            if (!Array.isArray(rows) || !rows.length) { jouyaAnnSetBadge(false); return; }
+            var newest = _jouyaAnnMarker(rows[0]);
+            var seen = '';
+            try { seen = localStorage.getItem('jouya_ann_last_seen') || ''; } catch (e) {}
+            jouyaAnnSetBadge(!!newest && newest !== seen);
+        })
+        .catch(function () { /* بی‌صدا — وضعیتِ نشانه دست‌نخورده می‌ماند */ });
+}
+
+/** پس از دیدنِ اعلانات: تازه‌ترین اعلان «خوانده‌شده» ثبت و نشانه خاموش می‌شود */
+function jouyaAnnMarkSeen(rows) {
+    try {
+        if (Array.isArray(rows) && rows.length) {
+            var m = _jouyaAnnMarker(rows[0]);
+            if (m) localStorage.setItem('jouya_ann_last_seen', m);
+        }
+    } catch (e) {}
+    jouyaAnnSetBadge(false);
+}
+
 /** اعلاناتِ فعالِ سرور را در عنصرِ داده‌شده رندر می‌کند (پنلِ «مرکز اعلانات») */
 function jouyaAnnRender(elId) {
     var el = document.getElementById(elId);
@@ -25799,6 +25894,8 @@ function jouyaAnnRender(elId) {
             return _jouyaAnnGet('announcements?select=*&order=created_at.desc&limit=50');
         })
         .then(function (rows) {
+            // دیده‌شدنِ اعلانات → نشانهٔ روی آیکن خاموش می‌شود
+            jouyaAnnMarkSeen(rows);
             if (!Array.isArray(rows) || !rows.length) {
                 el.innerHTML = '<p class="jann-empty">اعلانِ جدیدی وجود ندارد.</p>';
                 return;
@@ -29422,7 +29519,48 @@ function showFinancialTab(tabName) {
 var currentProductToolbar = null;
 var closeProductToolbarTimer = null;
 
+// ── (رفعِ باگِ اندروید) تشخیصِ دستگاهِ لمسی ────────────────────────────────────────
+//  فقط به media query تکیه می‌کنیم تا لپ‌تاپ‌های لمسی‌ـِ دارای ماوس (که hover واقعی
+//  دارند) اشتباهاً «لمسی» شمرده نشوند و رفتارِ دسکتاپ ذره‌ای تغییر نکند.
+function __hbTouchLike() {
+    try {
+        if (window.matchMedia) return !!window.matchMedia('(hover: none), (pointer: coarse)').matches;
+    } catch (e) {}
+    try { if ('ontouchstart' in window) return true; } catch (e) {}
+    try { if ((navigator.maxTouchPoints || 0) > 0) return true; } catch (e) {}
+    return false;
+}
+if (typeof window !== 'undefined') window.__hbTouchLike = __hbTouchLike;
+
+// ── محافظِ «کلیکِ شبح» روی نوارِ عملیات ───────────────────────────────────────────
+//  فقط روی نوارهایی اثر دارد که مُهرِ زمانیِ hbOpenedAt خورده‌اند (یعنی فقط حالتِ لمسی)؛
+//  پس روی دسکتاپ هیچ کلیکی گرفته نمی‌شود و رفتارِ قبلی کاملاً دست‌نخورده می‌ماند.
+//  نکته: نصبِ شنونده عمداً داخلِ تابع است، نه در سطحِ بالا؛ چون این فایل یک throwِ عمدی
+//  در سطحِ بالا دارد و کدِ سطح‌بالای بعد از آن هرگز اجرا نمی‌شود.
+function __hbEnsureGhostGuard() {
+    try {
+        if (window.__hbGhostClickGuard) return;
+        window.__hbGhostClickGuard = true;
+        document.addEventListener('click', function (e) {
+            try {
+                var bar = (e.target && e.target.closest) ? e.target.closest('.floating-action-toolbar') : null;
+                if (!bar || !bar.dataset || !bar.dataset.hbOpenedAt) return;
+                var dt = Date.now() - (parseInt(bar.dataset.hbOpenedAt, 10) || 0);
+                if (dt >= 0 && dt < 450) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+                }
+            } catch (err) {}
+        }, true);
+    } catch (e) {}
+}
+
 function showProductActionBar(event, productId) {
+    __hbEnsureGhostGuard();
+    // روی دستگاهِ لمسی، «هاورِ ساختگی» (mouseenter که مرورگر هنگامِ لمس/اسکرول می‌فرستد)
+    // نباید نوار را باز کند؛ باز کردن فقط با لمسِ خودِ دکمهٔ سه‌نقطه (رویدادِ click).
+    if (event && event.type === 'mouseenter' && __hbTouchLike()) return;
     if (closeProductToolbarTimer) {
         clearTimeout(closeProductToolbarTimer);
         closeProductToolbarTimer = null;
@@ -29438,6 +29576,8 @@ function showProductActionBar(event, productId) {
     var toolbar = document.createElement('div');
     toolbar.className = 'floating-action-toolbar';
     toolbar.setAttribute('data-product-id', productId);
+    // مُهرِ زمانی فقط در حالتِ لمسی → محافظِ کلیکِ شبح فقط همان‌جا فعال می‌شود
+    try { if (__hbTouchLike()) toolbar.dataset.hbOpenedAt = String(Date.now()); } catch (e) {}
     Object.assign(toolbar.style, {
         position: 'absolute',
         display: 'flex',
@@ -38635,7 +38775,15 @@ function ndCollectSearch(q) {
                 out.push({
                     type: 'جنس', name: p.name || '', icon: 'fa-box',
                     sub: [p.code ? ('کد ' + p.code) : '', p.categoryMain || '', (p.quantity != null ? ('موجودی ' + ndNum(p.quantity) + ' ' + (p.unit || '')) : '')].filter(Boolean).join(' • '),
-                    go: (function (id) { return function () { if (typeof showProductInOutList === 'function') showProductInOutList(id); else showSection('products-list'); }; })(p.id)
+                    // کلیک روی نتیجهٔ جستجوی داشبورد → «مشخصات جنس» (نه لیستِ ورود/خروج).
+                    // در هر سه نسخه (وب، اندروید، نصبی) یک مسیر است، پس همه‌جا یکسان عمل می‌کند.
+                    go: (function (id) {
+                        return function () {
+                            if (typeof showProductDetail === 'function') showProductDetail(id);
+                            else if (typeof showProductInOutList === 'function') showProductInOutList(id);
+                            else showSection('products-list');
+                        };
+                    })(p.id)
                 });
             }
         });
@@ -39135,6 +39283,14 @@ function ndUpdSetStatus(html, cls) {
     var el = document.getElementById('nd-upd-status');
     if (el) { el.innerHTML = html; el.className = 'nd-upd-status ' + (cls || ''); }
 }
+// تشخیصِ ویندوز ۷/۸/۸٫۱ (Windows NT 6.1 / 6.2 / 6.3) — برای انتخابِ نصب‌کنندهٔ درست
+// هنگامِ بروزرسانی. ویندوز ۱۰/۱۱ «Windows NT 10.0» گزارش می‌دهند.
+function ndUpdIsWin7() {
+    try { return /Windows NT 6\.[123](\D|$)/.test(navigator.userAgent || ''); }
+    catch (e) { return false; }
+}
+if (typeof window !== 'undefined') window.ndUpdIsWin7 = ndUpdIsWin7;
+
 function ndUpdCheck() {
     // مخزن هاردکد است (ND_UPDATE_REPO)؛ هیچ پیامِ «مخزن را وارد کنید» نمایش داده نمی‌شود.
     var repo = ndUpdGetRepo();
@@ -39148,15 +39304,22 @@ function ndUpdCheck() {
             var tag = String((rel && (rel.tag_name || rel.name)) || '').replace(/^v/i, '');
             if (!tag) { ndUpdSetStatus('نسخه‌ای در Releases پیدا نشد.', 'warn'); return; }
             var assets = (rel && rel.assets) || [];
-            var exe = null, msi = null, apk = null;
+            // نصب‌کنندهٔ ویندوز ۷ با نشانِ «win7» در نامِ فایل منتشر می‌شود. ویندوز ۷/۸ فقط
+            // با همان بیلد اجرا می‌شود، پس انتخابِ فایل بر اساسِ خودِ ویندوزِ کاربر انجام
+            // می‌گیرد تا بروزرسانیِ درون‌برنامه‌ای روی هر دو نسخه درست کار کند.
+            var _isW7 = (typeof ndUpdIsWin7 === 'function') ? ndUpdIsWin7() : false;
+            var exe = null, msi = null, apk = null, exe7 = null, msi7 = null;
             assets.forEach(function (a) {
                 var n = String(a && a.name || '').toLowerCase();
-                if (!exe && /\.exe$/.test(n)) exe = a;
-                if (!msi && /\.msi$/.test(n)) msi = a;
+                var w7 = n.indexOf('win7') !== -1;
+                if (/\.exe$/.test(n)) { if (w7) { if (!exe7) exe7 = a; } else if (!exe) exe = a; }
+                if (/\.msi$/.test(n)) { if (w7) { if (!msi7) msi7 = a; } else if (!msi) msi = a; }
                 if (!apk && /\.apk$/.test(n)) apk = a;
             });
+            // ویندوز ۷/۸ → بیلدِ win7 ؛ ویندوز ۱۰/۱۱ → بیلدِ عادی (و در نبودِ هرکدام، دیگری)
+            var deskPick = _isW7 ? (exe7 || msi7 || exe || msi) : (exe || msi || exe7 || msi7);
             // در اندروید فایلِ APK، در دسکتاپ فایلِ exe/msi انتخاب می‌شود
-            var pick = ndUpdIsAndroidApp() ? (apk || exe || msi) : (exe || msi || apk);
+            var pick = ndUpdIsAndroidApp() ? (apk || deskPick) : (deskPick || apk);
             window.__hbUpdAsset = pick ? pick.browser_download_url : (rel.html_url || '');
             if (ndUpdCmp(tag, cur) > 0) {
                 ndUpdSetStatus(
