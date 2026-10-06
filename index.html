@@ -220,7 +220,7 @@
             </li>
             <li onclick="ssbOpenSub('notes')">
                 <span class="ssb-item-icon"><i class="fas fa-bell"></i></span>
-                <span class="ssb-item-label">مرکز پیام</span>
+                <span class="ssb-item-label">هشدار های داخل سیستم</span>
                 <i class="fas fa-chevron-left ssb-arrow"></i>
             </li>
             <li onclick="ssbOpenSub('excel')" style="display:none;">
@@ -884,13 +884,17 @@
     <!-- منو مرتب‌سازی -->
     <div id="sort-menu-persons" class="sort-menu">
         <h4>مرتب‌سازی</h4>
-        <select onchange="applySort('persons', this.value)">
-            <option value="name-asc">نام (الف به ی)</option>
-            <option value="name-desc">نام (ی به الف)</option>
-            <option value="balance-desc">بدهی (بیشتر به کمتر)</option>
-            <option value="balance-asc">بدهی (کمتر به بیشتر)</option>
-            <option value="date-desc">جدیدترین</option>
-            <option value="date-asc">قدیمی‌ترین</option>
+        <select onchange="sortPersonsList(this.value)">
+            <option value="bal-desc">بیشترین باقیداری</option>
+            <option value="bal-asc">بیشترین طلب</option>
+            <option value="name-asc">حروف الفبا</option>
+            <option value="old">قدیمی‌ترین شخص</option>
+            <option value="new">جدیدترین شخص</option>
+            <option value="last-sale">آخرین فروش</option>
+            <option value="last-purchase">آخرین خرید</option>
+            <option value="last-receipt">آخرین دریافت</option>
+            <option value="last-payment">آخرین پرداخت</option>
+            <option value="updated">آخرین ویرایش</option>
         </select>
     </div>
 
@@ -1223,14 +1227,16 @@
     <div id="sort-menu-products" class="sort-menu">
         <h4>مرتب‌سازی</h4>
         <select onchange="sortProductsList(this.value)">
-            <option value="name-asc">نام (الف به ی)</option>
-            <option value="name-desc">نام (ی به الف)</option>
-            <option value="stock-desc">موجودی (بیشتر به کمتر)</option>
-            <option value="stock-asc">موجودی (کمتر به بیشتر)</option>
-            <option value="price-desc">قیمت فروش (بیشتر به کمتر)</option>
-            <option value="price-asc">قیمت فروش (کمتر به بیشتر)</option>
-            <option value="purchase-desc">قیمت خرید (بیشتر به کمتر)</option>
-            <option value="purchase-asc">قیمت خرید (کمتر به بیشتر)</option>
+            <option value="new">جدیدترین جنس</option>
+            <option value="old">قدیمی‌ترین جنس</option>
+            <option value="name-asc">حروف الفبا</option>
+            <option value="code">کد جنس</option>
+            <option value="stock-desc">بیشترین موجودی</option>
+            <option value="stock-asc">کمترین موجودی</option>
+            <option value="price-desc">گرانترین</option>
+            <option value="price-asc">ارزانترین</option>
+            <option value="expiry">تاریخ انقضا</option>
+            <option value="updated">آخرین ویرایش</option>
         </select>
     </div>
 

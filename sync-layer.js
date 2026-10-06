@@ -53,6 +53,27 @@
     ];
     var STORE_SETTINGS_TABLE = 'store_settings';
 
+    // ── (رفعِ باگِ سینکِ کتگوریِ فرعی) ─────────────────────────────────────────────
+    //  کتگوری‌های فرعیِ هر «کتگوریِ اصلی» زیرِ کلیدهای پویای localStorage ذخیره می‌شوند:
+    //  customProductSubCategories_<کتگوریِ اصلی>  (نه در یک کلیدِ ثابت). این کلیدها در
+    //  فهرستِ ثابتِ بالا نبودند، پس «push» نمی‌شدند و روی موبایل/دستگاهِ دوم هنگامِ ویرایشِ
+    //  جنس، لیستِ کتگوری فرعی خالی می‌ماند. این تابع همان فهرستِ ثابت را به‌علاوهٔ همهٔ
+    //  کلیدهای پویای customProductSubCategories_* برمی‌گرداند تا کاملاً سینک شوند.
+    //  (سمتِ «apply/pull» از قبل عمومی است و هر کلیدِ تنظیمات را می‌پذیرد، پس فقط سمتِ
+    //  ساخت/تشخیصِ تغییر نیاز به این تکمیل داشت.)
+    function effectiveSettingKeys() {
+        var keys = STORE_SETTING_KEYS.slice();
+        try {
+            for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i);
+                if (k && k.indexOf('customProductSubCategories_') === 0 && keys.indexOf(k) === -1) {
+                    keys.push(k);
+                }
+            }
+        } catch (e) {}
+        return keys;
+    }
+
     // ── کاهشِ مصرفِ پهنای‌باندِ سوپابیس (Egress) ──────────────────────────────────
     // قبلاً polling هر ۱٫۵ ثانیه بود و در هر چرخه ۱۴ درخواست (برای ۱۴ جدول) می‌فرستاد؛
     // یعنی ~۹ درخواست در ثانیه، همیشه و برای هر دستگاه — همین سقفِ رایگانِ Egress را سریع
@@ -472,7 +493,7 @@
         var snap = snapRead();
         var prev = snap[STORE_SETTINGS_TABLE] || {};
         var rows = [], metaByRid = {};
-        STORE_SETTING_KEYS.forEach(function (k) {
+        effectiveSettingKeys().forEach(function (k) {
             var raw = LS_get(k); if (raw == null) return;
             var val; try { val = JSON.parse(raw); } catch (e) { val = raw; }
             var data = safeSettingData(k, val);   // لوگو/تصاویرِ حجیم حذف می‌شوند
@@ -945,7 +966,7 @@
     }
     function buildStoreSettingsRows() {
         var dk = shortDevice(), rows = [];
-        STORE_SETTING_KEYS.forEach(function (k) {
+        effectiveSettingKeys().forEach(function (k) {
             var raw = LS_get(k); if (raw == null) return;
             var val; try { val = JSON.parse(raw); } catch (e) { val = raw; }
             var data = safeSettingData(k, val);   // لوگو/تصاویرِ حجیم حذف می‌شوند

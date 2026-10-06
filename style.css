@@ -867,7 +867,7 @@ body.dark-mode .badge-settled   { background: #14532d;  color: #86efac; }
     bottom: 0;
     right: 0;
     left: 0;
-    height: 70px;
+    height: 58px; /* کوتاه‌تر تا هم‌اندازهٔ هیدر شود (آیکن‌ها همچنان کاملاً داخل نوار) */
     background: #1e3a5f;
     display: flex;
     justify-content: space-around;
@@ -883,17 +883,17 @@ body.dark-mode .badge-settled   { background: #14532d;  color: #86efac; }
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px; /* کمی فاصله بیشتر برای زیبایی */
-    font-size: 12px;
+    gap: 3px; /* فاصلهٔ جمع‌وجورتر تا در نوارِ کوتاه‌تر جا شود */
+    font-size: 11px;
     font-weight: 600; /* متن boldتر */
     cursor: pointer;
     transition: all 0.3s ease;
-    padding: 8px 12px; /* کمی padding برای حس دکمه */
+    padding: 5px 12px; /* کمی padding برای حس دکمه */
     border-radius: 12px; /* گوشه‌های نرم */
 }
 
 .nav-btn i {
-    font-size: 20px; /* کمی بزرگ‌تر */
+    font-size: 18px; /* متناسب با نوارِ کوتاه‌تر، بدون سرریز */
     transition: all 0.3s ease;
 }
 
@@ -908,7 +908,7 @@ body.dark-mode .badge-settled   { background: #14532d;  color: #86efac; }
     background: linear-gradient(135deg, #1de9b6, #00bfa5);
     box-shadow: 0 6px 20px rgba(29, 233, 182, 0.5); /* همان glow تب‌های مالی */
     border-radius: 14px;
-    transform: translateY(-3px);
+    transform: translateY(-2px); /* برجستگیِ ملایم‌تر تا در نوارِ کوتاه‌ترِ جدید سرریز نکند */
 }
 
 .nav-btn.active i {
@@ -8392,6 +8392,26 @@ select.jf-pill, select.jf-pill:focus, select.jf-pill:hover, select.jf-pill:activ
 .filter-menu select, .filter-menu input { width: 100% !important; box-sizing: border-box; margin: 0 !important; }
 .filter-menu .btn-primary { width: 100% !important; margin: 4px 0 0 0 !important; box-sizing: border-box; }
 
+/* (درخواستِ کاربر — فقط اپِ اندروید) محتوای پاپ‌آپِ مرتب‌سازی/فیلتر کمی کوچک‌تر برای
+ * زیباییِ رابط. صرفاً اندازهٔ محتوا کم می‌شود؛ طراحی/رنگ/چیدمان دست‌نخورده می‌ماند.
+ * نشانهٔ data-jruntime=android توسطِ jouya-ux-fixes.js روی <html> گذاشته می‌شود. */
+html[data-jruntime="android"] .sort-menu,
+html[data-jruntime="android"] .filter-menu {
+    min-width: 258px !important;
+    padding: 13px 13px 12px !important;
+}
+html[data-jruntime="android"] .sort-menu h4,
+html[data-jruntime="android"] .filter-menu h4 {
+    font-size: 0.95rem !important; margin: 0 0 10px !important;
+}
+html[data-jruntime="android"] .sort-menu select,
+html[data-jruntime="android"] .filter-menu select,
+html[data-jruntime="android"] .filter-menu input {
+    padding: 9px 13px 9px 32px !important; font-size: 0.86rem !important; border-radius: 12px !important;
+}
+html[data-jruntime="android"] .filter-menu label { font-size: 0.8rem !important; margin-bottom: 5px !important; }
+html[data-jruntime="android"] .filter-menu .btn-primary { padding: 9px 12px !important; font-size: 0.9rem !important; }
+
 /* دو دکمهٔ دیالوگ تایید (لغو + تایید) هماهنگ با تمِ navy — محدود به #confirmModal */
 #confirmModal.modal-alert .modal-footer .btn-danger {
     background: #fff !important; color: var(--bill-navy, #1e3a5f) !important;
@@ -9626,14 +9646,43 @@ body.dark-mode .nd-upd-status.err  { color: #fca5a5; }
  *  body:not(:has(#dashboard.section.active)) مستثناست. تست شد (Chromium): هدرِ امورمالی
  *  و لیست‌ها دقیقاً هم‌تراز، بدونِ اسکرولِ افقی. (:has در WebView2 109+ پشتیبانی می‌شود.)
  *  یادداشتِ قدیمی: دکمهٔ شناورِ افزودن سرِجای خود می‌ماند. */
-@media (min-width: 1280px) and (max-width: 1599px) {
-    body:not(:has(#dashboard.section.active)) .content-area { zoom: 0.94; }
-}
+/* کوچک‌سازیِ یک‌دستِ ~۱۰٪ برای همهٔ بخش‌ها به‌جز داشبورد — در همهٔ اندازه‌ها (موبایل و وب و
+ * نصبی). درخواستِ کاربر: اشخاص/اجناس/امورمالی/گزارشات در اسکرین‌های کوچک زیادی بزرگ بودند.
+ * زوم روی content-area محتوای مشترک (اشخاص/اجناس/گزارشات/فورم‌ها) را یک‌دست کوچک می‌کند.
+ * «نه خیلی کوچک» → ۰٫۹۰ (۱۰٪). روی اسکرین‌های خیلی بزرگ کمی بیشتر تا تناسب حفظ شود. */
+body:not(:has(#dashboard.section.active)) .content-area { zoom: 0.90; }
 @media (min-width: 1600px) and (max-width: 1919px) {
-    body:not(:has(#dashboard.section.active)) .content-area { zoom: 0.90; }
+    body:not(:has(#dashboard.section.active)) .content-area { zoom: 0.88; }
 }
 @media (min-width: 1920px) {
     body:not(:has(#dashboard.section.active)) .content-area { zoom: 0.86; }
+}
+/* «امور مالی» خارج از content-area و به‌صورت سکشنِ جداست؛ پس زومِ بالا آن را نمی‌گیرد.
+ * برای یک‌دستی دقیقاً ۱۰٪ کوچک می‌شود (داشبورد و بقیه دست‌نخورده می‌مانند). */
+#financial { zoom: 0.90; }
+@media (min-width: 1600px) and (max-width: 1919px) { #financial { zoom: 0.88; } }
+@media (min-width: 1920px) { #financial { zoom: 0.86; } }
+
+/* ============================================================================
+ *  هشدار های داخل سیستم — کارتِ هر اعلانِ سروری (در پنلِ «هشدار های داخل سیستم»)
+ * ==========================================================================*/
+.jouya-ann-item {
+    padding: 10px 12px; margin: 0 0 10px;
+    border: 1px solid rgba(99,102,241,.25); border-right: 4px solid #6366f1;
+    border-radius: 10px; background: rgba(99,102,241,.06);
+}
+.jouya-ann-item .jann-title { font-weight: 800; color: #1e293b; margin-bottom: 4px; }
+.jouya-ann-item .jann-body { font-size: .9rem; color: #334155; line-height: 1.8; word-break: break-word; }
+.jouya-ann-item .jann-date { font-size: .72rem; color: #94a3b8; margin-top: 6px; text-align: left; }
+body.dark-mode .jouya-ann-item { background: rgba(99,102,241,.12); border-color: rgba(129,140,248,.3); }
+body.dark-mode .jouya-ann-item .jann-title { color: #e2e8f0; }
+body.dark-mode .jouya-ann-item .jann-body { color: #cbd5e1; }
+/* موبایل: پنلِ جمع‌وجورتر (زیادی بزرگ نباشد) */
+@media (max-width: 600px) {
+    .jouya-ann-item { padding: 8px 10px; margin-bottom: 8px; }
+    .jouya-ann-item .jann-title { font-size: .92rem; }
+    .jouya-ann-item .jann-body { font-size: .82rem; line-height: 1.7; }
+    #ssb-announcements-list { max-height: 44vh !important; }
 }
 
 /* ============================================================================

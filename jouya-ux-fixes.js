@@ -24,6 +24,25 @@
 (function () {
     'use strict';
 
+    // ── نشانهٔ محیطِ اجرا برای CSS: روی اپِ اندروید (Capacitor) صفتِ data-jruntime=android
+    //    روی <html> گذاشته می‌شود تا قواعدِ ظاهریِ مخصوصِ اندروید (مثلِ کوچک‌تر کردنِ محتوای
+    //    پاپ‌آپِ مرتب‌سازی/فیلتر) فقط در اپِ اندروید اعمال شوند. هیچ منطقی تغییر نمی‌کند و اگر
+    //    قبلاً «tauri» ست شده باشد دست نمی‌خورد. ───────────────────────────────────────────
+    try {
+        var _isAndroidApp = false;
+        try {
+            var _C = window.Capacitor;
+            if (_C) {
+                var _p = (typeof _C.getPlatform === 'function') ? _C.getPlatform() : (_C.platform || '');
+                if (_p === 'android') _isAndroidApp = true;
+            }
+            if (window.__JOUYA_RUNTIME === 'android') _isAndroidApp = true;
+        } catch (e) {}
+        if (_isAndroidApp && document.documentElement && !document.documentElement.getAttribute('data-jruntime')) {
+            document.documentElement.setAttribute('data-jruntime', 'android');
+        }
+    } catch (e) {}
+
     // ── بخش‌هایی که «فرمِ ورودِ داده» هستند؛ خروج از این‌ها تایید می‌خواهد ──────────
     var FORM_SECTIONS = {
         'sales-form': 1, 'purchase-form': 1, 'receipt-form': 1, 'payment-form': 1,

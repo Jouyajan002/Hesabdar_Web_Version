@@ -854,6 +854,8 @@ function loadDashboard() {
     // مُهرِ زمانیِ آخرین بارگذاریِ داشبورد — برای جلوگیری از اجرای تکراریِ loadTodayStatistics
     // بلافاصله پس از loadDashboard هنگامِ ورود به داشبورد (بهینه‌سازیِ سرعتِ ناوبری).
     try { window.__ndDashLoadedAt = Date.now(); } catch (e) {}
+    // متنِ بالای جستجوی داشبورد از سرور (قابلِ‌تنظیم توسطِ ادمین) — یک‌بار در هر نشست.
+    try { if (window.JouyaAnnouncements && typeof window.JouyaAnnouncements.applyTagline === 'function') window.JouyaAnnouncements.applyTagline(); } catch (e) {}
 }
 
 // ========================================================================
@@ -3570,6 +3572,11 @@ function saveSale() {
                 var _snap = _saleCostSnapshot(_snapProd, quantity, _unitType, _secFactor);
                 if (_snap) { _saleItm.purchasePriceAFN = _snap.purchasePriceAFN; _saleItm.purchasePriceUSD = _snap.purchasePriceUSD; }
             }
+            // جزئیاتِ بل برای این قلم = «جزئیات در بل»ِ خودِ جنس؛ در خودِ بل ماندگار می‌شود
+            if (!isService) {
+                var _dsp = _prodsAtSale.find(function (p) { return p.id == parseInt(productId); });
+                if (_dsp && _dsp.description && String(_dsp.description).trim()) _saleItm.details = String(_dsp.description).trim();
+            }
             items.push(_saleItm);
         }
     });
@@ -4531,8 +4538,9 @@ function savePurchase() {
 
     const items = [];
     const rows = document.querySelectorAll('#purchase-items-body .purchase-item-row');
+    const _prodsAtPurchase = (typeof db !== 'undefined' && db.getAllProducts) ? (db.getAllProducts() || []) : [];
     let hasError = false;
-    
+
     rows.forEach(row => {
         const productSelect = row.querySelector('.purchase-item-product');
         const productId = productSelect.value;
@@ -4556,7 +4564,11 @@ function savePurchase() {
         var _secFactor = parseFloat(row.dataset.secondaryFactor) || 0;
         
         if (productId && productId !== 'new' && quantity > 0 && price > 0) {
-            items.push({ productId: parseInt(productId), productName, quantity, unit, price, discount, total, unitType: _unitType, secondaryFactor: _secFactor });
+            var _purItm = { productId: parseInt(productId), productName, quantity, unit, price, discount, total, unitType: _unitType, secondaryFactor: _secFactor };
+            // جزئیاتِ بل برای این قلم = «جزئیات در بل»ِ خودِ جنس؛ در خودِ بل ماندگار می‌شود
+            var _dp = _prodsAtPurchase.find(function (p) { return p.id == parseInt(productId); });
+            if (_dp && _dp.description && String(_dp.description).trim()) _purItm.details = String(_dp.description).trim();
+            items.push(_purItm);
         } else if (productId === 'new') {
             showMessage('توجه', 'لطفاً جنس جدید را از مدیریت اجناس ثبت کنید.');
             hasError = true;
@@ -6882,6 +6894,7 @@ function loadProductsList(productsArg) {
     // مرتب‌سازی داده‌محور بر اساس انتخاب کاربر (سازگار با چیدمان کارتی)
     var sortKey = _productsSortKey || '';
     if (sortKey) {
+        var _toMs = (typeof _hbDateToMs === 'function') ? _hbDateToMs : function(){ return 0; };
         products.sort(function (a, b) {
             switch (sortKey) {
                 case 'name-asc':  return String(a.name || '').localeCompare(String(b.name || ''), 'fa');
@@ -6892,6 +6905,21 @@ function loadProductsList(productsArg) {
                 case 'price-asc':  return _n(a.salePriceAFN) - _n(b.salePriceAFN);
                 case 'purchase-desc': return _n(b.purchasePriceAFN) - _n(a.purchasePriceAFN);
                 case 'purchase-asc':  return _n(a.purchasePriceAFN) - _n(b.purchasePriceAFN);
+                // جدیدترین/قدیمی‌ترین جنس — شناسهٔ یکتا بر پایهٔ Date.now است پس ترتیبِ زمانیِ مطمئن می‌دهد
+                case 'new':  return (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0);
+                case 'old':  return (parseInt(a.id, 10) || 0) - (parseInt(b.id, 10) || 0);
+                // کد جنس (مرتب‌سازیِ عددی‌آگاه تا کدهای ۲ و ۱۰ درست بیایند)
+                case 'code': return String(a.code || '').localeCompare(String(b.code || ''), 'fa', { numeric: true });
+                // تاریخ انقضا — نزدیک‌ترین اول، اجناسِ بدونِ انقضا در انتها
+                case 'expiry': {
+                    var _ae = (a.expiryDate || '').trim(), _be = (b.expiryDate || '').trim();
+                    if (!_ae && !_be) return 0;
+                    if (!_ae) return 1;
+                    if (!_be) return -1;
+                    return _toMs(_ae) - _toMs(_be);
+                }
+                // آخرین ویرایش — تازه‌ترین اول
+                case 'updated': return _toMs(b.updatedAt || b.createdAt) - _toMs(a.updatedAt || a.createdAt);
                 default: return 0;
             }
         });
@@ -7011,6 +7039,49 @@ function loadProductsList(productsArg) {
     // بازآراییِ حالتِ انتخابِ چندگانهٔ گزارش پس از هر رندر (تعویضِ گدام/جستجو تیک‌ها را حفظ کند)
     if (typeof _rpProductPick !== 'undefined' && _rpProductPick && typeof _rpDecorateProductPick === 'function') _rpDecorateProductPick();
 }
+
+// ===== مبدلِ رشتهٔ تاریخِ ذخیره‌شده (createdAt/updatedAt/تاریخِ سند) به عددِ قابلِ‌مقایسه =====
+// فرمتِ ذخیره‌شده معمولاً شمسی است: «YYYY/MM/DD h:mm:ss AM/PM». این تابع آن را (و نیز
+// حالتِ میلادی یا ISOِ فالبک) به میلی‌ثانیه تبدیل می‌کند تا مرتب‌سازیِ زمانی دقیق باشد.
+function _hbDateToMs(s) {
+    if (s == null) return 0;
+    if (typeof s === 'number') return isFinite(s) ? s : 0;
+    if (typeof s !== 'string') return 0;
+    s = s.trim();
+    if (!s) return 0;
+    // ISO یا میلادیِ با خط‌تیره (فالبکِ قدیمیِ getCurrentDate → toISOString)
+    if (s.indexOf('-') !== -1 && s.indexOf('/') === -1) {
+        var _iso = new Date(s).getTime();
+        return isNaN(_iso) ? 0 : _iso;
+    }
+    try {
+        var parts = s.split(/\s+/);
+        var dmy = (parts[0] || '').split('/');
+        var y = parseInt(dmy[0], 10), m = parseInt(dmy[1], 10), day = parseInt(dmy[2], 10);
+        if (isNaN(y) || isNaN(m) || isNaN(day)) return 0;
+        var d;
+        if (y > 1700) {
+            // تاریخِ میلادی ذخیره شده
+            d = new Date(y, (m || 1) - 1, day || 1);
+        } else if (typeof window !== 'undefined' && typeof window._jalaliToGregorian === 'function') {
+            d = window._jalaliToGregorian(y, m, day);
+        } else {
+            return 0;
+        }
+        var hh = 0, mi = 0, ss = 0;
+        if (parts[1]) {
+            var t = parts[1].split(':');
+            hh = parseInt(t[0], 10) || 0; mi = parseInt(t[1], 10) || 0; ss = parseInt(t[2], 10) || 0;
+            var ap = (parts[2] || '').toUpperCase();
+            if (ap === 'PM' && hh < 12) hh += 12;
+            else if (ap === 'AM' && hh === 12) hh = 0;
+        }
+        d.setHours(hh, mi, ss, 0);
+        var ms = d.getTime();
+        return isNaN(ms) ? 0 : ms;
+    } catch (e) { return 0; }
+}
+if (typeof window !== 'undefined') window._hbDateToMs = _hbDateToMs;
 
 // ===== مرتب‌سازی داده‌محور لیست اجناس (سازگار با چیدمان کارتی) =====
 var _productsSortKey = '';
@@ -10916,6 +10987,25 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
         '<div class="hdr-side">' + (sideSrc ? ('<img src="' + esc(sideSrc) + '" alt="">') : '') + '</div>'
     ) : '';
 
+    // ---- جزئیاتِ هر قلم (ستونِ «جزئیات») ----
+    // منبع: item.details که هنگامِ ثبتِ بل از «جزئیات در بل»ِ جنس ذخیره شده (ماندگار در بل)،
+    // و برای بل‌های قدیمی که این فیلد را ندارند، فالبک به «جزئیات در بل»ِ فعلیِ همان جنس.
+    // ستون فقط وقتی اضافه می‌شود که «حداقل یک قلم» جزئیات داشته باشد (در غیرِ آن اصلاً نمایش داده نمی‌شود).
+    var _allProdsForDetails = null;
+    function _itemDetailText(it) {
+        try {
+            if (it && it.details != null && String(it.details).trim()) return String(it.details).trim();
+            if (it && it.productId != null) {
+                if (_allProdsForDetails === null) _allProdsForDetails = (typeof db !== 'undefined' && db.getAllProducts) ? (db.getAllProducts() || []) : [];
+                var pr = _allProdsForDetails.find(function (p) { return p.id == it.productId; });
+                if (pr && pr.description && String(pr.description).trim()) return String(pr.description).trim();
+            }
+        } catch (e) {}
+        return '';
+    }
+    var _itemDetailArr = (items || []).map(_itemDetailText);
+    var hasDetails = _itemDetailArr.some(function (d) { return !!d; });
+
     // ---- ردیف‌های اقلام ----
     var rowsHtml = '';
     var rowCount = 0;
@@ -10932,6 +11022,7 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
                 '<td class="c-qty">' + fn(qty) + (item.unit ? (' <span class="u">' + esc(item.unit) + '</span>') : '') + '</td>' +
                 '<td class="c-price">' + fn(price) + '</td>' +
                 '<td class="c-total">' + fn(lineTotal) + '</td>' +
+                (hasDetails ? ('<td class="c-details">' + (esc(_itemDetailArr[i]) || '&nbsp;') + '</td>') : '') +
             '</tr>';
         rowCount++;
     });
@@ -10942,11 +11033,12 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
                 '<tr class="empty-row">' +
                     '<td class="c-num">' + fn(r + 1) + '</td>' +
                     '<td class="c-desc">&nbsp;</td><td class="c-qty">&nbsp;</td><td class="c-price">&nbsp;</td><td class="c-total">&nbsp;</td>' +
+                    (hasDetails ? '<td class="c-details">&nbsp;</td>' : '') +
                 '</tr>';
         }
     }
     if (rowCount === 0 && isThermal) {
-        rowsHtml = '<tr><td colspan="5" style="text-align:center;padding:10px;color:#888;">قلمی ثبت نشده است</td></tr>';
+        rowsHtml = '<tr><td colspan="' + (hasDetails ? 6 : 5) + '" style="text-align:center;padding:10px;color:#888;">قلمی ثبت نشده است</td></tr>';
     }
 
     // ---- فوتر (تماس/آدرس/بارکد) ----
@@ -11015,6 +11107,20 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
     '.ft-line i { color: ' + onPrimary + '; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,0.14); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; }' +
     '.ft-barcode img { width: ' + (isThermal ? '46px' : '58px') + '; height: ' + (isThermal ? '46px' : '58px') + '; object-fit: contain; background: #fff; padding: 3px; border-radius: 6px; }';
 
+    // ---- ستونِ «جزئیات» (فقط وقتی حداقل یک قلم جزئیات دارد) ----
+    // عرض‌ها بازچینش می‌شوند تا ستونِ جدید جا شود و همه‌چیز در همان عرضِ ۱۰۰٪ـِ کاغذ منظم بماند
+    // (پس حاشیهٔ چاپ نیازی به تغییر ندارد). رنگ/قلم/طرح مثلِ بقیهٔ جدول است.
+    if (hasDetails) {
+        css +=
+            '.items .c-details { text-align: right; color: #44506a; word-break: break-word; }' +
+            '.items .c-num { width: 6%; }' +
+            '.items .c-desc { width: ' + (isThermal ? '28%' : '31%') + '; }' +
+            '.items .c-qty { width: 10%; }' +
+            '.items .c-price { width: 14%; }' +
+            '.items .c-total { width: 14%; }' +
+            '.items .c-details { width: ' + (isThermal ? '28%' : '25%') + '; }';
+    }
+
     // ---- HTML ----
     var html = '<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="UTF-8"><title>' + docTitle + ' ' + esc(billNum) + '</title><style>' + css + '</style></head><body>' +
     '<div class="bill">' +
@@ -11049,6 +11155,7 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
             '<th class="c-qty">تعداد</th>' +
             '<th class="c-price">قیمت واحد<br><small style="font-weight:400;opacity:.85;">(' + _currencyLabel + ')</small></th>' +
             '<th class="c-total">مبلغ کل<br><small style="font-weight:400;opacity:.85;">(' + _currencyLabel + ')</small></th>' +
+            (hasDetails ? '<th class="c-details">جزئیات</th>' : '') +
         '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
 
         '<div class="bill-bottom">' +
@@ -12481,9 +12588,30 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
             var pt = b ? b.style.transform : '', pw = b ? b.style.width : '';
             if (b) { b.style.transform = ''; b.style.width = ''; }
             try { if (pdfName) d.title = pdfName; } catch (e) {}
+            // ── (نسخهٔ Tauri) پیش از چاپ، پنجره تمام‌صفحه شود تا پنجرهٔ تنظیماتِ چاپِ WebView2
+            //    کامل و «دکمهٔ بستن/لغو» دیده شود (fit-to-screen). اگر برنامه از قبل تمام‌صفحه
+            //    باشد، maximize بی‌اثر است. اگر API در دسترس نبود، مثلِ قبل مستقیم چاپ می‌کند.
+            var _didFit = false;
+            try {
+                if ((typeof __jouyaIsTauri === 'function') && __jouyaIsTauri() &&
+                    window.__TAURI__ && window.__TAURI__.window) {
+                    var _WW = window.__TAURI__.window;
+                    var _w = (typeof _WW.getCurrentWindow === 'function') ? _WW.getCurrentWindow()
+                           : (typeof _WW.getCurrent === 'function') ? _WW.getCurrent() : null;
+                    if (_w && typeof _w.maximize === 'function') { _w.maximize(); _didFit = true; }
+                }
+            } catch (e) {}
             frame.contentWindow.focus();
-            frame.contentWindow.print();
-            setTimeout(function () { if (b) { b.style.transform = pt; b.style.width = pw; } }, 400);
+            if (_didFit) {
+                // کمی مکث تا WebView اندازهٔ تازه را بگیرد، سپس چاپ (پیش‌نمایش fit می‌شود)
+                setTimeout(function () {
+                    try { frame.contentWindow.print(); }
+                    catch (_) { try { window.print(); } catch (__) {} }
+                }, 300);
+            } else {
+                frame.contentWindow.print();
+            }
+            setTimeout(function () { if (b) { b.style.transform = pt; b.style.width = pw; } }, _didFit ? 850 : 400);
             try { console.log('[jouya-preview] print invoked'); } catch (_) {}
         } catch (e) {
             try { console.warn('[jouya-preview] print error:', e && e.message); } catch (_) {}
@@ -20040,6 +20168,88 @@ function loadPersonsList() {
 
    ========================================================================== */
 
+// ===== مرتب‌سازی داده‌محور لیست اشخاص (سازگار با چیدمان کارتی) =====
+var _personsSortKey = '';
+function sortPersonsList(value) {
+    _personsSortKey = value || '';
+    if (typeof loadPersonsList === 'function') loadPersonsList();
+    var menu = document.getElementById('sort-menu-persons');
+    if (menu) menu.style.display = 'none';
+}
+if (typeof window !== 'undefined') window.sortPersonsList = sortPersonsList;
+
+// آرایهٔ اشخاص را بر اساس انتخابِ کاربر مرتب می‌کند (بدون تغییرِ داده؛ فقط ترتیبِ نمایش)
+function _sortPersonsArray(persons) {
+    var key = _personsSortKey || '';
+    if (!key || !Array.isArray(persons) || persons.length < 2) return persons;
+    var arr = persons.slice();
+    var _toMs = (typeof _hbDateToMs === 'function') ? _hbDateToMs : function(){ return 0; };
+    var base = (typeof _baseCur === 'function') ? _baseCur() : 'AFN';
+    var allTx = (typeof db !== 'undefined' && db.getTransactions) ? (db.getTransactions() || []) : [];
+
+    // آخرین تاریخِ یک نوع تراکنش برای هر شخص (برای آخرین فروش/خرید/دریافت/پرداخت)
+    var lastMap = null;
+    if (key.indexOf('last-') === 0) {
+        var typeFor = {
+            'last-sale': 'فروش', 'last-purchase': 'خرید',
+            'last-receipt': 'دریافت', 'last-payment': 'پرداخت'
+        }[key];
+        lastMap = {};
+        allTx.forEach(function (t) {
+            if (!t || t.type !== typeFor) return;
+            var pid = (t.personId != null) ? t.personId : (t.customerId != null ? t.customerId : t.supplierId);
+            if (pid == null) return;
+            var ms = _toMs(t.date || t.createdAt);
+            if (lastMap[pid] == null || ms > lastMap[pid]) lastMap[pid] = ms;
+        });
+    }
+
+    // ماندهٔ خالصِ هر شخص به ارزِ پایه (برای بیشترین باقیداری/طلب)
+    var balMap = null;
+    if (key === 'bal-desc' || key === 'bal-asc') {
+        balMap = {};
+        arr.forEach(function (p) {
+            var net = 0;
+            try {
+                var info = (typeof _computePersonCardBalance === 'function') ? _computePersonCardBalance(p, allTx) : null;
+                if (info && info.balMap) {
+                    Object.keys(info.balMap).forEach(function (c) {
+                        var v = parseFloat(info.balMap[c]) || 0;
+                        if (!v) return;
+                        if (c === base) { net += v; return; }
+                        if (typeof CurrencySystem !== 'undefined' && CurrencySystem.convert) {
+                            var cv = CurrencySystem.convert(v, c, base, 'rate');
+                            net += (cv == null || isNaN(cv)) ? v : cv;
+                        } else { net += v; }
+                    });
+                }
+            } catch (e) {}
+            balMap[p.id] = net;
+        });
+    }
+
+    arr.sort(function (a, b) {
+        switch (key) {
+            case 'name-asc': return String(a.name || '').localeCompare(String(b.name || ''), 'fa');
+            case 'new':      return (parseInt(b.id, 10) || 0) - (parseInt(a.id, 10) || 0);
+            case 'old':      return (parseInt(a.id, 10) || 0) - (parseInt(b.id, 10) || 0);
+            case 'updated':  return _toMs(b.updatedAt || b.createdAt) - _toMs(a.updatedAt || a.createdAt);
+            // باقیداری = ماندهٔ مثبت (شخص به ما بدهکار) → بیشترین باقیداری یعنی مثبت‌ترین
+            case 'bal-desc': return (balMap[b.id] || 0) - (balMap[a.id] || 0);
+            // طلب = ماندهٔ منفی (ما به شخص بدهکار) → بیشترین طلب یعنی منفی‌ترین
+            case 'bal-asc':  return (balMap[a.id] || 0) - (balMap[b.id] || 0);
+            case 'last-sale':
+            case 'last-purchase':
+            case 'last-receipt':
+            case 'last-payment':
+                return (lastMap[b.id] || 0) - (lastMap[a.id] || 0);
+            default: return 0;
+        }
+    });
+    return arr;
+}
+if (typeof window !== 'undefined') window._sortPersonsArray = _sortPersonsArray;
+
 // بارگذاری لیست افراد
 function loadPersonsList() {
     // ریست حالت انتخاب (picker) اگر هنوز فعال است
@@ -20048,7 +20258,7 @@ function loadPersonsList() {
         _personPickerCategory = null;
         _personPickerReturnSection = null;
     }
-    const persons = db.getPersons();
+    const persons = _sortPersonsArray(db.getPersons());
     // اگر در حالت picker هستیم، جدول picker رندر شود
     if ((typeof _rpPersonPick !== 'undefined' && _rpPersonPick) || _personPickerCallback) {
         renderPersonsTablePickerMode(persons);
@@ -20088,8 +20298,8 @@ function filterPersons() {
             }
             return true;
         });
-        
-        renderPersonsTable(filtered);
+
+        renderPersonsTable(_sortPersonsArray(filtered));
     } catch (error) {
         console.error('خطا در فیلتر اشخاص:', error);
     }
@@ -25484,6 +25694,83 @@ function ssbOpenSub(key) {
     ssbPopulateForm(key);
 }
 
+// ============================================================================
+//  هشدار های داخل سیستم — اعلاناتِ سروری (از Supabase، فقط‌خواندنی با کلیدِ عمومی)
+//  ---------------------------------------------------------------------------
+//  ادمین/سرور اعلانات را در جدولِ «announcements»ِ Supabase می‌سازد و همهٔ کاربرانِ در حالِ
+//  استفاده آن را می‌بینند. اینجا فقط SELECT با anon key انجام می‌شود (RLS باید SELECTِ anon
+//  را مجاز کند). همچنین متنِ بالای جستجوی داشبورد از جدولِ «app_config» (کلید=dashboard_tagline)
+//  خوانده می‌شود تا ادمین آن را از سرور تغییر دهد و برای همهٔ کاربران عوض شود.
+//
+//  جدول‌هایی که باید در Supabase بسازید (یک‌بار، توسطِ ادمین):
+//    create table announcements (
+//      id bigint generated always as identity primary key,
+//      title text, body text,
+//      is_active boolean default true,
+//      created_at timestamptz default now()
+//    );
+//    create table app_config ( key text primary key, value text );
+//    -- ردیفِ متنِ داشبورد:  insert into app_config(key,value) values ('dashboard_tagline','متنِ شما');
+//  و در RLS هر دو جدول، SELECT برای نقشِ anon مجاز شود (policy: using (true) برای select).
+// ============================================================================
+var JouyaAnnouncements = (function () {
+    function cfg() { try { return window.JOUYA_SYNC_CONFIG || null; } catch (e) { return null; } }
+    function _get(path) {
+        var c = cfg();
+        if (!c || !c.url || !c.anonKey) return Promise.reject(new Error('no-config'));
+        var url = c.url.replace(/\/+$/, '') + '/rest/v1/' + path;
+        return fetch(url, {
+            headers: { 'apikey': c.anonKey, 'Authorization': 'Bearer ' + c.anonKey, 'Accept': 'application/json' },
+            cache: 'no-store'
+        }).then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); });
+    }
+    function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+    function _fmtDate(s) {
+        try { if (!s) return ''; var d = new Date(s); if (!isNaN(d.getTime())) return d.toLocaleDateString('fa-IR'); } catch (e) {}
+        return _esc(s);
+    }
+    function fetchAnnouncements() {
+        return _get('announcements?select=title,body,created_at,is_active&is_active=eq.true&order=created_at.desc&limit=50')
+            .catch(function () { return _get('announcements?select=*&order=created_at.desc&limit=50').catch(function () { return []; }); });
+    }
+    function renderInto(elId) {
+        var el = document.getElementById(elId);
+        if (!el) return;
+        fetchAnnouncements().then(function (rows) {
+            if (!Array.isArray(rows) || !rows.length) {
+                el.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:14px;">اعلانِ جدیدی وجود ندارد.</p>';
+                return;
+            }
+            el.innerHTML = rows.map(function (a) {
+                var title = _esc(a.title || '');
+                var body = _esc(a.body || a.message || '').replace(/\n/g, '<br>');
+                var date = a.created_at ? _fmtDate(a.created_at) : '';
+                return '<div class="jouya-ann-item">' +
+                    (title ? '<div class="jann-title">' + title + '</div>' : '') +
+                    (body ? '<div class="jann-body">' + body + '</div>' : '') +
+                    (date ? '<div class="jann-date">' + date + '</div>' : '') +
+                    '</div>';
+            }).join('');
+        }).catch(function () {
+            el.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:14px;">دریافتِ اعلانات ممکن نشد.</p>';
+        });
+    }
+    var _taglineTried = false;
+    function applyTagline(force) {
+        var el = document.querySelector('.nd-search-hint');
+        if (!el) return;
+        if (_taglineTried && !force) return;   // یک‌بار در هر نشست کافی است
+        _taglineTried = true;
+        _get('app_config?select=value&key=eq.dashboard_tagline&limit=1').then(function (rows) {
+            if (Array.isArray(rows) && rows.length && rows[0] && rows[0].value != null && String(rows[0].value).trim()) {
+                el.textContent = String(rows[0].value).trim();
+            }
+        }).catch(function () { /* همان متنِ پیش‌فرضِ HTML می‌ماند */ });
+    }
+    return { fetchAnnouncements: fetchAnnouncements, renderInto: renderInto, applyTagline: applyTagline };
+})();
+if (typeof window !== 'undefined') window.JouyaAnnouncements = JouyaAnnouncements;
+
 /** عنوان هر زیربخش */
 function ssbGetTitle(key) {
     const titles = {
@@ -25493,7 +25780,7 @@ function ssbGetTitle(key) {
         invoice:  '<i class="fas fa-file-invoice-dollar"></i> تنظیمات بل',
         numsys:   '<i class="fas fa-sort-numeric-down"></i> سیستم اعداد',
         currency: '<i class="fas fa-coins"></i> واحد پول',
-        notes:    '<i class="fas fa-bell"></i> مرکز پیام',
+        notes:    '<i class="fas fa-bell"></i> هشدار های داخل سیستم',
         excel:    '<i class="fas fa-file-excel"></i> اکسل',
         security: '<i class="fas fa-lock"></i> امنیت',
         dbinit:   '<i class="fas fa-tools"></i> تصحیح دیتابیس',
@@ -25719,6 +26006,12 @@ function ssbLoadSubContent(key) {
 
         case 'notes':
             return `
+            <div class="ssb-card">
+                <h4><i class="fas fa-bullhorn"></i> هشدار های داخل سیستم</h4>
+                <div id="ssb-announcements-list" style="max-height:340px;overflow-y:auto;padding:4px 0;">
+                    <p style="color:#94a3b8;text-align:center;padding:10px;">در حال بارگذاری...</p>
+                </div>
+            </div>
             <div class="ssb-card">
                 <h4><i class="fas fa-exclamation-triangle"></i> هشدارهای جنس (نزدیک به انقضاء و منقضی)</h4>
                 <div id="ssb-expiry-alerts-list" style="max-height:280px;overflow-y:auto;padding:4px 0;">
@@ -25985,6 +26278,12 @@ function ssbPopulateForm(key) {
         } else if (key === 'notes') {
             const el = document.getElementById('ssb-notes');
             try { if (el) el.value = localStorage.getItem('systemNotes') || ''; } catch(e) {}
+            // اعلاناتِ سروری (هشدار های داخل سیستم)
+            try {
+                if (window.JouyaAnnouncements && typeof window.JouyaAnnouncements.renderInto === 'function') {
+                    setTimeout(function () { window.JouyaAnnouncements.renderInto('ssb-announcements-list'); }, 40);
+                }
+            } catch(e) {}
             // بارگذاری لیست هشدارهای انقضاء
             try {
                 if (typeof loadExpiryAlertsList === 'function') {
