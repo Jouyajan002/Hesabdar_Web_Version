@@ -223,6 +223,11 @@
                 <span class="ssb-item-label">هشدار های داخل سیستم</span>
                 <i class="fas fa-chevron-left ssb-arrow"></i>
             </li>
+            <li onclick="ssbOpenSub('announcements')">
+                <span class="ssb-item-icon"><i class="fas fa-bullhorn"></i></span>
+                <span class="ssb-item-label">مرکز اعلانات</span>
+                <i class="fas fa-chevron-left ssb-arrow"></i>
+            </li>
             <li onclick="ssbOpenSub('excel')" style="display:none;">
                 <span class="ssb-item-icon"><i class="fas fa-file-excel"></i></span>
                 <span class="ssb-item-label">اکسل / وارد کردن داده</span>
@@ -584,7 +589,7 @@
                             <button class="dash-topbar-bell nd-topbar-backup" type="button" title="پشتیبان‌گیری گوگل درایو" onclick="ndOpenBackupQuick()">
                                 <i class="fas fa-cloud-arrow-up"></i>
                             </button>
-                            <button class="dash-topbar-bell" type="button" title="اعلانات" onclick="openSidebar(); if (typeof ssbOpenSub === 'function') { ssbOpenSub('notes'); }">
+                            <button class="dash-topbar-bell" type="button" title="مرکز اعلانات" onclick="openSidebar(); if (typeof ssbOpenSub === 'function') { ssbOpenSub('announcements'); }">
                                 <i class="fas fa-bell"></i>
                             </button>
                         </div>

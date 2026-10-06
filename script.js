@@ -855,7 +855,7 @@ function loadDashboard() {
     // بلافاصله پس از loadDashboard هنگامِ ورود به داشبورد (بهینه‌سازیِ سرعتِ ناوبری).
     try { window.__ndDashLoadedAt = Date.now(); } catch (e) {}
     // متنِ بالای جستجوی داشبورد از سرور (قابلِ‌تنظیم توسطِ ادمین) — یک‌بار در هر نشست.
-    try { if (window.JouyaAnnouncements && typeof window.JouyaAnnouncements.applyTagline === 'function') window.JouyaAnnouncements.applyTagline(); } catch (e) {}
+    try { if (typeof jouyaAnnApplyTagline === 'function') jouyaAnnApplyTagline(); } catch (e) {}
 }
 
 // ========================================================================
@@ -11112,7 +11112,10 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
     // (پس حاشیهٔ چاپ نیازی به تغییر ندارد). رنگ/قلم/طرح مثلِ بقیهٔ جدول است.
     if (hasDetails) {
         css +=
-            '.items .c-details { text-align: right; color: #44506a; word-break: break-word; }' +
+            // رنگ/چینش فقط روی سلول‌های بدنه؛ عنوانِ ستون دقیقاً مثلِ بقیهٔ عنوان‌ها
+            // سفید روی سرمه‌ای می‌ماند (قاعدهٔ .items thead th) و وسط‌چین است.
+            '.items .c-details { word-break: break-word; }' +
+            '.items tbody td.c-details { text-align: right; color: #44506a; }' +
             '.items .c-num { width: 6%; }' +
             '.items .c-desc { width: ' + (isThermal ? '28%' : '31%') + '; }' +
             '.items .c-qty { width: 10%; }' +
@@ -12588,31 +12591,66 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
             var pt = b ? b.style.transform : '', pw = b ? b.style.width : '';
             if (b) { b.style.transform = ''; b.style.width = ''; }
             try { if (pdfName) d.title = pdfName; } catch (e) {}
-            // ── (نسخهٔ Tauri) پیش از چاپ، پنجره تمام‌صفحه شود تا پنجرهٔ تنظیماتِ چاپِ WebView2
-            //    کامل و «دکمهٔ بستن/لغو» دیده شود (fit-to-screen). اگر برنامه از قبل تمام‌صفحه
-            //    باشد، maximize بی‌اثر است. اگر API در دسترس نبود، مثلِ قبل مستقیم چاپ می‌کند.
-            var _didFit = false;
+            // ── (نسخهٔ Tauri) پنجرهٔ «تنظیماتِ چاپ» را خودِ WebView2 می‌سازد و دقیقاً به اندازهٔ
+            //    پنجرهٔ برنامه کشیده می‌شود؛ پس وقتی برنامه تمام‌صفحه است آن پنجره هم بلند و
+            //    بزرگ می‌شود. برای اینکه جمع‌وجور شود و دکمه‌های پایینش (Print/Cancel = بستن)
+            //    کاملاً دیده شوند، پیش از چاپ پنجرهٔ برنامه را به یک اندازهٔ متناسب کوچک
+            //    می‌کنیم و بعد از بسته‌شدنِ چاپ، دقیقاً به حالتِ قبلی برمی‌گردانیم.
+            var _restoreWin = null;
+            var _doRealPrint = function () {
+                try { frame.contentWindow.print(); }
+                catch (_) { try { window.print(); } catch (__) {} }
+                // بازگرداندنِ اندازهٔ پنجره پس از بسته‌شدنِ پنجرهٔ چاپ
+                if (_restoreWin) {
+                    var _done = false;
+                    var _fin = function () { if (_done) return; _done = true; try { _restoreWin(); } catch (e) {} };
+                    try { frame.contentWindow.addEventListener('afterprint', _fin, { once: true }); } catch (e) {}
+                    setTimeout(_fin, 60000);   // تورِ ایمنی اگر afterprint نیامد
+                }
+                setTimeout(function () { if (b) { b.style.transform = pt; b.style.width = pw; } }, 450);
+                try { console.log('[jouya-preview] print invoked'); } catch (_) {}
+            };
+
+            var _fitting = false;
             try {
                 if ((typeof __jouyaIsTauri === 'function') && __jouyaIsTauri() &&
-                    window.__TAURI__ && window.__TAURI__.window) {
+                    window.__TAURI__ && window.__TAURI__.window && window.__TAURI__.dpi &&
+                    window.__TAURI__.dpi.LogicalSize) {
                     var _WW = window.__TAURI__.window;
+                    var _LS = window.__TAURI__.dpi.LogicalSize;
                     var _w = (typeof _WW.getCurrentWindow === 'function') ? _WW.getCurrentWindow()
                            : (typeof _WW.getCurrent === 'function') ? _WW.getCurrent() : null;
-                    if (_w && typeof _w.maximize === 'function') { _w.maximize(); _didFit = true; }
+                    if (_w && typeof _w.setSize === 'function' && typeof _w.isMaximized === 'function') {
+                        // اندازهٔ جمع‌وجور: کفِ امن ۷۶۰px ارتفاع تا پنلِ تنظیماتِ چاپ هرگز بریده نشود
+                        var _aw = (window.screen && window.screen.availWidth)  || 1280;
+                        var _ah = (window.screen && window.screen.availHeight) || 860;
+                        var _tw = Math.max(1000, Math.min(1200, Math.round(_aw * 0.75)));
+                        var _th = Math.max(760,  Math.min(880,  Math.round(_ah * 0.80)));
+                        _fitting = true;
+                        _w.isMaximized().then(function (wasMax) {
+                            return _w.outerSize().then(function (prevSize) {
+                                _restoreWin = function () {
+                                    try {
+                                        if (wasMax) { _w.maximize(); }
+                                        else if (prevSize) { _w.setSize(prevSize); _w.center(); }
+                                    } catch (e) {}
+                                };
+                                if (wasMax) { try { _w.unmaximize(); } catch (e) {} }
+                                return _w.setSize(new _LS(_tw, _th));
+                            });
+                        }).then(function () {
+                            try { _w.center(); } catch (e) {}
+                            // کمی مکث تا WebView اندازهٔ تازه را بگیرد، سپس چاپ
+                            setTimeout(function () { try { frame.contentWindow.focus(); } catch (e) {} _doRealPrint(); }, 340);
+                        }).catch(function () { _restoreWin = null; _doRealPrint(); });
+                    }
                 }
-            } catch (e) {}
-            frame.contentWindow.focus();
-            if (_didFit) {
-                // کمی مکث تا WebView اندازهٔ تازه را بگیرد، سپس چاپ (پیش‌نمایش fit می‌شود)
-                setTimeout(function () {
-                    try { frame.contentWindow.print(); }
-                    catch (_) { try { window.print(); } catch (__) {} }
-                }, 300);
-            } else {
-                frame.contentWindow.print();
+            } catch (e) { _fitting = false; }
+
+            if (!_fitting) {
+                frame.contentWindow.focus();
+                _doRealPrint();
             }
-            setTimeout(function () { if (b) { b.style.transform = pt; b.style.width = pw; } }, _didFit ? 850 : 400);
-            try { console.log('[jouya-preview] print invoked'); } catch (_) {}
         } catch (e) {
             try { console.warn('[jouya-preview] print error:', e && e.message); } catch (_) {}
             try { window.print(); } catch (_) {}
@@ -25695,81 +25733,105 @@ function ssbOpenSub(key) {
 }
 
 // ============================================================================
-//  هشدار های داخل سیستم — اعلاناتِ سروری (از Supabase، فقط‌خواندنی با کلیدِ عمومی)
+//  مرکز اعلانات — اعلاناتِ سروری (از Supabase، فقط‌خواندنی با کلیدِ عمومی)
 //  ---------------------------------------------------------------------------
-//  ادمین/سرور اعلانات را در جدولِ «announcements»ِ Supabase می‌سازد و همهٔ کاربرانِ در حالِ
-//  استفاده آن را می‌بینند. اینجا فقط SELECT با anon key انجام می‌شود (RLS باید SELECTِ anon
-//  را مجاز کند). همچنین متنِ بالای جستجوی داشبورد از جدولِ «app_config» (کلید=dashboard_tagline)
-//  خوانده می‌شود تا ادمین آن را از سرور تغییر دهد و برای همهٔ کاربران عوض شود.
+//  ⚠ نکتهٔ مهمِ معماری (علتِ باگِ «در حال بارگذاری»): در این فایل یک throwِ عمدی در
+//  سطحِ بالا وجود دارد (settingsForm)، پس هر «انتسابِ var» که بعد از آن نوشته شود
+//  هرگز اجرا نمی‌شود. نسخهٔ قبلی این بخش یک شیءِ ماژول با var بود و به همین دلیل
+//  window.JouyaAnnouncements همیشه undefined می‌ماند و پنل روی «در حال بارگذاری»
+//  قفل می‌شد. اینجا عمداً همه‌چیز «تابعِ سراسری (function declaration)» است، چون
+//  تابع‌های declaration به‌خاطرِ hoisting همیشه در دسترس‌اند — دقیقاً همان الگویی که
+//  بقیهٔ این فایل هم با آن کار می‌کند.
 //
-//  جدول‌هایی که باید در Supabase بسازید (یک‌بار، توسطِ ادمین):
-//    create table announcements (
-//      id bigint generated always as identity primary key,
-//      title text, body text,
-//      is_active boolean default true,
-//      created_at timestamptz default now()
-//    );
-//    create table app_config ( key text primary key, value text );
-//    -- ردیفِ متنِ داشبورد:  insert into app_config(key,value) values ('dashboard_tagline','متنِ شما');
-//  و در RLS هر دو جدول، SELECT برای نقشِ anon مجاز شود (policy: using (true) برای select).
+//  جدول‌های Supabase (یک‌بار توسطِ ادمین ساخته می‌شوند):
+//    announcements(id, title text, body text, is_active bool default true, created_at timestamptz default now())
+//    app_config(key text primary key, value text)   -- ردیفِ key='dashboard_tagline'
+//  و در RLS هر دو جدول، SELECT برای نقشِ anon مجاز شود.
 // ============================================================================
-var JouyaAnnouncements = (function () {
-    function cfg() { try { return window.JOUYA_SYNC_CONFIG || null; } catch (e) { return null; } }
-    function _get(path) {
-        var c = cfg();
-        if (!c || !c.url || !c.anonKey) return Promise.reject(new Error('no-config'));
-        var url = c.url.replace(/\/+$/, '') + '/rest/v1/' + path;
-        return fetch(url, {
+var _jouyaTaglineTried;   // فقط «اعلانِ» var (مقداردهی داخلِ تابع انجام می‌شود تا throw بالا مانعش نشود)
+
+function _jouyaAnnGet(path) {
+    var c = null;
+    try { c = window.JOUYA_SYNC_CONFIG || null; } catch (e) { c = null; }
+    if (!c || !c.url || !c.anonKey) return Promise.reject(new Error('پیکربندیِ سرور در دسترس نیست'));
+    var url = String(c.url).replace(/\/+$/, '') + '/rest/v1/' + path;
+    // مهلتِ زمانی، تا پنل در هیچ حالتی روی «در حال بارگذاری» قفل نماند
+    return new Promise(function (resolve, reject) {
+        var done = false;
+        var timer = setTimeout(function () {
+            if (!done) { done = true; reject(new Error('پاسخی از سرور نرسید (مهلت تمام شد)')); }
+        }, 15000);
+        fetch(url, {
             headers: { 'apikey': c.anonKey, 'Authorization': 'Bearer ' + c.anonKey, 'Accept': 'application/json' },
             cache: 'no-store'
-        }).then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); });
-    }
-    function _esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
-    function _fmtDate(s) {
-        try { if (!s) return ''; var d = new Date(s); if (!isNaN(d.getTime())) return d.toLocaleDateString('fa-IR'); } catch (e) {}
-        return _esc(s);
-    }
-    function fetchAnnouncements() {
-        return _get('announcements?select=title,body,created_at,is_active&is_active=eq.true&order=created_at.desc&limit=50')
-            .catch(function () { return _get('announcements?select=*&order=created_at.desc&limit=50').catch(function () { return []; }); });
-    }
-    function renderInto(elId) {
-        var el = document.getElementById(elId);
-        if (!el) return;
-        fetchAnnouncements().then(function (rows) {
+        }).then(function (r) {
+            if (!r.ok) {
+                return r.text().then(function (t) {
+                    throw new Error('HTTP ' + r.status + (t ? (' — ' + String(t).slice(0, 160)) : ''));
+                });
+            }
+            return r.json();
+        }).then(function (j) {
+            if (!done) { done = true; clearTimeout(timer); resolve(j); }
+        }).catch(function (e) {
+            if (!done) { done = true; clearTimeout(timer); reject(e); }
+        });
+    });
+}
+
+function _jouyaAnnEsc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function _jouyaAnnDate(s) {
+    try { if (!s) return ''; var d = new Date(s); if (!isNaN(d.getTime())) return d.toLocaleDateString('fa-IR'); } catch (e) {}
+    return _jouyaAnnEsc(s);
+}
+
+/** اعلاناتِ فعالِ سرور را در عنصرِ داده‌شده رندر می‌کند (پنلِ «مرکز اعلانات») */
+function jouyaAnnRender(elId) {
+    var el = document.getElementById(elId);
+    if (!el) return;
+    el.innerHTML = '<p class="jann-empty">در حال بارگذاری…</p>';
+    _jouyaAnnGet('announcements?select=title,body,created_at,is_active&is_active=eq.true&order=created_at.desc&limit=50')
+        .catch(function () {
+            // اگر ستونِ is_active وجود نداشت، بدونِ فیلتر هم تلاش می‌کنیم
+            return _jouyaAnnGet('announcements?select=*&order=created_at.desc&limit=50');
+        })
+        .then(function (rows) {
             if (!Array.isArray(rows) || !rows.length) {
-                el.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:14px;">اعلانِ جدیدی وجود ندارد.</p>';
+                el.innerHTML = '<p class="jann-empty">اعلانِ جدیدی وجود ندارد.</p>';
                 return;
             }
             el.innerHTML = rows.map(function (a) {
-                var title = _esc(a.title || '');
-                var body = _esc(a.body || a.message || '').replace(/\n/g, '<br>');
-                var date = a.created_at ? _fmtDate(a.created_at) : '';
+                var title = _jouyaAnnEsc(a.title || '');
+                var body = _jouyaAnnEsc(a.body || a.message || '').replace(/\n/g, '<br>');
+                var date = a.created_at ? _jouyaAnnDate(a.created_at) : '';
                 return '<div class="jouya-ann-item">' +
                     (title ? '<div class="jann-title">' + title + '</div>' : '') +
                     (body ? '<div class="jann-body">' + body + '</div>' : '') +
                     (date ? '<div class="jann-date">' + date + '</div>' : '') +
                     '</div>';
             }).join('');
-        }).catch(function () {
-            el.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:14px;">دریافتِ اعلانات ممکن نشد.</p>';
+        })
+        .catch(function (err) {
+            el.innerHTML = '<p class="jann-empty">دریافتِ اعلانات ممکن نشد.' +
+                '<span class="jann-err">' + _jouyaAnnEsc((err && err.message) || '') + '</span></p>';
         });
-    }
-    var _taglineTried = false;
-    function applyTagline(force) {
-        var el = document.querySelector('.nd-search-hint');
-        if (!el) return;
-        if (_taglineTried && !force) return;   // یک‌بار در هر نشست کافی است
-        _taglineTried = true;
-        _get('app_config?select=value&key=eq.dashboard_tagline&limit=1').then(function (rows) {
-            if (Array.isArray(rows) && rows.length && rows[0] && rows[0].value != null && String(rows[0].value).trim()) {
-                el.textContent = String(rows[0].value).trim();
-            }
-        }).catch(function () { /* همان متنِ پیش‌فرضِ HTML می‌ماند */ });
-    }
-    return { fetchAnnouncements: fetchAnnouncements, renderInto: renderInto, applyTagline: applyTagline };
-})();
-if (typeof window !== 'undefined') window.JouyaAnnouncements = JouyaAnnouncements;
+}
+
+/** متنِ بالای جستجوی داشبورد را از سرور می‌گیرد (یک‌بار در هر نشست) */
+function jouyaAnnApplyTagline(force) {
+    var el = document.querySelector('.nd-search-hint');
+    if (!el) return;
+    if (_jouyaTaglineTried && !force) return;
+    _jouyaTaglineTried = true;
+    _jouyaAnnGet('app_config?select=value&key=eq.dashboard_tagline&limit=1').then(function (rows) {
+        if (Array.isArray(rows) && rows.length && rows[0] && rows[0].value != null && String(rows[0].value).trim()) {
+            el.textContent = String(rows[0].value).trim();
+        }
+    }).catch(function () { /* همان متنِ پیش‌فرضِ HTML دست‌نخورده می‌ماند */ });
+}
 
 /** عنوان هر زیربخش */
 function ssbGetTitle(key) {
@@ -25781,6 +25843,7 @@ function ssbGetTitle(key) {
         numsys:   '<i class="fas fa-sort-numeric-down"></i> سیستم اعداد',
         currency: '<i class="fas fa-coins"></i> واحد پول',
         notes:    '<i class="fas fa-bell"></i> هشدار های داخل سیستم',
+        announcements: '<i class="fas fa-bullhorn"></i> مرکز اعلانات',
         excel:    '<i class="fas fa-file-excel"></i> اکسل',
         security: '<i class="fas fa-lock"></i> امنیت',
         dbinit:   '<i class="fas fa-tools"></i> تصحیح دیتابیس',
@@ -26004,14 +26067,17 @@ function ssbLoadSubContent(key) {
                 </button>
             </div>`;
 
-        case 'notes':
+        case 'announcements':
             return `
             <div class="ssb-card">
-                <h4><i class="fas fa-bullhorn"></i> هشدار های داخل سیستم</h4>
-                <div id="ssb-announcements-list" style="max-height:340px;overflow-y:auto;padding:4px 0;">
-                    <p style="color:#94a3b8;text-align:center;padding:10px;">در حال بارگذاری...</p>
+                <h4><i class="fas fa-bullhorn"></i> مرکز اعلانات</h4>
+                <div id="ssb-announcements-list" class="jann-list">
+                    <p class="jann-empty">در حال بارگذاری…</p>
                 </div>
-            </div>
+            </div>`;
+
+        case 'notes':
+            return `
             <div class="ssb-card">
                 <h4><i class="fas fa-exclamation-triangle"></i> هشدارهای جنس (نزدیک به انقضاء و منقضی)</h4>
                 <div id="ssb-expiry-alerts-list" style="max-height:280px;overflow-y:auto;padding:4px 0;">
@@ -26275,15 +26341,16 @@ function ssbPopulateForm(key) {
         } else if (key === 'currency') {
             const el = document.getElementById('ssb-currency');
             if (el) el.value = settings.defaultCurrency || _baseCur();
+        } else if (key === 'announcements') {
+            // مرکز اعلانات — اعلاناتِ سمتِ سرور
+            try {
+                if (typeof jouyaAnnRender === 'function') {
+                    setTimeout(function () { jouyaAnnRender('ssb-announcements-list'); }, 40);
+                }
+            } catch(e) {}
         } else if (key === 'notes') {
             const el = document.getElementById('ssb-notes');
             try { if (el) el.value = localStorage.getItem('systemNotes') || ''; } catch(e) {}
-            // اعلاناتِ سروری (هشدار های داخل سیستم)
-            try {
-                if (window.JouyaAnnouncements && typeof window.JouyaAnnouncements.renderInto === 'function') {
-                    setTimeout(function () { window.JouyaAnnouncements.renderInto('ssb-announcements-list'); }, 40);
-                }
-            } catch(e) {}
             // بارگذاری لیست هشدارهای انقضاء
             try {
                 if (typeof loadExpiryAlertsList === 'function') {
@@ -39225,11 +39292,11 @@ function ndUpdRunInAppInstall(url) {
         })
         .catch(function (err) {
             cleanup(); closeOv();
-            ndUpdSetStatus('دانلودِ خودکار ناموفق بود؛ نشانیِ دانلود باز می‌شود.' +
+            // درخواستِ کاربر: هیچ لینک/مرورگری باز نشود. کلِ روندِ دانلود و نصب درون‌برنامه‌ای
+            // است؛ در صورتِ خطا فقط پیام داده می‌شود تا دوباره تلاش کند.
+            ndUpdSetStatus('دانلودِ بروزرسانی ناموفق بود. لطفاً اتصالِ اینترنت را بررسی کنید و ' +
+                'دوباره «دانلود و نصب» را بزنید.' +
                 '<br><small>' + ndEsc(String((err && err.message) || err || '')) + '</small>', 'err');
-            // فالبک: بازکردنِ لینک تا کاربر دستی دانلود کند
-            try { __jouyaTauriInvoke('hb_open_uri', { uri: url }).catch(function () { window.open(url, '_blank'); }); }
-            catch (e) { try { window.open(url, '_blank'); } catch (e2) {} }
         });
 }
 if (typeof window !== 'undefined') window.ndUpdRunInAppInstall = ndUpdRunInAppInstall;
