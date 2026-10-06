@@ -16,6 +16,11 @@ name: ساخت نسخهٔ نصبیِ ویندوز — سازگار با ویند
 # را جداگانه بسازید، از تبِ Actions → این ورک‌فلو → دکمهٔ «Run workflow» اجرایش کنید.
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'نسخه (مثلاً 1.1.0). خالی بگذارید اگر هنگامِ اجرا، خودِ تگ را به‌عنوان ref انتخاب کرده‌اید.'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -81,7 +86,7 @@ jobs:
           $Dist = Join-Path $Root 'src-tauri\dist-web'
 
           $WebFiles = @(
-            'index.html',
+            'index.html', 'print-window.html',
             'style.css', 'auth-system.css', 'dashboard-store-info-fix.css', 'mobile-responsive.css',
             'tauri-bridge.js', 'database.js', 'script.js', 'persian-date-utils.js',
             'auth-system.js', 'drive-backup.js', 'instant-update-fix.js', 'delivery-list.js',
@@ -122,11 +127,17 @@ jobs:
       #  (مورد j) محافظت از سورس — درهم‌ریزیِ JSِ برنامه داخلِ dist-web پیش از embed
       # ══════════════════════════════════════════════════════════════════════
       # (مورد h) هنگامِ بیلد با تگ، نسخه را از تگ در version.json و tauri.conf.json یکی می‌کنیم.
-      - name: تزریقِ نسخه از تگ
-        if: startsWith(github.ref, 'refs/tags/v')
+      # نسخه از یکی از این دو منبع می‌آید (به همین ترتیبِ اولویت):
+      #   ۱) ورودیِ دستیِ «version» هنگامِ Run workflow
+      #   ۲) نامِ تگ، اگر هنگامِ اجرا خودِ تگ را به‌عنوان ref انتخاب کرده باشید
+      # اگر هیچ‌کدام نبود، این مرحله رد می‌شود و نسخه همان 0.0.0 می‌ماند (فقط برای تست).
+      - name: تزریقِ نسخه (ورودیِ دستی یا تگ)
+        if: ${{ inputs.version != '' || startsWith(github.ref, 'refs/tags/v') }}
         shell: pwsh
         run: |
-          $v = "${{ github.ref_name }}" -replace '^v',''
+          $v = "${{ inputs.version }}"
+          if ([string]::IsNullOrWhiteSpace($v)) { $v = "${{ github.ref_name }}" }
+          $v = $v -replace '^v',''
           Write-Host "نسخهٔ بیلد: $v"
           "{ ""version"": ""$v"", ""repo"": """" }" | Set-Content -Encoding UTF8 (Join-Path 'src-tauri' 'dist-web/version.json')
           $p = 'src-tauri/tauri.conf.json'
@@ -169,6 +180,22 @@ jobs:
           CARGO_UNSTABLE_BUILD_STD: "std,panic_abort"
           CARGO_BUILD_TARGET: ${{ env.WIN7_TARGET }}
         run: cargo tauri build
+
+      # نامِ خروجی را «‑win7» دار می‌کنیم تا اگر روی همان تگِ نسخهٔ ویندوز ۱۰/۱۱ منتشر شد،
+      # فایل‌ها در Releases هم‌نام نشوند و روی هم بازنویسی نگردند، و کاربر هم با یک نگاه
+      # بفهمد کدام نصب‌کننده مخصوصِ ویندوز ۷ است.
+      - name: نام‌گذاریِ خروجی‌ها با نشانِ win7
+        shell: pwsh
+        run: |
+          $b = "src-tauri/target/${{ env.WIN7_TARGET }}/release/bundle"
+          if (-not (Test-Path $b)) { Write-Host "پوشهٔ bundle نیست؛ رد شد."; exit 0 }
+          Get-ChildItem -Recurse -File $b |
+            Where-Object { $_.Extension -in '.exe', '.msi' -and $_.BaseName -notmatch '-win7$' } |
+            ForEach-Object {
+              $new = $_.BaseName + '-win7' + $_.Extension
+              Rename-Item -LiteralPath $_.FullName -NewName $new
+              Write-Host "نام‌گذاری شد → $new"
+            }
 
       - name: فهرستِ خروجی‌ها
         if: always()

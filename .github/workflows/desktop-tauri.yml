@@ -81,7 +81,7 @@ jobs:
           $Dist = Join-Path $Root 'src-tauri\dist-web'
 
           $WebFiles = @(
-            'index.html',
+            'index.html', 'print-window.html',
             'style.css', 'auth-system.css', 'dashboard-store-info-fix.css', 'mobile-responsive.css',
             'tauri-bridge.js', 'database.js', 'script.js', 'persian-date-utils.js',
             'auth-system.js', 'drive-backup.js', 'instant-update-fix.js', 'delivery-list.js',
