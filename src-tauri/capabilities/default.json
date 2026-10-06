@@ -2,7 +2,10 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "مجوزهای پایهٔ پنجرهٔ اصلی و پنجرهٔ چاپ (hb-print). هیچ پلاگینِ جانبی استفاده نمی‌شود، پس فقط مجوزهای هستهٔ Tauri لازم است؛ فرمان‌های خودِ برنامه (hb_*) مجوزِ جداگانه نمی‌خواهند. مجوزهای create-webview-window و close برای «پنجرهٔ چاپِ جداگانه» اضافه شده‌اند.",
-  "windows": ["main", "hb-print"],
+  "windows": [
+    "main",
+    "hb-print"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-set-title",
@@ -10,6 +13,7 @@
     "core:window:allow-unmaximize",
     "core:window:allow-minimize",
     "core:window:allow-start-dragging",
+    "core:window:allow-show",
     "core:window:allow-close",
     "core:window:allow-center",
     "core:window:allow-set-focus",
