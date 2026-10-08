@@ -9885,3 +9885,119 @@ body.dark-mode .pf-del-field-btn { background: rgba(248,113,113,.16); color: #f8
 .pf-custom-field > input { padding-left: 38px; }
 /* فاصلهٔ یکسان با بقیهٔ فیلدهای فرم */
 #product-custom-fields .pf-custom-field { margin-top: 10px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   انعطافِ محتوای ردیف‌های لیست‌ها روی دسکتاپ (Tauri + وب)
+   ---------------------------------------------------------------------------
+   ریشهٔ مشکل: ستون‌های کارتِ ردیف‌ها با کسرِ ثابت (fr) تعریف شده بودند
+   (مثلاً 1.6fr 1.6fr 1fr 1.05fr auto). کسرِ ثابت به محتوا کاری ندارد؛ پس:
+     • ستونی مثلِ «نوع معامله» که متنِ کوتاهی دارد، فضای خالیِ بزرگی می‌گرفت،
+     • و در همان لحظه ستونِ «اطلاعات» (تاریخ/نمبر بل/تعداد/طرف معامله) جا کم
+       می‌آورد و محتوایش بریده می‌شد — دقیقاً همان ناحیهٔ سرخ و سبزِ تصویر.
+   راهکار: هر ستون دقیقاً به اندازهٔ محتوای خودش می‌شود (با یک سقفِ منطقی تا یک
+   نامِ خیلی بلند ردیف را به‌هم نریزد) و فضای اضافیِ صفحه به‌طورِ مساوی میانِ
+   ستون‌ها پخش می‌شود؛ پس نه حفرهٔ خالی می‌ماند و نه ستونی جا کم می‌آورد. اگر در
+   عرضِ کوچک باز هم جا کم آمد، محتوا به‌جای بریده‌شدن به خطِ بعد می‌شکند و ارتفاعِ
+   ردیف فقط به‌اندازهٔ نیاز بیشتر می‌شود. فقط چیدمانِ نمایشی؛ هیچ داده،
+   منطق، رنگ یا اندازهٔ قلمی تغییر نمی‌کند و قواعدِ موبایل (≤760px) دست‌نخورده است.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (min-width: 761px) {
+
+    /* ── کارت‌های فروش/خرید/دریافت/پرداخت/معاملات/ورود و خروج جنس ─────────── */
+    /*   ستون‌ها: نوع یا نام | اطلاعات | مبلغ | موجودی یا مانده | عملیات        */
+    .sales-card,
+    .sales-card.ptx-sales-card {
+        grid-template-columns:
+            fit-content(26ch)      /* نام/نوع — فقط به اندازهٔ متنِ خودش */
+            minmax(0, max-content) /* اطلاعات — تا جایی که لازم دارد، نه بیشتر */
+            fit-content(22ch)      /* مبلغ/قیمت واحد */
+            fit-content(22ch)      /* موجودی/مانده */
+            auto;                  /* عملیات */
+        /* فضای اضافیِ صفحه به‌جای تلنبارشدن در یک ستون، به‌طورِ مساوی میانِ ستون‌ها
+           پخش می‌شود → نه حفرهٔ خالی می‌ماند و نه چیزی به هم می‌چسبد. */
+        justify-content: space-between;
+        gap: 8px 18px;
+        align-items: center;
+    }
+
+    /* خطِ «اطلاعات» دیگر بریده نمی‌شود: اگر جا نبود به خطِ بعد می‌شکند */
+    .sales-card-meta {
+        flex-wrap: wrap;
+        white-space: normal;
+        overflow: visible;
+        gap: 4px 18px;
+        min-width: 0;
+    }
+    .sales-card-meta-item {
+        overflow: visible;
+        text-overflow: clip;
+        white-space: nowrap;       /* برچسب و مقدارِ هر قلم کنارِ هم می‌مانند */
+        max-width: 100%;
+        min-width: 0;
+    }
+    .sales-card-meta-item .sales-meta-val {
+        white-space: normal;
+        overflow-wrap: anywhere;
+        overflow: visible;
+    }
+    /* مبلغ و موجودی هم کامل دیده شوند (ستونشان به اندازهٔ محتوا است) */
+    .sales-card-amount,
+    .sales-card-remaining { overflow: visible; text-overflow: clip; min-width: 0; }
+    /* نامِ بلند هنوز با سه‌نقطه کوتاه می‌شود تا ردیف به‌هم نریزد */
+    .sales-card-name { min-width: 0; }
+
+    /* ── کارت‌های لیستِ اشخاص ──────────────────────────────────────────────── */
+    /*   نام تا سقفِ ۳۴ نویسه؛ باقیداری و طلب فقط به اندازهٔ عددِ خودشان.        */
+    .person-card {
+        grid-template-columns:
+            fit-content(34ch)      /* نام شخص */
+            minmax(0, max-content) /* باقیداری */
+            minmax(0, max-content) /* طلب */
+            auto;                  /* عملیات */
+        justify-content: space-between;
+    }
+    .person-card-balance,
+    .person-card-debt { overflow: visible; text-overflow: clip; min-width: 0; }
+
+    /* ── کارت‌های لیستِ اجناس و مصارف ──────────────────────────────────────── */
+    .product-card {
+        grid-template-columns:
+            fit-content(32ch)      /* نام جنس */
+            minmax(0, max-content)
+            minmax(0, max-content)
+            minmax(0, max-content)
+            auto;
+        justify-content: space-between;
+    }
+    .product-card.with-purchase {
+        grid-template-columns:
+            fit-content(28ch)      /* نام جنس */
+            minmax(0, max-content)
+            minmax(0, max-content)
+            minmax(0, max-content)
+            minmax(0, max-content)
+            minmax(0, max-content)
+            auto;
+        justify-content: space-between;
+    }
+    .product-card-cell-data {
+        overflow: visible; text-overflow: clip; min-width: 0;
+        white-space: normal; overflow-wrap: anywhere;
+    }
+
+    /* ── ردیف‌های جدول‌مانند (صندوق، مصارف، کارمندان، معاملاتِ شخص) ─────────── */
+    /*   این‌ها باید ستون‌هایشان بینِ ردیف‌ها هم‌تراز بماند، پس کسرِ ستون‌ها حفظ   */
+    /*   می‌شود؛ فقط به‌جای «بریده‌شدن»، متنِ بلند به خطِ بعد می‌شکند تا چیزی      */
+    /*   پنهان نماند و ارتفاعِ ردیف هم فقط در صورتِ نیاز بیشتر شود.               */
+    /* (overflowِ خودِ ردیف عمداً دست‌نخورده می‌ماند: با شکستنِ متن ارتفاعِ ردیف
+       خودش بیشتر می‌شود و چیزی بیرون نمی‌زند، پس نیازی به تغییرش نیست.) */
+    .ptx-cell, .cbtx-cell, .exp-cell, .emp-cell {
+        white-space: normal;
+        overflow: visible;
+        text-overflow: clip;
+        overflow-wrap: anywhere;
+        line-height: 1.5;
+    }
+    /* ستون‌های عملیات نباید بشکنند */
+    .ptx-c-ops, .cbtx-c-ops, .exp-c-ops, .emp-c-ops { white-space: nowrap; }
+}
