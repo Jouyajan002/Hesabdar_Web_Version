@@ -40,15 +40,49 @@
     // مجددِ او از ابر Restore می‌شود (نیازی به Import JSON نیست). داده‌های unsynced باید پیش از
     // این (هنگامِ Logout) flush شده باشند.
     // device_key عمداً دست‌نخورده می‌ماند (هویتِ دستگاه نباید بی‌دلیل عوض شود).
+    //  ⚠ این فهرست باید «همهٔ» چیزهایی را پوشش دهد که دادهٔ کاربرند — نه فقط آرایه‌های
+    //  اصلی. باگِ نشتِ بین‌حسابی دقیقاً از همین‌جا می‌آمد: فهرست‌های سفارشیِ کاربر
+    //  (کتگوری‌های جنس/شخص/مصرف، واحدهای شمارش، نوعِ حساب، فیلدهای دلخواهِ جنس) پاک
+    //  نمی‌شدند، پس بعد از ورودِ کاربرِ دوم همچنان روی دستگاه بودند و — چون همین کلیدها
+    //  در sync-layer به‌عنوان store_settings سینک می‌شوند — به فضای ابریِ کاربرِ دوم هم
+    //  push می‌شدند. backupHistory هم کلِ نسخهٔ JSONِ دادهٔ کاربرِ قبلی را نگه می‌داشت.
     var USER_DATA_KEYS = ['persons', 'products', 'transactions', 'expenses', 'cashboxes', 'returns',
         'warehouses', 'warehouseTransfers', 'activeWarehouseId', 'cashboxTransactions', 'services',
-        'jouya-currencies', 'jouya-exchange-rates', 'jouya-reference-rates', 'settings', 'dashboardStats'];
+        'jouya-currencies', 'jouya-exchange-rates', 'jouya-reference-rates', 'settings', 'dashboardStats',
+        // فهرست‌های سفارشیِ کاربر (همگی در store_settings سینک می‌شوند)
+        'jouya-asset-kinds', 'customProductCategories', 'customProductSubCategories',
+        'customProductUnits', 'customPersonCategories', 'customExpenseCategories',
+        'customExpenseCategoriesRemoved', 'customProductFields', 'cashboxTypes',
+        // تاریخچهٔ پشتیبان حاوی نسخهٔ کاملِ دادهٔ کاربرِ قبلی است → باید پاک شود
+        'backupHistory'];
+    //  کلیدهای «پویا» که نمی‌توان ثابت فهرست کرد: کتگوری‌های فرعیِ هر کتگوریِ اصلی
+    //  با نامِ customProductSubCategories_<کتگوری> ذخیره می‌شوند.
+    var USER_DATA_PREFIXES = ['customProductSubCategories_'];
+    function clearUserDataKeys() {
+        USER_DATA_KEYS.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+        try {
+            var keys = [];
+            for (var i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i));
+            keys.forEach(function (k) {
+                if (!k) return;
+                for (var j = 0; j < USER_DATA_PREFIXES.length; j++) {
+                    if (k.indexOf(USER_DATA_PREFIXES[j]) === 0) {
+                        try { localStorage.removeItem(k); } catch (e) {}
+                        return;
+                    }
+                }
+            });
+        } catch (e) {}
+        // دادهٔ محلی پاک شد → اگر حالتِ «فقط محلی» روشن بود (به‌خاطرِ واردکردنِ فایلِ
+        // حسابِ دیگر) دیگر لازم نیست و خاموش می‌شود تا سینکِ کاربرِ جدید عادی کار کند.
+        try { var S2 = sync(); if (S2 && S2.setLocalOnly) S2.setLocalOnly(false); } catch (e) {}
+    }
     var SYNC_STATE_KEYS = ['jouya_sync_snapshot', 'jouya_sync_cursor', 'jouya_sync_migrated', 'jouya_sync_workspace', 'jouya_sync_outbox', 'jouya_sync_conflicts'];
     function resetLocalContextForNewUser() {
         var S = sync();
         try { if (S && S.signOut) S.signOut(); } catch (e) {}     // بستنِ نشستِ قبلی + توقفِ حلقه‌ها/Realtime
         SYNC_STATE_KEYS.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
-        USER_DATA_KEYS.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+        clearUserDataKeys();
         try { localStorage.removeItem(LINK_KEY); } catch (e) {}
         try { console.log('[auth-cloud] تعویضِ کاربر: Local Context کاربرِ قبلی پاک شد (داده‌اش در ابر امن است).'); } catch (e) {}
     }
@@ -65,7 +99,7 @@
             if (SESSION_KEEP_KEYS.indexOf(k) !== -1) return;   // workspaceِ کاربرِ جدید را نگه دار
             try { localStorage.removeItem(k); } catch (e) {}
         });
-        USER_DATA_KEYS.forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
+        clearUserDataKeys();
         try { localStorage.removeItem(LINK_KEY); } catch (e) {}
         try { console.log('[auth-cloud] تعویضِ کاربر (پس از ورودِ موفق): داده‌ی محلیِ کاربرِ قبلی پاک شد؛ نشستِ جدید حفظ شد.'); } catch (e) {}
     }
@@ -352,6 +386,7 @@
                         if (k.indexOf('print-') === 0) return;   // تنظیماتِ چاپِ دستگاه حفظ شود
                         try { localStorage.removeItem(k); } catch (e) {}
                     });
+                    try { if (S && S.setLocalOnly) S.setLocalOnly(false); } catch (e) {}
                     console.log('[auth-cloud] خروجِ کامل: همهٔ دادهٔ محلیِ این دستگاه پاک شد (ابر دست‌نخورده؛ device_id و ترجیحاتِ دستگاه حفظ شد).');
                 } catch (e) {}
                 return { ok: true };

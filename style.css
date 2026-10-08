@@ -9783,3 +9783,105 @@ html[data-jruntime="tauri"] .person-fab-add {
     #nd-upd-dl-pct { font-size: 12px !important; }
     #nd-upd-dl-note { font-size: 10.5px !important; }
 }
+
+/* ============================================================================
+ *  ردیف‌های لیست‌ها — انعطاف‌پذیریِ محتوا (رفعِ بریده‌شدن و فضای خالیِ نامنظم)
+ *  ---------------------------------------------------------------------------
+ *  ریشهٔ مشکل: سلول‌های ردیف «white-space:nowrap + overflow:hidden + ellipsis»
+ *  داشتند و داخلِ ستون‌های نسبتیِ ثابت (fr) می‌نشستند. نتیجه: محتوای بلند بریده و
+ *  زیرِ سلولِ بعدی پنهان می‌شد، و محتوای کوتاه فضای خالی جا می‌گذاشت.
+ *
+ *  راهِ حل: به‌جای بریدن، متن به خطِ بعد می‌رود و ارتفاعِ ردیف خودش را با محتوا
+ *  تطبیق می‌دهد. نسبتِ ستون‌ها عمداً دست‌نخورده می‌ماند تا ردیف‌ها زیرِ هم هم‌تراز
+ *  بمانند (اگر ستون‌ها auto می‌شدند، هر ردیف اندازهٔ خودش را می‌گرفت و لیست به‌هم می‌ریخت).
+ *  اعداد/مبالغ داخلِ span عمداً نمی‌شکنند تا رقم‌ها دو تکه نشوند.
+ *  روی موبایل از قبل چیدمانِ تک‌ستونی و wrap فعال بود، پس این قاعده فقط برای
+ *  نمایشگرهای عریض (وب و نسخهٔ نصبی) است و چیدمانِ موبایل دست‌نخورده می‌ماند.
+ * ==========================================================================*/
+@media (min-width: 761px) {
+    .product-card > *,
+    .person-card > * { min-width: 0; }
+
+    .product-card-name,
+    .product-card-cell-data,
+    .person-card-name,
+    .person-card-balance,
+    .person-card-debt {
+        white-space: normal !important;
+        overflow: visible !important;
+        text-overflow: clip !important;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+        line-height: 1.55;
+    }
+    /* مقادیر عددی/ارزی یکپارچه بمانند */
+    .product-card-cell-data span,
+    .person-card-balance span,
+    .person-card-debt span { white-space: nowrap; }
+}
+
+/* ============================================================================
+ *  دکمهٔ حذفِ ظریفِ کتگوری کنارِ دراپ‌داون (کتگوری مصرف)
+ * ==========================================================================*/
+.cat-del-btn {
+    position: absolute;
+    top: 50%;
+    left: 8px;
+    transform: translateY(-50%);
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, .10);
+    color: #ef4444;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 3;
+    transition: background .15s, color .15s;
+}
+.cat-del-btn:hover { background: #ef4444; color: #fff; }
+body.dark-mode .cat-del-btn { background: rgba(248, 113, 113, .16); color: #f87171; }
+body.dark-mode .cat-del-btn:hover { background: #ef4444; color: #fff; }
+
+/* ============================================================================
+ *  فیلدهای دلخواهِ جنس — دکمهٔ افزودن (کنارِ نامِ جنس) و دکمهٔ حذفِ هر فیلد
+ *  استایل عمداً از خودِ فیلدهای همان فرم تقلید می‌کند تا چیدمان به‌هم نریزد.
+ * ==========================================================================*/
+.pf-add-field-btn,
+.pf-del-field-btn {
+    position: absolute;
+    top: 50%;
+    left: 10px;
+    transform: translateY(-50%);
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    font-size: 11px;
+    line-height: 1;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 3;
+    transition: background .15s, color .15s;
+}
+.pf-add-field-btn { background: rgba(99,102,241,.12); color: #6366f1; }
+.pf-add-field-btn:hover { background: #6366f1; color: #fff; }
+.pf-del-field-btn { background: rgba(239,68,68,.10); color: #ef4444; }
+.pf-del-field-btn:hover { background: #ef4444; color: #fff; }
+body.dark-mode .pf-add-field-btn { background: rgba(129,140,248,.18); color: #818cf8; }
+body.dark-mode .pf-del-field-btn { background: rgba(248,113,113,.16); color: #f87171; }
+/* فیلد باید مرجعِ موقعیت باشد تا دکمه داخلِ خودش بنشیند */
+.bill-field { position: relative; }
+/* جا برای دکمه در سمتِ چپِ ورودی تا روی متن نیفتد */
+.bill-field > #product-name,
+.pf-custom-field > input { padding-left: 38px; }
+/* فاصلهٔ یکسان با بقیهٔ فیلدهای فرم */
+#product-custom-fields .pf-custom-field { margin-top: 10px; }

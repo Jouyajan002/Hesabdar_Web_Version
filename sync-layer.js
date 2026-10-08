@@ -49,7 +49,8 @@
     var STORE_SETTING_KEYS = [
         'settings', 'jouya-reference-rates', 'jouya-asset-kinds',
         'customProductCategories', 'customProductSubCategories', 'customProductUnits',
-        'customPersonCategories', 'customExpenseCategories'
+        'customPersonCategories', 'customExpenseCategories',
+        'customExpenseCategoriesRemoved', 'customProductFields'
     ];
     var STORE_SETTINGS_TABLE = 'store_settings';
 
@@ -564,6 +565,34 @@
     }
 
     var _wipeInProgress = false;
+
+    // ═══════════════════════════════════════════════════════════════════════
+    //  حالتِ «فقط محلی» (Local-Only)
+    //  ---------------------------------------------------------------------
+    //  وقتی کاربر یک فایلِ پشتیبانِ متعلق به «حسابِ دیگری» را وارد می‌کند، آن داده‌ها
+    //  نباید به فضای ابریِ حسابِ فعلی برود. این حالت push و pull را به‌طور کامل متوقف
+    //  می‌کند تا دادهٔ بیگانه نه بالا برود و نه با دادهٔ ابریِ حساب قاطی شود.
+    //
+    //  پرچم عمداً در localStorage است تا با بستن و باز کردنِ برنامه هم برقرار بماند؛
+    //  وگرنه در اجرای بعدی سینک روشن می‌شد و همان داده را بالا می‌فرستاد.
+    //  فقط جایی پاک می‌شود که دادهٔ محلی واقعاً حذف شده باشد: پاک‌سازی محلی، خروجِ
+    //  کامل، یا تعویضِ کاربر. پس هرگز با دادهٔ بیگانهٔ باقی‌مانده سینک از سر گرفته نمی‌شود.
+    // ═══════════════════════════════════════════════════════════════════════
+    var LOCAL_ONLY_KEY = 'jouya_sync_localonly';
+    function isLocalOnly() { try { return !!LS_get(LOCAL_ONLY_KEY); } catch (e) { return false; } }
+    function setLocalOnly(on, reason) {
+        try {
+            if (on) {
+                LS_set(LOCAL_ONLY_KEY, JSON.stringify({ reason: reason || '', at: nowIso() }));
+                stopLoops();
+                warn('حالتِ «فقط محلی» فعال شد — سینک متوقف است:', reason || '');
+            } else {
+                try { localStorage.removeItem(LOCAL_ONLY_KEY); } catch (e) {}
+                log('حالتِ «فقط محلی» خاموش شد — سینک دوباره مجاز است.');
+            }
+        } catch (e) {}
+        return isLocalOnly();
+    }
     // preview فقط شمارشِ unsynced را می‌دهد (بدونِ تغییر). UI پیش از Wipe هشدار می‌دهد.
     function previewLocalOnlyWipe(keys) { return { unsynced: countUnsyncedForKeys(keys || []) }; }
 
@@ -632,6 +661,8 @@
                 snapWrite(snap);
                 // ۴) outbox/pending را برای ایمنی خالی کن (در مسیرِ push استفاده نمی‌شود ولی محضِ احتیاط).
                 try { outWrite([]); } catch (e) {}
+                // دادهٔ محلی پاک شد، پس دیگر دادهٔ بیگانه‌ای نمانده و سینک می‌تواند از سر گرفته شود
+                try { if (isLocalOnly()) setLocalOnly(false); } catch (e) {}
                 log('Local-Only Wipe:', keys.length, 'کلید پاک شد؛ Cloud دست‌نخورده. unsynced=', unsynced);
                 return { ok: true, unsynced: unsynced, clearedKeys: keys.slice() };
             } finally {
@@ -641,6 +672,7 @@
     }
 
     function pushNow() {
+        if (isLocalOnly()) return Promise.resolve();     // حالتِ «فقط محلی»: هیچ چیز به ابر نمی‌رود
         if (_wipeInProgress) return Promise.resolve();   // در حینِ Local-Only Wipe هیچ push/tombstone نساز
         if (!online || !workspaceId || _applyingRemote) return Promise.resolve();
         // بدونِ نشستِ معتبر push نکن: در گذارِ احراز هویت (قبل از ورود/بعد از انقضا) push با anon
@@ -722,6 +754,7 @@
 
     var _pullInFlight = false;
     function pullNow() {
+        if (isLocalOnly()) return Promise.resolve(0);    // حالتِ «فقط محلی»: چیزی از ابر کشیده نمی‌شود
         if (!online || !workspaceId) return Promise.resolve(0);
         if (_pullInFlight) return Promise.resolve(0);   // از هم‌پوشانیِ pullها جلوگیری کن
         _pullInFlight = true;
@@ -908,6 +941,7 @@
 
     function startLoops() {
         stopLoops();
+        if (isLocalOnly()) { warn('سینک در حالتِ «فقط محلی» است و شروع نمی‌شود.'); return; }
         if (!CFG.liveSyncEnabled || !workspaceId) return;
         // یک pull اولیه، سپس Realtime (مسیرِ اصلیِ لحظه‌ای) + polling تطبیقیِ کم‌مصرف (fallback)
         pullNow();
@@ -1161,6 +1195,9 @@
         previewLocalOnlyWipe: previewLocalOnlyWipe,
         // پاکسازی پیشرفته (خالی‌کردنِ دادهٔ کسب‌وکار از فضای ابری؛ اکانت/لایسنس/workspace می‌مانند)
         cloudWipe: cloudWipe,
+        // حالتِ «فقط محلی» — پس از وارد کردنِ فایلِ پشتیبانِ حسابِ دیگر
+        isLocalOnly: isLocalOnly,
+        setLocalOnly: setLocalOnly,
         // مجموعه‌های آمادهٔ کلیدها (منبعِ واحدِ حقیقت برای دکمه‌های سایدبار):
         ALL_BUSINESS_KEYS: COLLECTIONS.map(function (c) { return c.key; }).concat(['jouya-reference-rates', 'dashboardStats', 'backupHistory', 'activeWarehouseId', 'cashboxTypes']),
         PERSONS_KEYS: ['persons'],

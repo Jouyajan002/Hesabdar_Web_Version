@@ -1642,7 +1642,43 @@ recalculateAllProductsStock() {
                 exchangeRates: JSON.parse(localStorage.getItem('jouya-exchange-rates') || '[]'),
                 referenceRates: JSON.parse(localStorage.getItem('jouya-reference-rates') || 'null'),
                 backupHistory: JSON.parse(localStorage.getItem('backupHistory') || '[]'),
-                dashboardStats: JSON.parse(localStorage.getItem('dashboardStats') || '{}')
+                dashboardStats: JSON.parse(localStorage.getItem('dashboardStats') || '{}'),
+                // ── فهرست‌های سفارشیِ خودِ کاربر (کتگوری‌ها/واحدها/نوعِ حساب) ──────────────
+                //  پیش‌تر در backup نبودند، پس بعد از Import کتگوری‌های ساختهٔ کاربر از بین
+                //  می‌رفتند و مصارفِ ثبت‌شده بی‌کتگوری می‌ماندند. مقدارها عیناً به‌صورتِ رشتهٔ
+                //  خام نگه داشته می‌شوند تا بدونِ هیچ تغییری برگردند. کلیدهای پویای
+                //  customProductSubCategories_<کتگوریِ اصلی> هم خودکار شامل می‌شوند.
+                customLists: (function () {
+                    try {
+                        var out = {}, i, k, v;
+                        var statics = ['customProductCategories', 'customProductSubCategories',
+                                       'customProductUnits', 'customPersonCategories',
+                                       'customExpenseCategories', 'customExpenseCategoriesRemoved',
+                                       'customProductFields', 'cashboxTypes'];
+                        for (i = 0; i < statics.length; i++) {
+                            v = localStorage.getItem(statics[i]);
+                            if (v != null) out[statics[i]] = v;
+                        }
+                        for (i = 0; i < localStorage.length; i++) {
+                            k = localStorage.key(i);
+                            if (k && k.indexOf('customProductSubCategories_') === 0) out[k] = localStorage.getItem(k);
+                        }
+                        return out;
+                    } catch (e) { return {}; }
+                })(),
+                // ── شناسهٔ مالکِ فایل ───────────────────────────────────────────────────
+                //  برای اینکه هنگامِ Import تشخیص داده شود فایل متعلق به همین اکانت است یا
+                //  اکانتِ دیگری. (هیچ رمز یا توکنی ذخیره نمی‌شود — فقط ایمیل و شناسهٔ workspace.)
+                owner: (function () {
+                    try {
+                        var acc = JSON.parse(localStorage.getItem('jouya_user_account') || 'null');
+                        var email = (acc && (acc.email || acc.username)) || '';
+                        return {
+                            email: String(email || '').trim().toLowerCase(),
+                            workspaceId: localStorage.getItem('jouya_sync_workspace') || ''
+                        };
+                    } catch (e) { return { email: '', workspaceId: '' }; }
+                })()
             };
             return { success: true, data };
         } catch (error) {
@@ -1716,6 +1752,25 @@ recalculateAllProductsStock() {
                             }
                         }
                         if (allData.referenceRates != null) localStorage.setItem('jouya-reference-rates', JSON.stringify(allData.referenceRates));
+                        // فهرست‌های سفارشیِ کاربر (کتگوری‌ها/واحدها/نوعِ حساب) — فقط اگر در فایل
+                        // باشند بازیابی می‌شوند (سازگار با backupهای قدیمی). فهرستِ کلیدهای مجاز
+                        // بسته است تا یک فایلِ دستکاری‌شده نتواند کلیدِ دلخواهی در حافظه بنویسد.
+                        if (allData.customLists && typeof allData.customLists === 'object') {
+                            try {
+                                Object.keys(allData.customLists).forEach(function (k) {
+                                    if (!k) return;
+                                    var allowed = (k === 'customProductCategories' || k === 'customProductSubCategories' ||
+                                                   k === 'customProductUnits' || k === 'customPersonCategories' ||
+                                                   k === 'customExpenseCategories' || k === 'customExpenseCategoriesRemoved' ||
+                                                   k === 'customProductFields' || k === 'cashboxTypes' ||
+                                                   k.indexOf('customProductSubCategories_') === 0);
+                                    if (!allowed) return;
+                                    var v = allData.customLists[k];
+                                    if (typeof v === 'string') localStorage.setItem(k, v);
+                                    else if (v != null) localStorage.setItem(k, JSON.stringify(v));
+                                });
+                            } catch (clErr) {}
+                        }
                         localStorage.setItem('dashboardStats', JSON.stringify(allData.dashboardStats || {}));
                         // --- سیستم Migration: نسخهٔ شِمای فایل را اعمال و Migrationها را اجرا کن
                         try {

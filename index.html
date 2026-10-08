@@ -1558,7 +1558,15 @@
                                         <div class="bill-field bill-field-icononly">
                                             <i class="fas fa-box bill-field-icon"></i>
                                             <input type="text" id="product-name" placeholder="نام جنس" required>
+                                            <!-- افزودنِ فیلدِ دلخواهِ کاربر (نامِ فیلد را خودش می‌گذارد) -->
+                                            <button type="button" id="product-add-field-btn" class="pf-add-field-btn"
+                                                    title="افزودن فیلد جدید" onclick="hbPromptProductCustomField()">
+                                                <i class="fas fa-plus"></i>
+                                            </button>
                                         </div>
+
+                                        <!-- فیلدهای دلخواهِ کاربر (با همان استایلِ فیلدِ نام جنس) -->
+                                        <div id="product-custom-fields"></div>
 
                                         <div class="bill-field bill-field-icononly">
                                             <i class="fas fa-ruler bill-field-icon"></i>
@@ -3677,12 +3685,7 @@
                                 <label>کتگوری:</label>
                                 <select id="filter-expense-category" onchange="filterExpenses()">
                                     <option value="all">همه</option>
-                                    <option value="مصرف روزانه دکان">مصرف روزانه دکان</option>
-                                    <option value="کرایه دکان">کرایه دکان</option>
-                                    <option value="کرایه اجناس">کرایه اجناس</option>
-                                    <option value="حقوق کارمندان">حقوق کارمندان</option>
-                                    <option value="تبلیغات">تبلیغات</option>
-                                    <option value="کمیشن حواله">کمیشن حواله</option>
+                                    <!-- گزینه‌ها از روی کتگوری‌های واقعیِ کاربر پر می‌شوند -->
                                 </select>
                             </div>
                             <div class="filter-group">
@@ -3734,15 +3737,8 @@
                         <i class="fas fa-list bill-field-icon"></i>
                         <select id="expense-category" class="bill-inline-input" required>
                             <option value="">کتگوری مصرف</option>
-                            <option value="مصرف روزانه دکان">مصرف روزانه دکان</option>
-                            <option value="کرایه دکان">کرایه دکان</option>
-                            <option value="کرایه اجناس">کرایه اجناس</option>
-                            <option value="حقوق کارمندان">حقوق کارمندان</option>
-                            <option value="تبلیغات">تبلیغات</option>
-                            <option value="برق و آب">برق و آب</option>
-                            <option value="حمل و نقل">حمل و نقل</option>
-                            <option value="کمیشن حواله">کمیشن حواله</option>
-                            <option value="دیگر">دیگر</option>
+                            <!-- هیچ کتگوریِ پیش‌فرضی وجود ندارد: کتگوری‌ها را خودِ کاربر می‌سازد و
+                                 سیستم هم کتگوری‌های مصارفِ قبلاً ثبت‌شده را خودکار بازسازی می‌کند. -->
                         </select>
                     </div>
                     <div class="bill-field bill-field-icononly">

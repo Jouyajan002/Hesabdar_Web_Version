@@ -856,6 +856,7 @@ function loadDashboard() {
     try { window.__ndDashLoadedAt = Date.now(); } catch (e) {}
     // متنِ بالای جستجوی داشبورد از سرور (قابلِ‌تنظیم توسطِ ادمین) — یک‌بار در هر نشست.
     try { if (typeof jouyaAnnApplyTagline === 'function') jouyaAnnApplyTagline(); } catch (e) {}
+    try { if (typeof _hbEnsureSortRestoreHook === 'function') _hbEnsureSortRestoreHook(); } catch (e) {}
     // نشانهٔ «اعلانِ خوانده‌نشده» روی آیکنِ مرکز اعلانات (حداکثر هر ۶۰ ثانیه یک بررسی)
     try { if (typeof jouyaAnnCheckUnread === 'function') jouyaAnnCheckUnread(); } catch (e) {}
 }
@@ -3403,6 +3404,7 @@ function saveProduct() {
         salePriceAFN:     (function(){ var v = document.getElementById('product-sale-price-afn').value;     return v === '' ? 0 : (parseFloat(v) || 0); })(),
         salePriceUSD:     (function(){ var v = document.getElementById('product-sale-price-usd').value;     return v === '' ? 0 : (parseFloat(v) || 0); })(),
         description: document.getElementById('product-description').value,
+        customFields: (typeof hbCollectProductCustomFields === 'function') ? hbCollectProductCustomFields() : {},
         supplierId: (document.getElementById('product-supplier') ? document.getElementById('product-supplier').value : null) || null
     };
     
@@ -4407,6 +4409,97 @@ registerDataRebuilder({
 });
 
 // ════════════════════════════════════════════════════════════════════════
+//  بازسازیِ خودکارِ «کتگوری‌های مصارف» از روی مصارفِ قبلاً ثبت‌شده
+//  ---------------------------------------------------------------------
+//  پیش‌تر فهرستِ کتگوری‌های مصرف به‌صورت پیش‌فرض در فرم بود و کاربران با همان‌ها مصرف
+//  ثبت کرده بودند. حالا که پیش‌فرض‌ها حذف شده‌اند (کتگوری را خودِ کاربر می‌سازد)، آن
+//  ریکاردهای قدیمی به کتگوری‌ای اشاره می‌کنند که دیگر در فهرست نیست و در کتگوری‌بندیِ
+//  مصارف بی‌صاحب می‌مانند. این Rebuilder فهرستِ مصارفِ ثبت‌شده را می‌خواند و هر کتگوریِ
+//  واقعاً استفاده‌شده را به فهرستِ کتگوری‌های کاربر اضافه می‌کند — نه فهرستِ پیش‌فرضِ قدیم.
+//  پس روی نصبِ تازه (بدون هیچ مصرفی) هیچ کتگوری‌ای ساخته نمی‌شود.
+//
+//  کتگوری‌هایی که کاربر خودش حذف کرده در customExpenseCategoriesRemoved نگه داشته
+//  می‌شوند تا دوباره زنده نشوند. idempotent است و روی هر بارگذاری/Import/بازیابی اجرا
+//  می‌گردد، پس دادهٔ قدیمی از JSON، گوگل‌درایو و فضای ابری هم خودکار هماهنگ می‌شود.
+// ════════════════════════════════════════════════════════════════════════
+function _expenseCatsMissing() {
+    var have = [], removed = [];
+    try { have = JSON.parse(localStorage.getItem('customExpenseCategories') || '[]'); } catch (e) { have = []; }
+    try { removed = JSON.parse(localStorage.getItem('customExpenseCategoriesRemoved') || '[]'); } catch (e) { removed = []; }
+    if (!Array.isArray(have)) have = [];
+    if (!Array.isArray(removed)) removed = [];
+    var skip = {};
+    have.forEach(function (c) { if (typeof c === 'string') skip[c.trim()] = 1; });
+    removed.forEach(function (c) { if (typeof c === 'string') skip[c.trim()] = 1; });
+    var out = [], seen = {};
+    var push = function (c) {
+        if (typeof c !== 'string') return;
+        c = c.trim();
+        if (!c || skip[c] || seen[c]) return;
+        seen[c] = 1; out.push(c);
+    };
+    try { _engRaw('expenses').forEach(function (e) { if (e) push(e.category); }); } catch (e) {}
+    try {
+        _engRaw('transactions').forEach(function (t) {
+            if (t && t.expenseGroup) push(t.category);
+        });
+    } catch (e) {}
+    return out;
+}
+registerDataRebuilder({
+    name: 'expense_categories_backfill',
+    description: 'ساختِ خودکارِ کتگوری‌های مصارف از روی مصارفِ قبلاً ثبت‌شده (تا ریکاردهای قدیمی بی‌کتگوری نمانند)',
+    canRebuild: function () { return _expenseCatsMissing().length > 0; },
+    rebuild: function () {
+        var missing = _expenseCatsMissing();
+        if (!missing.length) return { changed: false, count: 0 };
+        var cur = [];
+        try { cur = JSON.parse(localStorage.getItem('customExpenseCategories') || '[]'); } catch (e) { cur = []; }
+        if (!Array.isArray(cur)) cur = [];
+        missing.forEach(function (c) { if (cur.indexOf(c) === -1) cur.push(c); });
+        localStorage.setItem('customExpenseCategories', JSON.stringify(cur));
+        return { changed: true, count: missing.length };
+    }
+});
+
+// ════════════════════════════════════════════════════════════════════════
+//  اصلاحِ جهتِ «انتقال بین دو شخص» در ریکاردهای قدیمی
+//  ---------------------------------------------------------------------
+//  باگ: در نسخه‌های پیشین، لِنگِ پرداخت‌کننده با نوعِ «پرداخت» و لِنگِ دریافت‌کننده با
+//  نوعِ «دریافت» ثبت می‌شد؛ چون در قاعدهٔ ماندهٔ برنامه «پرداخت» به ماندهٔ شخص اضافه و
+//  «دریافت» از آن کسر می‌کند، نتیجه برعکس می‌شد: به پرداخت‌کننده اضافه و از دریافت‌کننده
+//  کسر می‌گردید. از این پس ثبتِ تازه با جهتِ درست و نشانهٔ transferSchema:2 انجام می‌شود.
+//
+//  این Rebuilder فقط لِنگ‌هایی را اصلاح می‌کند که transferGroup دارند و هنوز نشانهٔ
+//  transferSchema:2 ندارند (یعنی قطعاً با منطقِ قدیمی ثبت شده‌اند) و نوعشان را جابه‌جا
+//  می‌کند. idempotent است: بعد از نخستین اجرا، همه نشانه می‌گیرند و دیگر چیزی عوض نمی‌شود.
+//  چون روی هر بارگذاری/وارد کردن/بازیابی اجرا می‌شود، دادهٔ قدیمیِ کاربران — چه از JSON،
+//  چه از گوگل‌درایو و چه از فضای ابری — خودکار با مهندسیِ جدید هماهنگ می‌گردد.
+// ════════════════════════════════════════════════════════════════════════
+registerDataRebuilder({
+    name: 'person_transfer_direction_fix',
+    description: 'اصلاحِ جهتِ انتقال بین اشخاص در ریکاردهای قدیمی (کسر از پرداخت‌کننده، افزودن به دریافت‌کننده)',
+    canRebuild: function () {
+        var txs = _engRaw('transactions');
+        return txs.some(function (t) {
+            return t && t.transferGroup && t.transferSchema !== 2 &&
+                   (t.type === 'پرداخت' || t.type === 'دریافت');
+        });
+    },
+    rebuild: function () {
+        var txs = _engRaw('transactions');
+        var fixed = 0;
+        txs.forEach(function (t) {
+            if (!t || !t.transferGroup || t.transferSchema === 2) return;
+            if (t.type === 'پرداخت') { t.type = 'دریافت'; t.transferSchema = 2; fixed++; }
+            else if (t.type === 'دریافت') { t.type = 'پرداخت'; t.transferSchema = 2; fixed++; }
+        });
+        if (fixed > 0) localStorage.setItem('transactions', JSON.stringify(txs));
+        return { changed: fixed > 0, count: fixed };
+    }
+});
+
+// ════════════════════════════════════════════════════════════════════════
 //  ارکستریتورِ بازسازیِ کامل  (Single Entry Point)
 //  ترتیبِ وابستگی مهم است:
 //    person_previous_account_cleanup → batch_initial_cost → stock → purchase_price
@@ -4416,7 +4509,7 @@ registerDataRebuilder({
 //  این تابع روی «هر» بارگذاری/وارد/بازیابی صدا زده می‌شود و ungated است؛ هر Rebuilder
 //  خودش با canRebuild تصمیم می‌گیرد که آیا دادهٔ خامِ کافی دارد یا نه.
 // ════════════════════════════════════════════════════════════════════════
-var REBUILD_PIPELINE = ['person_previous_account_cleanup', 'stock', 'purchase_price', 'cashbox_balance', 'sale_profit'];
+var REBUILD_PIPELINE = ['expense_categories_backfill', 'person_transfer_direction_fix', 'person_previous_account_cleanup', 'stock', 'purchase_price', 'cashbox_balance', 'sale_profit'];
 
 function rebuildAllDerivedData() {
     var summary = {};
@@ -4836,17 +4929,26 @@ function saveReceipt() {
         if (!destPersonId) { showMessage('خطا', 'شخصِ دریافت‌کننده را انتخاب کنید.'); return; }
         if (parseInt(personId) === parseInt(destPersonId)) { showMessage('خطا', 'پرداخت‌کننده و دریافت‌کننده نباید یکی باشند.'); return; }
         var _tgrp = 'rtx_' + Date.now();
-        // لِنگِ پرداخت‌کننده A: «پرداخت» (اثرِ خروجِ مبلغ از A)
+        // ── جهتِ درستِ انتقال (رفعِ باگِ معکوس‌بودن) ───────────────────────────────
+        //  قاعدهٔ ماندهٔ برنامه: «دریافت» یعنی پول از شخص گرفته شده → از ماندهٔ او کسر
+        //  می‌شود؛ «پرداخت» یعنی پول به شخص داده شده → به ماندهٔ او افزوده می‌شود.
+        //  پس در انتقالِ A→B: لِنگِ A باید «دریافت» باشد (از پرداخت‌کننده کسر شود) و
+        //  لِنگِ B باید «پرداخت» (به دریافت‌کننده افزوده شود). پیش‌تر برعکس ثبت می‌شد.
+        //  transferSchema:2 نشانهٔ «ثبت‌شده با جهتِ درست» است تا ریکاردهای قدیمی یک‌بار
+        //  به‌صورتِ خودکار اصلاح شوند و ریکاردهای جدید دوباره اصلاح نشوند.
+        // لِنگِ پرداخت‌کننده A: پول از او خارج شده → «دریافت» (کسر از ماندهٔ A)
         db.saveTransaction({
-            type: 'پرداخت', personId: parseInt(personId), personName, date, amount, currency,
-            receiptType: type, reference, transferGroup: _tgrp, counterpartyId: parseInt(destPersonId), counterpartyName: destPersonName,
+            type: 'دریافت', personId: parseInt(personId), personName, date, amount, currency,
+            receiptType: type, reference, transferGroup: _tgrp, transferSchema: 2,
+            counterpartyId: parseInt(destPersonId), counterpartyName: destPersonName,
             description: (description || '') + ' | انتقال به: ' + destPersonName, status: 'انجام شد',
             rateUsed: _dayRateFor(currency), baseCurrency: _baseC
         });
-        // لِنگِ دریافت‌کننده B: «دریافتی» (اثرِ ورودِ مبلغ به B)
+        // لِنگِ دریافت‌کننده B: پول به او رسیده → «پرداخت» (افزوده به ماندهٔ B)
         db.saveTransaction({
-            type: 'دریافت', personId: parseInt(destPersonId), personName: destPersonName, date, amount, currency,
-            receiptType: type, reference, transferGroup: _tgrp, counterpartyId: parseInt(personId), counterpartyName: personName,
+            type: 'پرداخت', personId: parseInt(destPersonId), personName: destPersonName, date, amount, currency,
+            receiptType: type, reference, transferGroup: _tgrp, transferSchema: 2,
+            counterpartyId: parseInt(personId), counterpartyName: personName,
             description: (description || '') + ' | انتقال از: ' + personName, status: 'انجام شد',
             rateUsed: _dayRateFor(currency), baseCurrency: _baseC
         });
@@ -6887,6 +6989,15 @@ function renderEmployeeRow(emp) {
 }
 // توابع مدیریت اجناس
 function loadProductsList(productsArg) {
+    // بازگرداندنِ مرتب‌سازیِ ذخیره‌شدهٔ کاربر (یک‌بار در هر اجرا)
+    try {
+        _hbEnsureSortRestoreHook();
+        if (!_productsSortKey) {
+            var _sv = _hbSortGet('products');
+            if (_sv) { _productsSortKey = _sv; _productsShowPurchase = (_sv.indexOf('purchase') === 0); }
+        }
+        _hbSortSyncMenu('products');
+    } catch (e) {}
     var products = Array.isArray(productsArg) ? productsArg.slice() : db.getProducts().slice();
     var tbody = document.querySelector('#products-table tbody');
     if (!tbody) return;
@@ -7087,10 +7198,178 @@ function _hbDateToMs(s) {
 }
 if (typeof window !== 'undefined') window._hbDateToMs = _hbDateToMs;
 
+// ════════════════════════════════════════════════════════════════════════
+//  فیلدهای دلخواهِ جنس (ساختهٔ خودِ کاربر)
+//  ---------------------------------------------------------------------
+//  تعریفِ فیلدها در localStorage کلیدِ customProductFields نگه داشته می‌شود
+//  ([{id, name}]) و «مقدارِ» هر فیلد داخلِ خودِ جنس در product.customFields[id].
+//  چون هر جنس به‌صورتِ یک رکوردِ کامل سینک/بک‌آپ می‌شود، مقدارها خودکار همراهِ جنس
+//  ذخیره، سینک و بازیابی می‌شوند و هیچ تغییری در ساختارِ سرور لازم نیست.
+//  جهتِ نوشتن (راست‌چین/چپ‌چین) از روی زبانِ نامِ فیلد تشخیص داده می‌شود.
+// ════════════════════════════════════════════════════════════════════════
+function hbProductFieldsGet() {
+    try {
+        var a = JSON.parse(localStorage.getItem('customProductFields') || '[]');
+        if (!Array.isArray(a)) return [];
+        return a.filter(function (f) { return f && f.id && typeof f.name === 'string'; });
+    } catch (e) { return []; }
+}
+function hbProductFieldsSet(list) {
+    try { localStorage.setItem('customProductFields', JSON.stringify(Array.isArray(list) ? list : [])); } catch (e) {}
+}
+// نامِ فارسی/عربی → راست‌چین ، در غیرِ آن چپ‌چین
+function hbFieldDir(name) {
+    try { return /[؀-ۿ]/.test(String(name || '')) ? 'rtl' : 'ltr'; } catch (e) { return 'rtl'; }
+}
+function hbProductFieldInputId(id) { return 'product-cf-' + id; }
+
+/** رندرِ فیلدهای دلخواه در فرمِ ثبت/ویرایشِ جنس (با همان استایلِ فیلدِ نام جنس) */
+function hbRenderProductCustomFields(values) {
+    var host = document.getElementById('product-custom-fields');
+    if (!host) return;
+    var list = hbProductFieldsGet();
+    host.innerHTML = '';
+    list.forEach(function (f) {
+        var dir = hbFieldDir(f.name);
+        var wrap = document.createElement('div');
+        wrap.className = 'bill-field bill-field-icononly pf-custom-field';
+        wrap.innerHTML =
+            '<i class="fas fa-tag bill-field-icon"></i>' +
+            '<input type="text" id="' + hbProductFieldInputId(f.id) + '" data-cf-id="' + f.id + '" ' +
+                'placeholder="' + String(f.name).replace(/"/g, '&quot;') + '" ' +
+                'dir="' + dir + '" style="text-align:' + (dir === 'rtl' ? 'right' : 'left') + ';">' +
+            '<button type="button" class="pf-del-field-btn" title="حذف فیلد">' +
+                '<i class="fas fa-xmark"></i></button>';
+        var inp = wrap.querySelector('input');
+        if (values && values[f.id] != null) inp.value = values[f.id];
+        wrap.querySelector('.pf-del-field-btn').onclick = function () { hbDeleteProductCustomField(f.id, f.name); };
+        host.appendChild(wrap);
+    });
+}
+
+/** گرفتنِ نامِ فیلدِ جدید از کاربر و ساختنِ آن */
+function hbPromptProductCustomField() {
+    var ask = function (name) {
+        name = String(name || '').trim();
+        if (!name) return;
+        var list = hbProductFieldsGet();
+        if (list.some(function (f) { return f.name === name; })) {
+            if (typeof showMessage === 'function') showMessage('توجه', 'فیلدی با این نام از قبل وجود دارد.');
+            return;
+        }
+        var vals = hbCollectProductCustomFields();   // مقادیرِ تایپ‌شده از بین نروند
+        list.push({ id: 'cf' + Date.now() + Math.floor(Math.random() * 100), name: name });
+        hbProductFieldsSet(list);
+        hbRenderProductCustomFields(vals);
+    };
+    if (typeof showPrompt === 'function') { showPrompt('افزودن فیلد جدید', 'نام فیلد را بنویسید:', ask); return; }
+    var v = null;
+    try { v = window.prompt('نام فیلد جدید را بنویسید:'); } catch (e) { v = null; }
+    if (v != null) ask(v);
+}
+
+/** حذفِ یک فیلدِ دلخواه (تعریفِ فیلد؛ مقادیرِ ذخیره‌شدهٔ اجناس دست‌نخورده می‌مانند) */
+function hbDeleteProductCustomField(id, name) {
+    var run = function () {
+        hbProductFieldsSet(hbProductFieldsGet().filter(function (f) { return f.id !== id; }));
+        hbRenderProductCustomFields(hbCollectProductCustomFields());
+    };
+    if (typeof showConfirm === 'function') showConfirm('حذف فیلد', 'فیلد «' + (name || '') + '» حذف شود؟', run);
+    else if (confirm('فیلد «' + (name || '') + '» حذف شود؟')) run();
+}
+
+/** خواندنِ مقادیرِ فیلدهای دلخواه از فرم */
+function hbCollectProductCustomFields() {
+    var out = {};
+    try {
+        var host = document.getElementById('product-custom-fields');
+        if (!host) return out;
+        host.querySelectorAll('input[data-cf-id]').forEach(function (inp) {
+            var id = inp.getAttribute('data-cf-id');
+            var v = (inp.value || '').trim();
+            if (id && v) out[id] = v;
+        });
+    } catch (e) {}
+    return out;
+}
+
+/** برچسب/مقدارِ فیلدهای دلخواهِ یک جنس — برای مشخصات جنس و گزارشات */
+function hbProductCustomPairs(product) {
+    var out = [];
+    try {
+        var defs = hbProductFieldsGet();
+        var vals = (product && product.customFields) || {};
+        defs.forEach(function (f) {
+            var v = vals[f.id];
+            if (v != null && String(v).trim()) out.push({ name: f.name, value: String(v) });
+        });
+    } catch (e) {}
+    return out;
+}
+if (typeof window !== 'undefined') {
+    window.hbPromptProductCustomField = hbPromptProductCustomField;
+    window.hbRenderProductCustomFields = hbRenderProductCustomFields;
+    window.hbProductCustomPairs = hbProductCustomPairs;
+}
+
+// ===== ماندگاریِ مرتب‌سازیِ لیست‌ها بینِ اجراهای برنامه =====
+//  انتخابِ کاربر در هر لیست ذخیره می‌شود تا بعد از بستن و باز کردنِ برنامه از بین نرود.
+//  فقط «انتخابِ مرتب‌سازی» نگه داشته می‌شود؛ هیچ داده‌ای تغییر نمی‌کند.
+function _hbSortStore() {
+    try { var o = JSON.parse(localStorage.getItem('jouya_list_sort') || '{}'); return (o && typeof o === 'object') ? o : {}; }
+    catch (e) { return {}; }
+}
+function _hbSortGet(section) {
+    var v = _hbSortStore()[section];
+    return (typeof v === 'string') ? v : '';
+}
+function _hbSortSet(section, value) {
+    try {
+        var o = _hbSortStore();
+        if (value) o[section] = value; else delete o[section];
+        localStorage.setItem('jouya_list_sort', JSON.stringify(o));
+    } catch (e) {}
+}
+// بازگرداندنِ مقدارِ منوی مرتب‌سازی (تا کاربر ببیند چه چیزی فعال است)
+function _hbSortSyncMenu(section) {
+    try {
+        var menu = document.getElementById('sort-menu-' + section);
+        if (!menu) return;
+        var sel = menu.querySelector('select');
+        var v = _hbSortGet(section);
+        if (sel && v && Array.prototype.some.call(sel.options, function (o) { return o.value === v; })) sel.value = v;
+    } catch (e) {}
+}
+// اعمالِ دوبارهٔ مرتب‌سازیِ ذخیره‌شده روی لیست‌هایی که DOM-محور مرتب می‌شوند
+function _hbEnsureSortRestoreHook() {
+    try {
+        if (window.__hbSortHook) return;
+        window.__hbSortHook = true;
+        document.addEventListener('sectionChanged', function () {
+            setTimeout(function () {
+                try {
+                    var map = { 'sales-list': 1, 'purchases-list': 1, 'receipts-list': 1, 'payments-list': 1,
+                                'sales-returns-list': 1, 'purchase-returns-list': 1, 'proforma-list': 1,
+                                'transactions': 1, 'financial': 1, 'cashbox-transactions': 1, 'person-transactions': 1 };
+                    var store = _hbSortStore();
+                    Object.keys(store).forEach(function (sec) {
+                        if (!map[sec] || !store[sec]) return;
+                        var el = document.getElementById(sec) || document.getElementById(sec + '-table');
+                        if (!el) return;
+                        _hbSortSyncMenu(sec);
+                        if (typeof applySort === 'function') applySort(sec, store[sec]);
+                    });
+                } catch (e) {}
+            }, 120);
+        });
+    } catch (e) {}
+}
+
 // ===== مرتب‌سازی داده‌محور لیست اجناس (سازگار با چیدمان کارتی) =====
 var _productsSortKey = '';
 var _productsShowPurchase = false;
 function sortProductsList(value) {
+    _hbSortSet('products', value || '');
     _productsSortKey = value || '';
     // فقط در حالت «قیمت خرید» ستون قیمت خرید به سطرها افزوده می‌شود
     _productsShowPurchase = (typeof value === 'string' && value.indexOf('purchase') === 0);
@@ -7164,6 +7443,7 @@ function resetProductForm() {
     if (typeof toggleSecondaryUnitFields === 'function') toggleSecondaryUnitFields();
     // پاک‌سازی و بازسازیِ ردیف‌های ارزهای اضافی برای جنسِ جدید
     try { if (typeof _fillExtraCurrencyPrices === 'function') _fillExtraCurrencyPrices(null); } catch (e) {}
+    try { if (typeof hbRenderProductCustomFields === 'function') hbRenderProductCustomFields({}); } catch (e) {}
     delete document.getElementById('productForm').dataset.editId;
 }
 
@@ -7433,6 +7713,7 @@ function loadProductData(productId) {
         // ردیف‌های ارزهای اضافی (یورو و…) — ساخته و پر می‌شوند تا در ویرایش نمایش داده شوند
         try { if (typeof _fillExtraCurrencyPrices === 'function') _fillExtraCurrencyPrices(product); } catch (e) {}
         _set('product-description', product.description);
+        try { if (typeof hbRenderProductCustomFields === 'function') hbRenderProductCustomFields(product.customFields || {}); } catch (e) {}
         // تامین‌کننده — اگر در فهرست نباشد، اضافه می‌شود
         var _supEl = document.getElementById('product-supplier');
         if (_supEl && product.supplierId) {
@@ -7475,6 +7756,13 @@ window._syncProductPriceLabels = _syncProductPriceLabels;
 
 function initProductForm() {
     _syncProductPriceLabels();
+    // فیلدهای دلخواهِ کاربر رندر شوند (مقادیر در حالتِ ویرایش جداگانه پر می‌شوند)
+    try {
+        if (typeof hbRenderProductCustomFields === 'function') {
+            var _keep = (typeof hbCollectProductCustomFields === 'function') ? hbCollectProductCustomFields() : {};
+            hbRenderProductCustomFields(_keep);
+        }
+    } catch (e) {}
     // کد مربوط به پر کردن سلکت‌های دسته‌بندی و تامین‌کننده در اینجا قرار می‌گیرد
     const mainCategorySelect = document.getElementById('product-category-main');
     
@@ -9129,6 +9417,22 @@ function loadTransactionsList() {
 
 function loadExpensesList() {
     const expenses = (db.getExpenses() || []).slice().sort(sortNewestFirst);
+    // گزینه‌های فیلترِ کتگوری از روی کتگوری‌های واقعیِ کاربر پر می‌شوند (نه فهرستِ پیش‌فرضِ قدیم)
+    try {
+        var _fc = document.getElementById('filter-expense-category');
+        if (_fc) {
+            var _cats = [];
+            try { _cats = JSON.parse(localStorage.getItem('customExpenseCategories') || '[]'); } catch (e) { _cats = []; }
+            if (!Array.isArray(_cats)) _cats = [];
+            var _prev = _fc.value;
+            _fc.innerHTML = '<option value="all">همه</option>';
+            _cats.forEach(function (c) {
+                if (!c) return;
+                var o = document.createElement('option'); o.value = c; o.textContent = c; _fc.appendChild(o);
+            });
+            if (_prev && Array.prototype.some.call(_fc.options, function (o) { return o.value === _prev; })) _fc.value = _prev;
+        }
+    } catch (e) {}
     const tbody = document.querySelector('#expenses-table tbody');
     if (!tbody) return;
 
@@ -9206,6 +9510,7 @@ function initExpenseForm() {
         categorySelect.appendChild(option);
     });
     if (typeof setupProductAddSelect === 'function') setupProductAddSelect(categorySelect, 'customExpenseCategories', 'کتگوری مصرف');
+    if (typeof setupSelectDeleteBtn === 'function') setupSelectDeleteBtn(categorySelect, 'customExpenseCategories', 'کتگوری مصرف');
     
     // حساب‌ها
     const cashboxes = db.getCashboxes();
@@ -14973,9 +15278,11 @@ function editTransaction(id) {
                         if (_rForm) { _rForm.dataset.editGroupKey = 'expenseGroup'; _rForm.dataset.editGroupId = tx.expenseGroup; }
                     } else if (tx.transferGroup) {
                         if (typeof _receiptSwitchTab === 'function') _receiptSwitchTab('person');
-                        var _isRecv = (tx.type === 'دریافت');
-                        var _bId = _isRecv ? tx.personId : tx.counterpartyId, _bName = _isRecv ? tx.personName : tx.counterpartyName;
-                        var _aId = _isRecv ? tx.counterpartyId : tx.personId, _aName = _isRecv ? tx.counterpartyName : tx.personName;
+                        // با جهتِ درستِ انتقال، لِنگِ «پرداخت‌کننده A» نوعِ «دریافت» دارد و لِنگِ
+                        // «دریافت‌کنندهٔ B» نوعِ «پرداخت». پس A همان شخصِ لِنگِ دریافت است.
+                        var _isPayerLeg = (tx.type === 'دریافت');
+                        var _aId = _isPayerLeg ? tx.personId : tx.counterpartyId, _aName = _isPayerLeg ? tx.personName : tx.counterpartyName;
+                        var _bId = _isPayerLeg ? tx.counterpartyId : tx.personId, _bName = _isPayerLeg ? tx.counterpartyName : tx.personName;
                         if (hiddenFrom) hiddenFrom.value = _aId || '';
                         if (searchFrom) searchFrom.value = _aName || '';
                         var _dpn = document.getElementById('receipt-dest-person'), _dps = document.getElementById('receipt-dest-person-search');
@@ -16597,9 +16904,17 @@ function _rpBuildReportAOA(kind) {
                 if (_ppBase === 'USD') return (L && L.usd != null) ? (parseFloat(L.usd) || 0) : (parseFloat(rp.purchasePriceUSD) || 0);
                 return (L && L.afn != null) ? (parseFloat(L.afn) || 0) : (parseFloat(rp.purchasePriceAFN) || 0);
             };
-            aoa.push(['نام جنس', 'کد جنس', 'گتگوری', 'ورودی', 'خروجی', 'موجودی فعلی', 'واحد شمارش', 'قیمت خرید (' + _ppBase + ')', 'تاریخ انقضا', 'اطلاعات بیشتر']);
+            // ستون‌های فیلدهای دلخواهِ کاربر (اگر ساخته باشد) — بعد از «تاریخ انقضا»
+            var _cfDefs = (typeof hbProductFieldsGet === 'function') ? hbProductFieldsGet() : [];
+            var _cfNames = _cfDefs.map(function (f) { return f.name; });
+            var _cfValFor = function (id) {
+                var rp = _rawPPById[id] || {};
+                var vals = rp.customFields || {};
+                return _cfDefs.map(function (f) { var v = vals[f.id]; return (v == null) ? '' : String(v); });
+            };
+            aoa.push(['نام جنس', 'کد جنس', 'گتگوری', 'ورودی', 'خروجی', 'موجودی فعلی', 'واحد شمارش', 'قیمت خرید (' + _ppBase + ')', 'تاریخ انقضا'].concat(_cfNames, ['اطلاعات بیشتر']));
             list.forEach(function (p) {
-                aoa.push([p.name, p.code, p.category, R(p.inQ), R(p.outQ), R(p.stock), p.unit, R(_ppFor(p.id)), p.expiry, p.notes]);
+                aoa.push([p.name, p.code, p.category, R(p.inQ), R(p.outQ), R(p.stock), p.unit, R(_ppFor(p.id)), p.expiry].concat(_cfValFor(p.id), [p.notes]));
             });
         } else if (kind === 'f_expenses') {
             title = 'مصارفات';
@@ -16831,11 +17146,12 @@ if (typeof window !== 'undefined') window._rpInvalidatePersonCache = function ()
 function _rpTxEndpoints(tx, isPay) {
     var party = (tx && (tx.personName || tx.customerName || tx.supplierName)) || '';
     try {
-        // انتقالِ بین دو شخص: دو لِنگِ «پرداخت A» و «دریافت B» با یک transferGroup ساخته می‌شوند.
+        // انتقالِ بین دو شخص: لِنگِ پرداخت‌کننده A نوعِ «دریافت» دارد و لِنگِ دریافت‌کنندهٔ B
+        // نوعِ «پرداخت» (جهتِ درستِ ماندهٔ برنامه). پس مبدأ همیشه طرفِ لِنگِ «دریافت» است.
         if (tx && tx.transferGroup) {
             var other = String(tx.counterpartyName || '').trim() || _rpPersonName(tx.counterpartyId);
             if (other) {
-                if (tx.type === 'پرداخت') return { src: party, dst: other };
+                if (tx.type === 'دریافت') return { src: party, dst: other };
                 return { src: other, dst: party };
             }
         }
@@ -20258,6 +20574,7 @@ function loadPersonsList() {
 // ===== مرتب‌سازی داده‌محور لیست اشخاص (سازگار با چیدمان کارتی) =====
 var _personsSortKey = '';
 function sortPersonsList(value) {
+    _hbSortSet('persons', value || '');
     _personsSortKey = value || '';
     if (typeof loadPersonsList === 'function') loadPersonsList();
     var menu = document.getElementById('sort-menu-persons');
@@ -20345,6 +20662,11 @@ function loadPersonsList() {
         _personPickerCategory = null;
         _personPickerReturnSection = null;
     }
+    try {
+        _hbEnsureSortRestoreHook();
+        if (!_personsSortKey) { var _pv = _hbSortGet('persons'); if (_pv) _personsSortKey = _pv; }
+        _hbSortSyncMenu('persons');
+    } catch (e) {}
     const persons = _sortPersonsArray(db.getPersons());
     // اگر در حالت picker هستیم، جدول picker رندر شود
     if ((typeof _rpPersonPick !== 'undefined' && _rpPersonPick) || _personPickerCallback) {
@@ -23586,6 +23908,8 @@ function toggleSortMenu(section) {
     _attachFsCloseHandler();
     const menu = document.getElementById(`sort-menu-${section}`);
     if (!menu) return;
+    // نمایشِ انتخابِ ذخیره‌شدهٔ کاربر هنگامِ بازکردنِ منو
+    try { _hbSortSyncMenu(section); } catch (e) {}
     const isOpen = menu.style.display === 'block';
     // بستن همه منوها
     document.querySelectorAll('.sort-menu, .filter-menu').forEach(m => m.style.display = 'none');
@@ -23635,6 +23959,7 @@ document.addEventListener('click', function(e) {
 // 2. اعمال مرتب‌سازی واقعی و هماهنگ با همه بخش‌ها
 // ==========================================================================
 function applySort(section = '', criteria) {
+    try { _hbSortSet(section, criteria); _hbEnsureSortRestoreHook(); } catch (e) {}
     let tableId = `${section}-table`;
     
     // هماهنگی با تب‌های مختلف بخش امور مالی
@@ -27197,13 +27522,63 @@ function ssbCreateBackup() {
         }
     } catch(e) { ssbShowMsg('خطا: ' + e.message, true); }
 }
+// ── مالکیتِ فایلِ پشتیبان هنگامِ ورود (Import) ──────────────────────────────────
+//  اگر فایلِ JSON متعلق به «حسابِ دیگری» باشد، اطلاعاتِ فروشگاهِ کاربرِ فعلی نباید با
+//  اطلاعاتِ فروشگاهِ صاحبِ فایل جایگزین شود و چیزی هم به فضای ابریِ حسابِ فعلی فرستاده
+//  نمی‌شود؛ فقط بقیهٔ داده‌ها روی همین دستگاه می‌آیند. اگر فایل مالِ خودِ همین حساب باشد،
+//  رفتار دقیقاً مثلِ قبل است (همه‌چیز از جمله اطلاعاتِ فروشگاه وارد و همگام می‌شود).
+//  فایل‌های پشتیبانِ قدیمی که شناسهٔ مالک ندارند، مثلِ قبل «مالِ خودِ کاربر» فرض می‌شوند.
+function __hbCurrentOwnerEmail() {
+    try {
+        var acc = JSON.parse(localStorage.getItem('jouya_user_account') || 'null');
+        return String((acc && (acc.email || acc.username)) || '').trim().toLowerCase();
+    } catch (e) { return ''; }
+}
+function __hbImportIsForeign(allData) {
+    try {
+        var fileEmail = String(((allData && allData.owner) || {}).email || '').trim().toLowerCase();
+        var me = __hbCurrentOwnerEmail();
+        if (!fileEmail || !me) return false;   // بدونِ شناسه → رفتارِ قبلی
+        return fileEmail !== me;
+    } catch (e) { return false; }
+}
+function __hbGuardedImport(file, label) {
+    var savedSettings = null;
+    try { savedSettings = localStorage.getItem('settings'); } catch (e) {}
+    return db.importData(file).then(function (res) {
+        var allData = (res && res.data) || {};
+        if (!__hbImportIsForeign(allData)) return __ssbSyncImportedToCloud(label);
+        // ── فایلِ متعلق به حسابِ دیگر ────────────────────────────────────────────
+        //  ۱) اطلاعاتِ فروشگاهِ خودِ کاربر برگردانده می‌شود (جایگزین نمی‌شود)
+        //  ۲) سینک برای این داده «خاموش» می‌شود تا هیچ چیز به فضای ابریِ حسابِ فعلی نرود
+        try { if (savedSettings != null) localStorage.setItem('settings', savedSettings); } catch (e) {}
+        try {
+            var _S = window.JouyaSync;
+            if (_S && typeof _S.setLocalOnly === 'function') _S.setLocalOnly(true, 'import-foreign-backup');
+        } catch (e) {}
+        try { if (typeof window.rebuildAllDerivedData === 'function') window.rebuildAllDerivedData(); } catch (e) {}
+        try { window.dispatchEvent(new CustomEvent('jouya-data-change', { detail: { reason: 'json-import' } })); } catch (e) {}
+        ssbShowMsg('داده‌ها فقط روی همین دستگاه وارد شد ✓');
+        if (typeof showMessage === 'function') {
+            showMessage('حالت فقط-محلی فعال شد',
+                '<div style="text-align:right;direction:rtl;line-height:2">' +
+                'این فایلِ پشتیبان متعلق به <b>حساب دیگری</b> است.<br><br>' +
+                '• اطلاعاتِ فروشگاهِ شما تغییر نکرد.<br>' +
+                '• همگام‌سازی با فضای ابری <b>متوقف شد</b> تا این داده‌ها واردِ حساب شما نشود.<br>' +
+                '• این داده‌ها فقط روی همین دستگاه هستند.<br><br>' +
+                'برای برگشتن به حالت عادی و روشن‌شدنِ دوبارهٔ همگام‌سازی، از «حذف داده‌ها» ' +
+                'پاک‌سازی کنید یا از حساب خارج شوید.' +
+                '</div>');
+        }
+        return Promise.resolve();
+    });
+}
 function ssbRestoreFromFile() {
     const fileInput = document.getElementById('ssb-restore-file');
     if (!fileInput || !fileInput.files[0]) { ssbShowMsg('فایلی انتخاب نشده!', true); return; }
     if (!confirm('داده‌های فعلی با فایل پشتیبان جایگزین می‌شوند. ادامه می‌دهید؟')) return;
     if (db.importData) {
-        db.importData(fileInput.files[0])
-            .then(() => __ssbSyncImportedToCloud('بازیابی'))
+        __hbGuardedImport(fileInput.files[0], 'بازیابی')
             .catch(e  => { ssbShowMsg('خطا در بازیابی: ' + (e.error || e.message || ''), true); });
     } else {
         ssbShowMsg('متد importData در db موجود نیست', true);
@@ -27267,8 +27642,7 @@ function ssbImportData() {
     if (!fileInput || !fileInput.files[0]) { ssbShowMsg('فایلی انتخاب نشده!', true); return; }
     if (!confirm('داده‌های فعلی جایگزین می‌شوند. ادامه می‌دهید؟')) return;
     if (db.importData) {
-        db.importData(fileInput.files[0])
-            .then(() => __ssbSyncImportedToCloud('ورود'))
+        __hbGuardedImport(fileInput.files[0], 'ورود')
             .catch(e  => { ssbShowMsg('خطا: ' + (e.error || e.message || ''), true); });
     } else {
         ssbShowMsg('متد importData موجود نیست', true);
@@ -30346,6 +30720,12 @@ function _renderProductDetail(productId) {
     var specRows = '';
     specRows += _pdRow('کد', _pdText(product.code));
     specRows += _pdRow('کتگوری', _pdText(((product.categoryMain || '') + (product.categorySub ? ' / ' + product.categorySub : '')).trim()));
+    // فیلدهای دلخواهِ کاربر — دقیقاً مثلِ بقیهٔ ردیف‌های مشخصات
+    try {
+        (typeof hbProductCustomPairs === 'function' ? hbProductCustomPairs(product) : []).forEach(function (pr) {
+            specRows += _pdRow(pr.name, _pdText(pr.value));
+        });
+    } catch (e) {}
     specRows += _pdRow('واحد', _pdText(product.unit));
     // قیمتِ خریدِ تمام‌شده (با هزینه حمل و نقل) مطابقِ آخرین سریِ خریدِ همین جنس
     var _pdLandedMap = (typeof _landedPurchasePriceMap === 'function') ? _landedPurchasePriceMap() : {};
@@ -36009,6 +36389,68 @@ function setupProductAddSelect(selectElement, storageKey, label) {
     selectElement.addEventListener('change', selectElement._addOnChange);
 }
 
+// ── دکمهٔ حذفِ ظریفِ کتگوری کنارِ دراپ‌داون ──────────────────────────────────────
+//  در <select>ِ نیتیو نمی‌توان کنارِ هر گزینه آیکن گذاشت، پس این دکمه روی «کتگوریِ
+//  انتخاب‌شده» عمل می‌کند: به‌محضِ انتخابِ یک کتگوریِ ساختهٔ کاربر ظاهر می‌شود و با یک
+//  تایید، همان کتگوری را از فهرست حذف می‌کند. نامِ حذف‌شده در customExpenseCategoriesRemoved
+//  ثبت می‌شود تا بازسازیِ خودکار دوباره زنده‌اش نکند. مصارفِ ثبت‌شده دست نمی‌خورند.
+function setupSelectDeleteBtn(selectElement, storageKey, label) {
+    if (!selectElement || selectElement._delBtnInited) return;
+    var field = (selectElement.closest && selectElement.closest('.bill-field')) || selectElement.parentElement;
+    if (!field) return;
+    try { if (window.getComputedStyle(field).position === 'static') field.style.position = 'relative'; } catch (e) {}
+
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'cat-del-btn';
+    btn.title = 'حذفِ ' + label + 'ِ انتخاب‌شده';
+    btn.innerHTML = '<i class="fas fa-xmark"></i>';
+    btn.style.display = 'none';
+    field.appendChild(btn);
+
+    var keyOf = function () { return selectElement._addStorageKey || storageKey; };
+    var listOf = function () {
+        var l = [];
+        try { l = JSON.parse(localStorage.getItem(keyOf()) || '[]'); } catch (e) { l = []; }
+        return Array.isArray(l) ? l : [];
+    };
+    var sync = function () {
+        var v = selectElement.value || '';
+        btn.style.display = (v && listOf().indexOf(v) !== -1) ? 'flex' : 'none';
+    };
+
+    btn.onclick = function (ev) {
+        try { ev.preventDefault(); ev.stopPropagation(); } catch (e) {}
+        var v = selectElement.value || '';
+        if (!v) return;
+        var run = function () {
+            var key = keyOf();
+            localStorage.setItem(key, JSON.stringify(listOf().filter(function (x) { return x !== v; })));
+            // ثبت در فهرستِ حذف‌شده‌ها تا بازسازیِ خودکار دوباره نسازدش
+            if (key === 'customExpenseCategories') {
+                try {
+                    var rm = JSON.parse(localStorage.getItem('customExpenseCategoriesRemoved') || '[]');
+                    if (!Array.isArray(rm)) rm = [];
+                    if (rm.indexOf(v) === -1) rm.push(v);
+                    localStorage.setItem('customExpenseCategoriesRemoved', JSON.stringify(rm));
+                } catch (e) {}
+            }
+            var op = Array.prototype.find.call(selectElement.options, function (o) { return o.value === v; });
+            if (op && op.parentNode) op.parentNode.removeChild(op);
+            selectElement.value = '';
+            sync();
+            try { selectElement.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+        };
+        if (typeof showConfirm === 'function') showConfirm('حذف ' + label, 'کتگوری «' + v + '» از فهرست حذف شود؟ (مصارفِ ثبت‌شده دست‌نخورده می‌مانند)', run);
+        else if (confirm('کتگوری «' + v + '» از فهرست حذف شود؟')) run();
+    };
+
+    selectElement.addEventListener('change', sync);
+    sync();
+    selectElement._delBtnInited = true;
+}
+if (typeof window !== 'undefined') window.setupSelectDeleteBtn = setupSelectDeleteBtn;
+
 // ---- آیکن ➕ : نمایش فیلد نقدی ارز دیگر (همان فیلد موجود) ----
 // ---- آیکن ➕ : افزودن یک ردیف مبلغ + انتخاب حساب (نظر به ارز) ----
 // این فیلدها فقط ظاهری‌اند و کاربر می‌تواند مبلغ و حساب دیگری یادداشت کند.
@@ -38442,6 +38884,7 @@ function _receiptInitExpenseCategory() {
             }
         });
         if (typeof setupProductAddSelect === 'function') setupProductAddSelect(sel, 'customExpenseCategories', 'کتگوری مصرف');
+        if (typeof setupSelectDeleteBtn === 'function') setupSelectDeleteBtn(sel, 'customExpenseCategories', 'کتگوری مصرف');
         sel._rdInited = true;
     } catch (e) {}
 }
