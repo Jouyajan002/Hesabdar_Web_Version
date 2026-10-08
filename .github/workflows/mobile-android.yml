@@ -152,7 +152,7 @@ jobs:
           JSON
           npm install --no-audit --no-fund \
             @capacitor/core@6 @capacitor/cli@6 @capacitor/android@6 @capacitor/browser@6 @capacitor/app@6 \
-            @capacitor/share@6 @capacitor/filesystem@6 \
+            @capacitor/share@6 @capacitor/filesystem@6 @capacitor-community/file-opener@6 \
             javascript-obfuscator@4
 
       - name: پیکربندیِ Capacitor
@@ -238,6 +238,15 @@ jobs:
           grep -q 'android:dataExtractionRules' "$MF" || \
             sed -i 's/<application /<application android:dataExtractionRules="@xml\/jouya_data_extraction_rules" /' "$MF"
 
+          # ── اجازهٔ نصبِ بروزرسانی از داخلِ خودِ برنامه ──────────────────────────
+          #  بدونِ این اجازه، اندروید بازکردنِ نصب‌کنندهٔ بسته را از داخلِ برنامه مسدود
+          #  می‌کند و بروزرسانیِ درون‌برنامه‌ای کار نمی‌کند. (کاربر در اولین بار یک‌بار
+          #  «نصب برنامه‌های ناشناس» را برای حسابدار تأیید می‌کند.)
+          if ! grep -q 'REQUEST_INSTALL_PACKAGES' "$MF"; then
+            sed -i 's|<application |<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <application |' "$MF"
+          fi
+          echo "— مجوزها —"; grep -n 'uses-permission' "$MF" || true
+
           echo "— <application> پس از تنظیم —"
           grep -n '<application' "$MF" || true
 
@@ -317,6 +326,9 @@ jobs:
           grep -q "capacitor-share" "$SETTINGS"      || MISSING="$MISSING @capacitor/share"
           grep -q "capacitor-filesystem" "$SETTINGS" || MISSING="$MISSING @capacitor/filesystem"
           grep -q "capacitor-app" "$SETTINGS"        || MISSING="$MISSING @capacitor/app"
+          # افزونهٔ بازکنندهٔ فایل فقط برای «نصبِ بروزرسانی از داخلِ برنامه» است؛ اگر نبود
+          # برنامه کار می‌کند و نصب از پنلِ اشتراک انجام می‌شود، پس فقط هشدار می‌دهیم.
+          grep -q "file-opener" "$SETTINGS" || echo "::warning::@capacitor-community/file-opener ثبت نشد — نصبِ بروزرسانی از پنلِ اشتراک انجام می‌شود." 
           if [ -n "$MISSING" ]; then
             echo "::error::این افزونه‌ها در پروژهٔ اندروید ثبت نشده‌اند:$MISSING — ارسال به واتساپ کار نخواهد کرد."
             exit 1
