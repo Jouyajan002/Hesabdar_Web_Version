@@ -405,6 +405,16 @@
                 if (S && S.pushNow && !offline) flush = Promise.resolve(S.pushNow());
             } catch (e) {}
             return flush.catch(function () {}).then(function () {
+                // اگر در «حالتِ فقط-محلی» هستیم، داده‌های روی این دستگاه متعلق به یک
+                // پشتیبانِ بیگانه است و قرار بود «فقط تا خروج» بماند. پس همین‌جا پاک
+                // می‌شود و پرچم برداشته می‌شود تا ورودِ بعدی دادهٔ واقعیِ حساب را از ابر
+                // بازیابی کند. دادهٔ خودِ کاربر در ابرِ خودش دست‌نخورده است.
+                try {
+                    if (S && typeof S.isLocalOnly === 'function' && S.isLocalOnly()) {
+                        clearUserDataKeys();
+                        console.log('[auth-cloud] خروج: دادهٔ پشتیبانِ بیگانه پاک شد و همگام‌سازی عادی شد.');
+                    }
+                } catch (e) {}
                 try { if (S && S.signOut) S.signOut(); } catch (e) {}
                 try { localStorage.removeItem(LINK_KEY); } catch (e) {}
                 return { ok: true };

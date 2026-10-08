@@ -27522,55 +27522,156 @@ function ssbCreateBackup() {
         }
     } catch(e) { ssbShowMsg('خطا: ' + e.message, true); }
 }
-// ── مالکیتِ فایلِ پشتیبان هنگامِ ورود (Import) ──────────────────────────────────
-//  اگر فایلِ JSON متعلق به «حسابِ دیگری» باشد، اطلاعاتِ فروشگاهِ کاربرِ فعلی نباید با
-//  اطلاعاتِ فروشگاهِ صاحبِ فایل جایگزین شود و چیزی هم به فضای ابریِ حسابِ فعلی فرستاده
-//  نمی‌شود؛ فقط بقیهٔ داده‌ها روی همین دستگاه می‌آیند. اگر فایل مالِ خودِ همین حساب باشد،
-//  رفتار دقیقاً مثلِ قبل است (همه‌چیز از جمله اطلاعاتِ فروشگاه وارد و همگام می‌شود).
-//  فایل‌های پشتیبانِ قدیمی که شناسهٔ مالک ندارند، مثلِ قبل «مالِ خودِ کاربر» فرض می‌شوند.
+// ═════════════════════════════════════════════════════════════════════════════
+//  نگهبانِ مالکیتِ فایلِ پشتیبان (JSON و Google Drive) — JouyaImportGuard
+//  ---------------------------------------------------------------------------
+//  قاعده: یک فایلِ پشتیبان فقط و فقط وقتی اجازه دارد واردِ «فضای ابریِ» یک حساب شود
+//  که اثبات شود متعلق به همان حساب است. در هر حالتِ دیگر داده‌ها وارد می‌شوند اما
+//  «فقط روی همین دستگاه» می‌مانند (حالتِ فقط-محلی) و هیچ چیز به ابر نمی‌رود.
+//
+//  ⚠ ریشهٔ باگِ گزارش‌شده: نسخهٔ قبلی فقط فیلدِ owner.email را می‌دید و اگر نبود
+//  («بدونِ شناسه → رفتارِ قبلی») فایل را مالِ خودِ کاربر فرض می‌کرد. فایل‌های
+//  پشتیبانِ ساخته‌شده پیش از افزوده‌شدنِ owner (و همهٔ پشتیبان‌های قدیمیِ Google
+//  Drive) این فیلد را ندارند، پس دقیقاً همان فایلِ «کاربرِ اول» بی‌چون‌وچرا مالِ
+//  «کاربرِ دوم» شمرده می‌شد و صفر تا صدِ داده‌اش به ابرِ کاربرِ دوم push می‌شد.
+//
+//  تشخیص سه لایه دارد و به ترتیب بررسی می‌شود:
+//    ۱) شناسهٔ صریحِ مالک در فایل (owner.email یا owner.workspaceId) — قطعی.
+//    ۲) اگر شناسه نبود و این دستگاه اصلاً به ابر وصل نیست → ابری نیست که آلوده شود.
+//    ۳) اگر شناسه نبود ولی به ابر وصل‌ایم → «اثرِانگشتِ فروشگاه» (نام/تلفن/ایمیل/
+//       صاحبِ فروشگاه) داخلِ فایل با اطلاعاتِ فروشگاهِ همین حساب مقایسه می‌شود.
+//       اگر هیچ‌کدام قابلِ مقایسه نبود، نتیجه «نامشخص» است و از خودِ کاربر پرسیده
+//       می‌شود؛ پاسخِ پیش‌فرض و امن = «مالِ من نیست».
+// ═════════════════════════════════════════════════════════════════════════════
+function __hbNormText(v) {
+    return String(v == null ? '' : v)
+        .replace(/[يی]/g, 'ی').replace(/[كک]/g, 'ک')
+        .replace(/[‌‏‎]/g, ' ')
+        .replace(/\s+/g, ' ').trim().toLowerCase();
+}
+function __hbNormPhone(v) { return String(v == null ? '' : v).replace(/[^0-9]/g, ''); }
 function __hbCurrentOwnerEmail() {
     try {
         var acc = JSON.parse(localStorage.getItem('jouya_user_account') || 'null');
-        return String((acc && (acc.email || acc.username)) || '').trim().toLowerCase();
+        return __hbNormText((acc && (acc.email || acc.username)) || '');
     } catch (e) { return ''; }
 }
-function __hbImportIsForeign(allData) {
+// شناسهٔ مالکِ «این دستگاه/حساب»
+function __hbMyOwner() {
+    var email = __hbCurrentOwnerEmail(), ws = '';
+    try { ws = String(localStorage.getItem('jouya_sync_workspace') || '').trim(); } catch (e) {}
     try {
-        var fileEmail = String(((allData && allData.owner) || {}).email || '').trim().toLowerCase();
-        var me = __hbCurrentOwnerEmail();
-        if (!fileEmail || !me) return false;   // بدونِ شناسه → رفتارِ قبلی
-        return fileEmail !== me;
-    } catch (e) { return false; }
+        var lk = JSON.parse(localStorage.getItem('jouya_cloud_linked') || 'null');
+        if (lk) { if (!email) email = __hbNormText(lk.email || ''); if (!ws) ws = String(lk.workspaceId || '').trim(); }
+    } catch (e) {}
+    return { email: email, workspaceId: ws };
+}
+// شناسهٔ مالکِ «فایل»
+function __hbFileOwner(allData) {
+    var o = (allData && allData.owner) || {};
+    return { email: __hbNormText(o.email || ''), workspaceId: String(o.workspaceId || '').trim() };
+}
+// آیا این حساب اصلاً به فضای ابری وصل است؟ (اگر نه، ابری نیست که محافظت شود)
+function __hbCloudLinked() {
+    try { if (window.JouyaAuth && typeof window.JouyaAuth.isLinked === 'function' && window.JouyaAuth.isLinked()) return true; } catch (e) {}
+    try { var S = window.JouyaSync; if (S && typeof S.session === 'function' && S.session()) return true; } catch (e) {}
+    try { if (localStorage.getItem('jouya_sync_workspace')) return true; } catch (e) {}
+    return false;
+}
+// اثرِانگشتِ فروشگاه از یک شیءِ settings
+function __hbStoreFp(settings) {
+    var s = settings || {};
+    return {
+        name:  __hbNormText(s.storeName),
+        phone: __hbNormPhone(s.storePhone),
+        email: __hbNormText(s.storeEmail),
+        owner: __hbNormText(s.storeOwner || s.ownerName)
+    };
+}
+// مقایسهٔ دو اثرِانگشت: 'match' | 'differ' | 'unknown'
+function __hbCompareFp(a, b) {
+    var fields = ['name', 'phone', 'email', 'owner'], comparable = 0, i, k;
+    for (i = 0; i < fields.length; i++) {
+        k = fields[i];
+        if (!a[k] || !b[k]) continue;
+        comparable++;
+        if (a[k] === b[k]) return 'match';      // یک تطابقِ قطعی کافی است
+    }
+    return comparable ? 'differ' : 'unknown';
+}
+// تصمیمِ نهایی: 'own' (مجاز برای ابر) | 'foreign' (فقط محلی) | 'unknown'
+// mySettingsRaw: رشتهٔ settingsِ کاربر «پیش از» واردکردنِ فایل (چون import آن را بازنویسی می‌کند)
+function __hbClassifyImport(allData, mySettingsRaw) {
+    try {
+        var me = __hbMyOwner(), fo = __hbFileOwner(allData);
+        // ۱) شناسهٔ صریح
+        if (fo.email && me.email)               return (fo.email === me.email) ? 'own' : 'foreign';
+        if (fo.workspaceId && me.workspaceId)   return (fo.workspaceId === me.workspaceId) ? 'own' : 'foreign';
+        // ۲) بدونِ اتصالِ ابری، چیزی برای محافظت نیست
+        if (!__hbCloudLinked())                 return 'own';
+        // ۳) اثرِانگشتِ فروشگاه
+        var mine = null;
+        try { mine = JSON.parse(mySettingsRaw || localStorage.getItem('settings') || '{}') || {}; } catch (e) { mine = {}; }
+        var cmp = __hbCompareFp(__hbStoreFp(allData && allData.settings), __hbStoreFp(mine));
+        if (cmp === 'match')  return 'own';
+        if (cmp === 'differ') return 'foreign';
+        return 'unknown';
+    } catch (e) { return 'foreign'; }   // در تردید، امن‌ترین حالت
+}
+// حالتِ «نامشخص» → از کاربر پرسیده می‌شود؛ نه/بی‌پاسخ = بیگانه
+function __hbResolveUnknown(allData) {
+    var me = __hbMyOwner();
+    var who = me.email ? ('«' + me.email + '»') : 'همین حساب';
+    var q = 'این فایلِ پشتیبان نشانهٔ مالکیت ندارد (پشتیبانِ قدیمی).\n\n' +
+            'آیا این فایل متعلق به ' + who + ' است؟\n\n' +
+            'بله = داده‌ها با فضای ابریِ شما همگام می‌شود.\n' +
+            'خیر = داده‌ها فقط روی همین دستگاه می‌ماند.';
+    try { return confirm(q) ? 'own' : 'foreign'; } catch (e) { return 'foreign'; }
+}
+// اعمالِ حالتِ فقط-محلی پس از واردکردنِ فایلِ بیگانه
+function __hbApplyForeignImport(savedSettings, silent) {
+    //  ۱) اطلاعاتِ فروشگاهِ خودِ کاربر برگردانده می‌شود (جایگزین نمی‌شود)
+    //  ۲) ارسال به ابر «خاموش» می‌شود تا هیچ چیز به فضای ابریِ حسابِ فعلی نرود
+    try { if (savedSettings != null) localStorage.setItem('settings', savedSettings); } catch (e) {}
+    try {
+        var _S = window.JouyaSync;
+        if (_S && typeof _S.setLocalOnly === 'function') _S.setLocalOnly(true, 'import-foreign-backup');
+    } catch (e) {}
+    try { if (typeof window.rebuildAllDerivedData === 'function') window.rebuildAllDerivedData(); } catch (e) {}
+    try { window.dispatchEvent(new CustomEvent('jouya-data-change', { detail: { reason: 'json-import' } })); } catch (e) {}
+    if (!silent && typeof showMessage === 'function') {
+        showMessage('حالت فقط-محلی فعال شد',
+            '<div style="text-align:right;direction:rtl;line-height:2">' +
+            'این فایلِ پشتیبان متعلق به <b>حساب شما نیست</b>.<br><br>' +
+            '• اطلاعاتِ فروشگاهِ شما تغییر نکرد.<br>' +
+            '• <b>ارسال</b> به فضای ابری متوقف شد تا این داده‌ها واردِ حساب شما نشود.<br>' +
+            '• <b>دریافت</b> از فضای ابری فعال است؛ داده‌های حسابِ خودتان دانلود می‌شود.<br>' +
+            '• این داده‌های وارد‌شده فقط روی همین دستگاه می‌مانند.<br><br>' +
+            'با <b>خروج از حساب</b> این داده‌ها پاک و همگام‌سازی دوباره عادی می‌شود. ' +
+            'از «حذف داده‌ها» هم می‌توانید همین کار را انجام دهید.' +
+            '</div>');
+    }
+}
+// در دسترسِ drive-backup.js (بازیابی از Google Drive از همین نگهبان رد می‌شود)
+if (typeof window !== 'undefined') {
+    window.JouyaImportGuard = {
+        classify: __hbClassifyImport,
+        resolveUnknown: __hbResolveUnknown,
+        applyForeign: __hbApplyForeignImport,
+        myOwner: __hbMyOwner,
+        cloudLinked: __hbCloudLinked
+    };
 }
 function __hbGuardedImport(file, label) {
     var savedSettings = null;
     try { savedSettings = localStorage.getItem('settings'); } catch (e) {}
     return db.importData(file).then(function (res) {
         var allData = (res && res.data) || {};
-        if (!__hbImportIsForeign(allData)) return __ssbSyncImportedToCloud(label);
-        // ── فایلِ متعلق به حسابِ دیگر ────────────────────────────────────────────
-        //  ۱) اطلاعاتِ فروشگاهِ خودِ کاربر برگردانده می‌شود (جایگزین نمی‌شود)
-        //  ۲) سینک برای این داده «خاموش» می‌شود تا هیچ چیز به فضای ابریِ حسابِ فعلی نرود
-        try { if (savedSettings != null) localStorage.setItem('settings', savedSettings); } catch (e) {}
-        try {
-            var _S = window.JouyaSync;
-            if (_S && typeof _S.setLocalOnly === 'function') _S.setLocalOnly(true, 'import-foreign-backup');
-        } catch (e) {}
-        try { if (typeof window.rebuildAllDerivedData === 'function') window.rebuildAllDerivedData(); } catch (e) {}
-        try { window.dispatchEvent(new CustomEvent('jouya-data-change', { detail: { reason: 'json-import' } })); } catch (e) {}
+        var verdict = __hbClassifyImport(allData, savedSettings);
+        if (verdict === 'unknown') verdict = __hbResolveUnknown(allData);
+        if (verdict === 'own') return __ssbSyncImportedToCloud(label);
+        __hbApplyForeignImport(savedSettings);
         ssbShowMsg('داده‌ها فقط روی همین دستگاه وارد شد ✓');
-        if (typeof showMessage === 'function') {
-            showMessage('حالت فقط-محلی فعال شد',
-                '<div style="text-align:right;direction:rtl;line-height:2">' +
-                'این فایلِ پشتیبان متعلق به <b>حساب دیگری</b> است.<br><br>' +
-                '• اطلاعاتِ فروشگاهِ شما تغییر نکرد.<br>' +
-                '• <b>ارسال</b> به فضای ابری متوقف شد تا این داده‌ها واردِ حساب شما نشود.<br>' +
-                '• <b>دریافت</b> از فضای ابری فعال است؛ داده‌های حسابِ خودتان دانلود می‌شود.<br>' +
-                '• این داده‌های وارد‌شده فقط روی همین دستگاه می‌مانند.<br><br>' +
-                'برای برگشتن به حالت عادی و روشن‌شدنِ دوبارهٔ ارسال، از «حذف داده‌ها» ' +
-                'پاک‌سازی کنید یا از حساب خارج شوید.' +
-                '</div>');
-        }
         return Promise.resolve();
     });
 }

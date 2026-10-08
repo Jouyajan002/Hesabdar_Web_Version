@@ -6,8 +6,6 @@
  *  - ذخیره اکانت کاربر در Google Drive (appDataFolder) برای ورود از هر کامپیوتر
  *  - ثبت لیسانس در Drive به‌عنوان «استفاده‌شده»
  *  - فالبک به مرورگر در صورت نبود electronAPI (فقط برای توسعه وب)
- *  - Tauri (ویندوز): ورودِ گوگل با دستورهای نیتیوِ Rust (hb_google_signin / hb_google_refresh_token)
- *    با OAuth loopback و Refresh Token بلندمدت؛ Client Secret فقط در Rust است. اگر دستورها نبودند → فالبک به مسیرِ وب
  * ============================================================================= */
 
 (function () {
@@ -38,44 +36,6 @@
     function hasNativeGoogleSignIn() {
         try { return !!(window.electronAPI && typeof window.electronAPI.googleSignIn === 'function'); }
         catch (e) { return false; }
-    }
-
-    // ── دستورهای نیتیوِ Tauri برای ورودِ گوگل (OAuth loopback در Rust) ─────────────────
-    // فقط وقتی فعال است که واقعاً داخلِ Tauri باشیم و invokeِ آن موجود باشد؛ در وب/PWA و
-    // الکترون هیچ‌کدام از این‌ها اجرا نمی‌شود. اگر دستورها در باینری نبودند (نسخهٔ قدیمی)،
-    // یک‌بار علامت می‌خورد و ورود به مسیرِ وب (Google Identity Services) برمی‌گردد.
-    let _tauriGoogleBroken = false;
-    function _tauriInvoke() {
-        try {
-            if (window.__TAURI__ && window.__TAURI__.core && typeof window.__TAURI__.core.invoke === 'function') {
-                return function (cmd, args) { return window.__TAURI__.core.invoke(cmd, args); };
-            }
-            if (window.__TAURI_INTERNALS__ && typeof window.__TAURI_INTERNALS__.invoke === 'function') {
-                return function (cmd, args) { return window.__TAURI_INTERNALS__.invoke(cmd, args); };
-            }
-        } catch (e) {}
-        return null;
-    }
-    // نتیجه: شیِ {success, token, userInfo} / {success:false, error}؛ یا null اگر مسیرِ نیتیوِ Tauri در دسترس نیست
-    async function tauriGoogleSignIn() {
-        const inv = _tauriInvoke();
-        if (!inv || !isTauriNative() || _tauriGoogleBroken) return null;
-        try { return await inv('hb_google_signin'); }
-        catch (e) {
-            console.warn('ورودِ نیتیوِ Tauri در دسترس نیست؛ فالبک به مسیرِ وب:', e);
-            _tauriGoogleBroken = true;
-            return null;
-        }
-    }
-    async function tauriGoogleRefresh(refreshToken) {
-        const inv = _tauriInvoke();
-        if (!inv || !isTauriNative() || _tauriGoogleBroken) return null;
-        try { return await inv('hb_google_refresh_token', { refreshToken: refreshToken }); }
-        catch (e) {
-            console.warn('رفرشِ نیتیوِ Tauri در دسترس نیست:', e);
-            _tauriGoogleBroken = true;
-            return null;
-        }
     }
 
     // =========================================================================
@@ -128,23 +88,6 @@
                 detail: { email: result.userInfo && result.userInfo.email, token: result.token }
             }));
             return result.token;
-        }
-
-        // مسیرِ نیتیوِ Tauri (ویندوز): OAuth loopback در Rust — Refresh Token بلندمدت، بدونِ Client Secret در JS
-        const tauriResult = await tauriGoogleSignIn();
-        if (tauriResult) {
-            if (!tauriResult.success) {
-                throw new Error(tauriResult.error || 'ورود ناموفق');
-            }
-            TokenStore.save(tauriResult.token);
-            if (tauriResult.userInfo && tauriResult.userInfo.email) {
-                localStorage.setItem('jouya_gdrive_email', tauriResult.userInfo.email);
-                localStorage.setItem('jouya_gdrive_name', tauriResult.userInfo.name || '');
-            }
-            window.dispatchEvent(new CustomEvent('gdrive-signed-in', {
-                detail: { email: tauriResult.userInfo && tauriResult.userInfo.email, token: tauriResult.token }
-            }));
-            return tauriResult.token;
         }
 
         // مسیرِ درونِ‌مرورگر (Tauri/ویندوز و وب): بدونِ نیاز به کدِ نیتیو، با Google Identity
@@ -239,20 +182,6 @@
                 }
             } catch (e) {
                 console.warn('رفرش توکن:', e);
-            }
-        }
-        // رفرشِ نیتیوِ Tauri (Refresh Token ذخیره‌شده؛ Client Secret فقط در Rust)
-        if (token && token.refresh_token && !hasNativeGoogleSignIn()) {
-            try {
-                const result = await tauriGoogleRefresh(token.refresh_token);
-                if (result && result.success) {
-                    // refresh_token را حفظ کن
-                    result.token.refresh_token = token.refresh_token;
-                    TokenStore.save(result.token);
-                    return result.token;
-                }
-            } catch (e) {
-                console.warn('رفرش توکن (Tauri):', e);
             }
         }
         // ورود جدید
@@ -412,11 +341,30 @@
             data = data.data;
         }
 
+        // ── نگهبانِ مالکیت (همان نگهبانِ وارد‌کردنِ فایلِ JSON) ────────────────────
+        //  پیش‌تر این مسیر از نگهبان رد نمی‌شد: همهٔ کلیدها مستقیم در localStorage
+        //  نوشته می‌شد و پس از reload، سینک صفر تا صدِ آن را به فضای ابریِ حسابِ
+        //  فعلی push می‌کرد — حتی اگر پشتیبان مالِ حسابِ دیگری بود. اکنون دقیقاً
+        //  مثلِ واردکردنِ فایلِ JSON تصمیم‌گیری می‌شود: فقط پشتیبانی که اثبات شود
+        //  مالِ همین حساب است اجازهٔ رفتن به ابر دارد.
+        const Guard = (typeof window !== 'undefined') ? window.JouyaImportGuard : null;
+        const savedSettings = (() => { try { return localStorage.getItem('settings'); } catch (e) { return null; } })();
+        let verdict = 'own';
+        if (Guard && typeof Guard.classify === 'function') {
+            try {
+                verdict = Guard.classify(data, savedSettings);
+                if (verdict === 'unknown' && typeof Guard.resolveUnknown === 'function') {
+                    verdict = Guard.resolveUnknown(data);
+                }
+            } catch (e) { verdict = 'foreign'; }   // در تردید، امن‌ترین حالت
+        }
+
         let count = 0;
         Object.keys(data).forEach(key => {
             try {
                 // فیلدهای metadata را skip کن
                 if (key === 'version' || key === 'exportDate' || key === 'success') return;
+                if (key === 'owner') return;   // شناسهٔ مالکِ فایل، داده نیست
                 const val = data[key];
                 if (val !== null && val !== undefined) {
                     localStorage.setItem(key, typeof val === 'string' ? val : JSON.stringify(val));
@@ -424,6 +372,12 @@
                 }
             } catch (e) {}
         });
+
+        if (verdict !== 'own' && Guard && typeof Guard.applyForeign === 'function') {
+            // اطلاعاتِ فروشگاهِ خودِ کاربر برمی‌گردد + ارسال به ابر خاموش می‌شود
+            // silent=true: پیامِ اختصاصیِ همین پنجرهٔ Google Drive نمایش داده می‌شود
+            try { Guard.applyForeign(savedSettings, true); } catch (e) {}
+        }
         return count;
     }
 
@@ -767,6 +721,22 @@
                 const actionBtns = document.getElementById('gdrive-action-btns');
                 if (progressWrap) progressWrap.style.display = 'none';
                 if (actionBtns) actionBtns.style.display = 'none';
+                // اگر پشتیبان مالِ این حساب نبود، نگهبان حالتِ فقط-محلی را روشن کرده است
+                let localOnlyNote = '';
+                try {
+                    const S = window.JouyaSync;
+                    if (S && typeof S.isLocalOnly === 'function' && S.isLocalOnly()) {
+                        localOnlyNote = `
+                        <div style="text-align:right;direction:rtl;background:#fffbeb;border:1px solid #fcd34d;
+                                    border-radius:10px;padding:10px 12px;margin:0 0 14px;color:#92400e;
+                                    font-size:12.5px;line-height:1.9;">
+                            <b>توجه:</b> این پشتیبان متعلق به حساب شما نیست.<br>
+                            اطلاعاتِ فروشگاهِ شما تغییر نکرد و <b>ارسال</b> به فضای ابری متوقف شد تا این
+                            داده‌ها واردِ حساب شما نشود. داده‌ها فقط روی همین دستگاه است و با
+                            <b>خروج از حساب</b> پاک می‌شود.
+                        </div>`;
+                    }
+                } catch (e) {}
                 if (resultBox) {
                     resultBox.style.display = 'block';
                     resultBox.innerHTML = `
@@ -776,6 +746,7 @@
                             تاریخ پشتیبان: <strong>${formatAfghanDateTime(backupData.backupDate)}</strong><br>
                             تعداد بخش‌های بازیابی‌شده: <strong>${count}</strong>
                         </p>
+                        ${localOnlyNote}
                         <button class="backup-close-btn" onclick="location.reload()" style="width:100%;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;border-radius:11px;padding:12px;font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;">بارگذاری مجدد صفحه</button>
                     `;
                 }
