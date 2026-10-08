@@ -40075,7 +40075,21 @@ function ndUpdRunWebAndroidInstall(url) {
         }, 800);
     };
 
-    // ── دانلود با نمایشِ پیشرفتِ واقعی ──
+    // ── اندروید: دانلودِ «نیتیو» (نه fetch) ──────────────────────────────────────
+    //  چرا fetch کار نمی‌کرد: صفحهٔ برنامه در WebView روی مبدأِ localhost اجرا می‌شود و
+    //  فایلِ ریلیزِ گیت‌هاب مبدأِ دیگری است؛ بدونِ هدرهای CORS مرورگرِ داخلی درخواست را
+    //  همان اول رد می‌کرد و برنامه ناچار به مرورگر برمی‌گشت. دانلودِ نیتیوِ افزونهٔ
+    //  Filesystem از لایهٔ جاوا انجام می‌شود، پس اصلاً درگیرِ CORS نیست و پیشرفتِ واقعی
+    //  هم می‌دهد. در پایان، نصب‌کنندهٔ اندروید مستقیم از داخلِ برنامه باز می‌شود.
+    if (isAndroid) {
+        __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, function (err) {
+            try { console.warn('[nd-upd] native android update failed:', err && err.message); } catch (e) {}
+            legacyFallback('دانلودِ درون‌برنامه‌ای ممکن نشد؛ دانلود از مرورگر ادامه می‌یابد.');
+        });
+        return true;
+    }
+
+    // ── وب: دانلود با نمایشِ پیشرفتِ واقعی ──
     var started = false;
     try {
         fetch(url, { cache: 'no-store' }).then(function (res) {
@@ -40110,6 +40124,88 @@ function ndUpdRunWebAndroidInstall(url) {
     return true;
 }
 if (typeof window !== 'undefined') window.ndUpdRunWebAndroidInstall = ndUpdRunWebAndroidInstall;
+
+// ── گرفتنِ شیءِ افزونهٔ Capacitor (چند مسیرِ دسترسی، مثلِ __jouyaAndCall) ──────────
+function __hbAndPlugin(name) {
+    var C = window.Capacitor;
+    if (!C) return null;
+    try { if (C.Plugins && C.Plugins[name]) return C.Plugins[name]; } catch (e) {}
+    try {
+        if (typeof C.registerPlugin === 'function') {
+            if (!__jouyaAndRegCache[name]) __jouyaAndRegCache[name] = C.registerPlugin(name);
+            return __jouyaAndRegCache[name];
+        }
+    } catch (e) {}
+    return null;
+}
+
+// ── بازکردنِ نصب‌کنندهٔ اندروید برای فایلِ APK ─────────────────────────────────────
+//  ۱) FileOpener → نصب‌کنندهٔ بسته مستقیم باز می‌شود (حالتِ مطلوب).
+//  ۲) اگر افزونه نبود → پنلِ اشتراکِ سیستم، که «نصب‌کنندهٔ بسته» در آن هست.
+function __hbAndroidOpenApk(uri) {
+    if (!uri) return Promise.reject(new Error('نشانیِ فایل نامعتبر است'));
+    var APK = 'application/vnd.android.package-archive';
+    return __jouyaAndCall('FileOpener', 'open', { filePath: uri, contentType: APK })
+        .catch(function () { return __jouyaAndCall('FileOpener', 'open', { filePath: uri, fileMimeType: APK }); })
+        .catch(function () { return __jouyaAndCall('Share', 'share', { title: 'نصب بروزرسانی', url: uri }); });
+}
+
+// ── دانلود + نصبِ کاملاً درون‌برنامه‌ای در اندروید ────────────────────────────────
+function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
+    var FS = __hbAndPlugin('Filesystem');
+    if (!FS || typeof FS.downloadFile !== 'function') {
+        onFail(new Error('Filesystem.downloadFile در دسترس نیست'));
+        return;
+    }
+
+    // شنوندهٔ پیشرفتِ نیتیو (افزونه هنگامِ progress:true رویداد می‌فرستد)
+    var subHandle = null;
+    try {
+        if (typeof FS.addListener === 'function') {
+            var r = FS.addListener('progress', function (p) {
+                var total = (p && (p.contentLength || p.total)) || 0;
+                var got = (p && (p.bytes || p.loaded)) || 0;
+                if (total > 0) setPct(Math.round(got * 100 / total));
+                else if (got > 0) note('دریافت‌شده: ' + Math.round(got / 1048576) + ' مگابایت');
+            });
+            if (r && typeof r.then === 'function') r.then(function (h) { subHandle = h; }).catch(function () {});
+            else subHandle = r;
+        }
+    } catch (e) {}
+    var cleanup = function () { try { if (subHandle && typeof subHandle.remove === 'function') subHandle.remove(); } catch (e) {} };
+
+    // چند پوشه به‌ترتیب امتحان می‌شود تا روی همهٔ نسخه‌های اندروید بنویسد
+    var DIRS = ['CACHE', 'EXTERNAL', 'DOCUMENTS', 'DATA'];
+    var tryDir = function (i) {
+        if (i >= DIRS.length) return Promise.reject(new Error('ذخیرهٔ فایلِ بروزرسانی ممکن نشد'));
+        return Promise.resolve(FS.downloadFile({
+            url: url, path: fileName, directory: DIRS[i], progress: true, recursive: true
+        })).then(function (res) { return { dir: DIRS[i], res: res }; })
+          .catch(function () { return tryDir(i + 1); });
+    };
+
+    note('در حال دانلود…');
+    tryDir(0).then(function (d) {
+        cleanup();
+        setPct(100);
+        note('در حال بازکردنِ نصب‌کننده…');
+        return Promise.resolve(__jouyaAndCall('Filesystem', 'getUri', { path: fileName, directory: d.dir }))
+            .then(function (u) { return (u && (u.uri || u.path)) || (d.res && (d.res.uri || d.res.path)) || ''; })
+            .catch(function () { return (d.res && (d.res.uri || d.res.path)) || ''; });
+    }).then(function (uri) {
+        return __hbAndroidOpenApk(uri).then(function () { return uri; });
+    }).then(function () {
+        setTimeout(function () {
+            closeOv();
+            ndUpdSetStatus('بروزرسانی دانلود شد و نصب آغاز شد. «نصب» را تأیید کنید؛ ' +
+                'روی نسخهٔ فعلی نصب می‌شود و اطلاعاتِ شما دست‌نخورده می‌ماند.' +
+                '<br><small>اگر اندروید اجازه خواست، «نصب برنامه‌های ناشناس» را برای حسابدار فعال کنید.</small>', 'ok');
+        }, 700);
+    }).catch(function (err) {
+        cleanup();
+        onFail(err);
+    });
+}
 function ndUpdSaveRepo() {
     var el = document.getElementById('nd-upd-repo');
     ndUpdSetRepo(el ? el.value : '');
