@@ -177,6 +177,9 @@
     // push تعارض‌های همگام‌نشده به ابر (upsert idempotent روی workspace_id,conflict_key).
     var _pushingConflicts = false;
     function pushConflicts() {
+        // در حالتِ «فقط محلی» هیچ چیز بالا نمی‌رود — لاگِ تعارض هم نسخه‌ای از رکوردِ
+        // محلی (losing) را حمل می‌کند، پس همین‌جا هم متوقف می‌شود.
+        if (isLocalOnly()) return Promise.resolve();
         if (_pushingConflicts || !workspaceId || (typeof navigator !== 'undefined' && navigator && navigator.onLine === false)) return Promise.resolve();
         var arr = readConflicts();
         var pending = arr.filter(function (x) { return !x.synced; });
@@ -570,13 +573,23 @@
     //  حالتِ «فقط محلی» (Local-Only)
     //  ---------------------------------------------------------------------
     //  وقتی کاربر یک فایلِ پشتیبانِ متعلق به «حسابِ دیگری» را وارد می‌کند، آن داده‌ها
-    //  نباید به فضای ابریِ حسابِ فعلی برود. این حالت push و pull را به‌طور کامل متوقف
-    //  می‌کند تا دادهٔ بیگانه نه بالا برود و نه با دادهٔ ابریِ حساب قاطی شود.
+    //  نباید به فضای ابریِ حسابِ فعلی برود.
     //
-    //  پرچم عمداً در localStorage است تا با بستن و باز کردنِ برنامه هم برقرار بماند؛
-    //  وگرنه در اجرای بعدی سینک روشن می‌شد و همان داده را بالا می‌فرستاد.
-    //  فقط جایی پاک می‌شود که دادهٔ محلی واقعاً حذف شده باشد: پاک‌سازی محلی، خروجِ
-    //  کامل، یا تعویضِ کاربر. پس هرگز با دادهٔ بیگانهٔ باقی‌مانده سینک از سر گرفته نمی‌شود.
+    //  ⚠ اصلاحِ ریشه‌ای (باگِ «حساب خالی باز می‌شود»):
+    //  نسخهٔ قبلی این حالت، هم push و هم pull (و حتی startLoops) را متوقف می‌کرد. چون
+    //  bootstrap خودش روی pullNow ساخته شده، ورودِ صریحِ کاربر هم هیچ چیزی از ابر دانلود
+    //  نمی‌کرد؛ و چون پرچم در localStorage می‌ماند، این وضعیت دائمی می‌شد → کاربر حسابِ
+    //  خودش را «بدونِ هیچ داده و بدونِ اطلاعاتِ فروشگاه» می‌دید، در حالی که داده‌اش در ابر
+    //  سالم بود. ورود/خروجِ عادی هم پرچم را پاک نمی‌کرد، پس راهِ برگشتی از رابط نبود.
+    //
+    //  منطقِ درست: نشتِ داده فقط از سمتِ «آپلود» ممکن است. «دانلود» از ابرِ خودِ کاربر
+    //  هرگز چیزی را فاش نمی‌کند — فقط دادهٔ خودِ او را برمی‌گرداند. پس از این پس:
+    //    • push  (و pushِ تعارض‌ها) در این حالت کاملاً متوقف است → دادهٔ بیگانه هرگز بالا نمی‌رود.
+    //    • pull / startLoops / Realtime عادی کار می‌کنند → حسابِ کاربر هرگز خالی نمی‌ماند.
+    //  پرچم همچنان در localStorage است تا با بستن برنامه هم برقرار بماند، و در هر جایی که
+    //  دادهٔ محلی واقعاً پاک شده باشد (پاک‌سازی محلی، خروجِ کامل، تعویضِ کاربر) برداشته می‌شود.
+    //  به‌علاوه maybeReleaseLocalOnly() یک شبکهٔ ایمنی است: اگر دیگر هیچ دادهٔ کسب‌وکاری
+    //  روی دستگاه نمانده باشد، چیزی برای محافظت نیست و حالت خودکار آزاد می‌شود.
     // ═══════════════════════════════════════════════════════════════════════
     var LOCAL_ONLY_KEY = 'jouya_sync_localonly';
     function isLocalOnly() { try { return !!LS_get(LOCAL_ONLY_KEY); } catch (e) { return false; } }
@@ -584,14 +597,37 @@
         try {
             if (on) {
                 LS_set(LOCAL_ONLY_KEY, JSON.stringify({ reason: reason || '', at: nowIso() }));
-                stopLoops();
-                warn('حالتِ «فقط محلی» فعال شد — سینک متوقف است:', reason || '');
+                // تایمرِ معلقِ push را لغو کن تا تغییرِ لحظهٔ قبل بالا نرود. حلقه‌ها را
+                // عمداً متوقف نمی‌کنیم: pull باید زنده بماند تا حساب خالی نشود.
+                try { if (typeof window !== 'undefined') { clearTimeout(window._syncPushDebounce); window._syncPushDebounce = null; } } catch (e) {}
+                try { if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; } } catch (e) {}
+                warn('حالتِ «فقط محلی» فعال شد — آپلود به ابر متوقف است (دانلود فعال می‌ماند):', reason || '');
             } else {
                 try { localStorage.removeItem(LOCAL_ONLY_KEY); } catch (e) {}
-                log('حالتِ «فقط محلی» خاموش شد — سینک دوباره مجاز است.');
+                log('حالتِ «فقط محلی» خاموش شد — آپلود دوباره مجاز است.');
             }
         } catch (e) {}
         return isLocalOnly();
+    }
+    // آیا هنوز دادهٔ کسب‌وکاری روی این دستگاه هست؟ (برای تصمیمِ آزادسازیِ حالتِ فقط‌محلی)
+    function hasLocalBusinessData() {
+        try {
+            var c = localCounts(), t;
+            for (t in c) { if (Object.prototype.hasOwnProperty.call(c, t) && c[t] > 0) return true; }
+        } catch (e) {}
+        return false;
+    }
+    // شبکهٔ ایمنی: اگر حالتِ فقط‌محلی روشن است ولی هیچ دادهٔ محلی نمانده، دیگر دادهٔ
+    // بیگانه‌ای برای محافظت وجود ندارد → حالت آزاد می‌شود تا سینک کاملاً عادی شود.
+    function maybeReleaseLocalOnly() {
+        try {
+            if (isLocalOnly() && !hasLocalBusinessData()) {
+                setLocalOnly(false);
+                log('حالتِ «فقط محلی» خودکار آزاد شد: دادهٔ محلی خالی است.');
+                return true;
+            }
+        } catch (e) {}
+        return false;
     }
     // preview فقط شمارشِ unsynced را می‌دهد (بدونِ تغییر). UI پیش از Wipe هشدار می‌دهد.
     function previewLocalOnlyWipe(keys) { return { unsynced: countUnsyncedForKeys(keys || []) }; }
@@ -754,7 +790,9 @@
 
     var _pullInFlight = false;
     function pullNow() {
-        if (isLocalOnly()) return Promise.resolve(0);    // حالتِ «فقط محلی»: چیزی از ابر کشیده نمی‌شود
+        // ⚠ عمداً هیچ گاردِ «فقط محلی» این‌جا نیست: دانلود از ابرِ خودِ کاربر هرگز داده‌ای
+        // را فاش نمی‌کند و متوقف‌کردنش باعثِ «حسابِ خالی» می‌شد (bootstrap هم روی همین
+        // تابع ساخته شده). محافظت فقط در pushNow/pushConflicts اعمال می‌شود.
         if (!online || !workspaceId) return Promise.resolve(0);
         if (_pullInFlight) return Promise.resolve(0);   // از هم‌پوشانیِ pullها جلوگیری کن
         _pullInFlight = true;
@@ -941,8 +979,10 @@
 
     function startLoops() {
         stopLoops();
-        if (isLocalOnly()) { warn('سینک در حالتِ «فقط محلی» است و شروع نمی‌شود.'); return; }
         if (!CFG.liveSyncEnabled || !workspaceId) return;
+        // حلقه‌ها حتی در حالتِ «فقط محلی» شروع می‌شوند تا دانلود (pull/Realtime) زنده بماند
+        // و حسابِ کاربر خالی نماند؛ خودِ pushNow در آن حالت چیزی بالا نمی‌فرستد.
+        if (isLocalOnly()) warn('حالتِ «فقط محلی»: فقط دانلود فعال است — آپلود متوقف می‌ماند.');
         // یک pull اولیه، سپس Realtime (مسیرِ اصلیِ لحظه‌ای) + polling تطبیقیِ کم‌مصرف (fallback)
         pullNow();
         connectRealtime();   // مسیرِ اصلیِ به‌روزرسانیِ لحظه‌ای
@@ -1071,6 +1111,11 @@
         workspaceId = wsId;
         LS_set('jouya_sync_workspace', wsId);
         log('bootstrap برای', wsId, '(اول دانلود، بعد آپلود)');
+        // ۰) شبکهٔ ایمنی: اگر دستگاه در حالتِ «فقط محلی» مانده ولی دادهٔ محلی خالی است،
+        //    دیگر دادهٔ بیگانه‌ای نیست که محافظت شود → حالت آزاد شود تا آپلود هم عادی شود.
+        //    (دانلود در هر حالت انجام می‌شود، پس ورود هرگز به حسابِ خالی منتهی نمی‌شود.)
+        try { maybeReleaseLocalOnly(); } catch (e) {}
+        if (isLocalOnly()) warn('bootstrap در حالتِ «فقط محلی»: دانلود انجام می‌شود، آپلود نه.');
         // ۱) دانلودِ کاملِ ابر از ابتدا → داده‌های ابری وارد لوکال می‌شوند (فقط افزودن/به‌روزرسانی).
         LS_set(CURSOR_KEY, '1970-01-01T00:00:00Z');
         return pullNow().then(function (downloaded) {
@@ -1195,9 +1240,12 @@
         previewLocalOnlyWipe: previewLocalOnlyWipe,
         // پاکسازی پیشرفته (خالی‌کردنِ دادهٔ کسب‌وکار از فضای ابری؛ اکانت/لایسنس/workspace می‌مانند)
         cloudWipe: cloudWipe,
-        // حالتِ «فقط محلی» — پس از وارد کردنِ فایلِ پشتیبانِ حسابِ دیگر
+        // حالتِ «فقط محلی» — پس از وارد کردنِ فایلِ پشتیبانِ حسابِ دیگر.
+        // در این حالت فقط «آپلود» متوقف است؛ دانلود از ابرِ خودِ کاربر همیشه فعال می‌ماند.
         isLocalOnly: isLocalOnly,
         setLocalOnly: setLocalOnly,
+        hasLocalBusinessData: hasLocalBusinessData,
+        maybeReleaseLocalOnly: maybeReleaseLocalOnly,
         // مجموعه‌های آمادهٔ کلیدها (منبعِ واحدِ حقیقت برای دکمه‌های سایدبار):
         ALL_BUSINESS_KEYS: COLLECTIONS.map(function (c) { return c.key; }).concat(['jouya-reference-rates', 'dashboardStats', 'backupHistory', 'activeWarehouseId', 'cashboxTypes']),
         PERSONS_KEYS: ['persons'],
