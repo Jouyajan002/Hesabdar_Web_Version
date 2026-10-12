@@ -941,6 +941,34 @@ function _fifoItemBase(it) {
     return { baseQty: qty, perBase: price };
 }
 
+// بهای واحدِ «قفل‌شده روی خودِ قلمِ بلِ فروش» (snapshotِ لحظهٔ ثبت، نوشتهٔ _saleCostSnapshot).
+// فقط وقتی به کار می‌رود که جدولِ اجناس بهایی ندهد (جنس حذف شده یا قیمت خرید ندارد).
+// عمداً فقط فیلدهایی خوانده می‌شود که قطعاً «قیمتِ خرید» هستند؛ landedUnitCost خوانده
+// نمی‌شود چون روی اقلامِ خرید معنا دارد نه فروش. مقدار همیشه بهای «یک واحدِ اصلی» است،
+// دقیقاً هم‌واحد با bo.remaining، پس هیچ تبدیلِ ضریبی لازم نیست.
+function _saleItemLockedCost(ev, cur) {
+    try {
+        var tx = ev && ev.saleTx;
+        if (!tx || !Array.isArray(tx.items) || ev.itemIndex == null) return 0;
+        var it = tx.items[ev.itemIndex];
+        if (!it || it.isService) return 0;
+        var v;
+        if (it.purchasePrices && typeof it.purchasePrices === 'object' && it.purchasePrices[cur] != null) {
+            v = parseFloat(it.purchasePrices[cur]);
+            if (!isNaN(v) && v > 0) return v;
+        }
+        if (cur === 'AFN' && it.purchasePriceAFN != null) {
+            v = parseFloat(it.purchasePriceAFN);
+            if (!isNaN(v) && v > 0) return v;
+        }
+        if (cur === 'USD' && it.purchasePriceUSD != null) {
+            v = parseFloat(it.purchasePriceUSD);
+            if (!isNaN(v) && v > 0) return v;
+        }
+        return 0;
+    } catch (e) { return 0; }
+}
+
 function _computeFifoProfitMaps() {
     var saleMap = {};       // { saleId: مفادِ کلِ بل به «ارزِ سند» }  ← سازگارِ کامل با کدِ فعلی
     var itemMap = {};       // { 'saleId|idx': مفادِ قلم به «ارزِ سند» }
@@ -1225,6 +1253,19 @@ function _computeFifoProfitMaps() {
                 // قیمتِ خریدِ فعلیِ جنس در ارزِ فروش — از حل‌کنندهٔ مرکزی (map-first)، بدونِ هاردکد.
                 var _p = prodById[pid];
                 var cst = (_p && typeof db !== 'undefined' && db.getPurchasePrice) ? (parseFloat(db.getPurchasePrice(_p, _c)) || 0) : 0;
+                // ── تنها اصلاحِ این بخش ──────────────────────────────────────────
+                //  اگر جنس دیگر در جدولِ اجناس نباشد (حذف‌شده، یا tombstoneِ آمده از ابر)
+                //  یا قیمتِ خریدش ثبت نشده باشد، بها صفر می‌ماند و تمامِ مبلغِ فروش به‌عنوان
+                //  «مفاد» شمرده می‌شود — همان چیزی که مفاد را چند برابر نشان می‌داد.
+                //  خودِ برنامه هنگامِ ثبتِ فروش قیمتِ خرید را با _saleCostSnapshot روی همان
+                //  قلمِ بل قفل می‌کند؛ پس همان نسخهٔ قفل‌شده خوانده می‌شود. این دقیقاً همان
+                //  الگویی است که مسیرِ «برگشت از فروش» در بالای همین تابع به کار می‌برد
+                //  (اول قیمتِ روی قلم، بعد جدولِ اجناس) — پس قاعدهٔ تازه‌ای وضع نمی‌شود.
+                //  فقط حالتی را پر می‌کند که امروز صفر است؛ هیچ محاسبهٔ سالمی عوض نمی‌شود.
+                if (!(cst > 0)) {
+                    var _snapCost = _saleItemLockedCost(bo.ev, _c);
+                    if (_snapCost > 0) cst = _snapCost;
+                }
                 bo.ev.costAcc += cst * bo.remaining;
                 // معادلِ همان بها به ارزِ مرجع، با نرخِ سندِ فروش (نه نرخِ روز).
                 var _cb = _toBaseAt(cst, bo.ev.saleTx || { currency: _c });
