@@ -10081,21 +10081,70 @@ body.dark-mode .pf-del-field-btn { background: rgba(248,113,113,.16); color: #f8
 body.hb-trial-on { padding-top: 40px; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   نتیجهٔ «فعال» هنگامِ پیمایش با کلیدهای جهت‌دار (↑ ↓ Enter Esc)
-   همان رنگِ hoverِ موجودِ فهرست‌ها تا تجربه یکدست بماند.
+   نتایجِ جستجو — حالتِ «زیرِ موس» و «انتخاب‌شده با کلیدهای جهت‌دار»
+   ---------------------------------------------------------------------------
+   ریشهٔ ناخوانایی در حالتِ تاریک: دراپ‌داونِ اجناس یک قاعدهٔ hoverِ روشن را در
+   زمانِ اجرا با !important به صفحه تزریق می‌کند (background:#f0f7ff)، و از آن
+   طرف قاعدهٔ تاریکِ برنامه رنگِ متن را روشن می‌کند؛ نتیجه «متنِ سفید روی زمینهٔ
+   سفید» بود. این‌جا برای حالتِ تاریک هم hover و هم انتخابِ کیبوردی با ویژگیِ
+   بالاتر بازنویسی می‌شود تا زمینه تیره و متن روشن بماند. در حالتِ روشن هم رنگِ
+   انتخاب یکدست با hoverِ موجود است. فقط رنگ — هیچ چیدمان یا منطقی عوض نمی‌شود.
    ═══════════════════════════════════════════════════════════════════════════ */
+/* ── حالتِ روشن ── */
 .hb-kb-active,
 .product-search-result-item.hb-kb-active,
 .search-item.hb-kb-active,
 .nd-sr-item.hb-kb-active {
     background: #e0efff !important;
     box-shadow: inset 3px 0 0 #2563eb;
-    border-radius: 4px;
 }
+.search-results-list .search-item:hover,
+.search-results .search-item:hover { background: #f0f7ff; }
+
+/* ── حالتِ تاریک: زمینهٔ تیره + متنِ روشن (هم موس، هم کیبورد) ── */
+body.dark-mode .product-search-results .product-search-result-item:hover,
+body.dark-mode .product-search-result-item:hover,
+body.dark-mode .search-results-list .search-item:hover,
+body.dark-mode .search-results .search-item:hover,
+body.dark-mode .nd-search-results .nd-sr-item:hover,
+body.dark-mode .wh-search-results > *:hover {
+    background: #334155 !important;
+    color: #f1f5f9 !important;
+}
+body.dark-mode .product-search-results .product-search-result-item:hover *,
+body.dark-mode .search-results-list .search-item:hover *,
+body.dark-mode .search-results .search-item:hover *,
+body.dark-mode .nd-search-results .nd-sr-item:hover * { color: #f1f5f9 !important; }
+
 body.dark-mode .hb-kb-active,
+body.dark-mode .product-search-results .product-search-result-item.hb-kb-active,
 body.dark-mode .product-search-result-item.hb-kb-active,
-body.dark-mode .search-item.hb-kb-active,
-body.dark-mode .nd-sr-item.hb-kb-active {
-    background: rgba(37, 99, 235, .30) !important;
-    box-shadow: inset 3px 0 0 #60a5fa;
+body.dark-mode .search-results-list .search-item.hb-kb-active,
+body.dark-mode .search-results .search-item.hb-kb-active,
+body.dark-mode .nd-search-results .nd-sr-item.hb-kb-active {
+    background: #1d4ed8 !important;
+    color: #ffffff !important;
+    box-shadow: inset 3px 0 0 #93c5fd;
 }
+/*  ویژگی عمداً بالا گرفته شده تا بر قاعدهٔ «رنگِ فرزندانِ نتیجه» پایین‌تر غلبه کند،
+    وگرنه متنِ نتیجهٔ انتخاب‌شده خاکستری می‌ماند و روی زمینهٔ آبی کم‌کنتراست می‌شود. */
+body.dark-mode .hb-kb-active *,
+body.dark-mode .search-results-list .search-item.hb-kb-active *,
+body.dark-mode .search-results .search-item.hb-kb-active *,
+body.dark-mode .product-search-results .product-search-result-item.hb-kb-active *,
+body.dark-mode .nd-search-results .nd-sr-item.hb-kb-active * { color: #ffffff !important; }
+
+/* ظرفِ فهرست‌ها در حالتِ تاریک (ظرفِ اجناس استایلِ درون‌خطی دارد، پس !important لازم است) */
+body.dark-mode .search-results-list,
+body.dark-mode .wh-search-results,
+body.dark-mode #_psr_body_dd {
+    background: #1e293b !important;
+    border-color: rgba(255, 255, 255, .16) !important;
+}
+body.dark-mode .search-results-list .search-item,
+body.dark-mode .search-results .search-item {
+    color: #e2e8f0 !important;
+    border-bottom-color: rgba(255, 255, 255, .10) !important;
+}
+body.dark-mode .search-results-list .search-item *,
+body.dark-mode .search-results .search-item * { color: #cbd5e1 !important; }

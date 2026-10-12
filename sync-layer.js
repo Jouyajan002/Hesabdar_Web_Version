@@ -75,6 +75,29 @@
         return keys;
     }
 
+    // ── فهرست‌هایی که «خودِ کاربر» می‌سازد ──────────────────────────────────────
+    //  کتگوری جنس (اصلی/فرعی)، واحد شمارش (اصلی/فرعی)، کتگوری شخص، کتگوری مصرف و
+    //  فیلدهای دلخواهِ جنس. این‌ها دادهٔ کاربرند، نه پیکربندیِ دستگاه؛ پس:
+    //    • با فضای ابریِ همان حساب همگام می‌شوند (از مسیرِ store_settings)،
+    //    • و در «حذف دیتابیس»، «ریسیت کامل» و «پاکسازی پیشرفته» باید کامل پاک شوند.
+    //  عمداً شاملِ 'settings' (اطلاعاتِ فروشگاه) و 'jouya-reference-rates' نیست؛ و
+    //  cashboxTypes (نوعیتِ حساب) هم که پیش‌فرضِ سیستم است دست‌نخورده می‌ماند.
+    function userListKeys() {
+        //  jouya-asset-kinds و cashboxTypes عمداً این‌جا نیستند: آن‌ها پیش‌فرضِ خودِ سیستم‌اند
+        //  (CurrencySystem اگر نباشند دوباره می‌سازدشان)، پس «حذف»شان بی‌معنا و گمراه‌کننده است.
+        var base = ['customProductCategories', 'customProductSubCategories',
+                    'customProductUnits', 'customPersonCategories', 'customExpenseCategories',
+                    'customExpenseCategoriesRemoved', 'customProductFields'];
+        var out = base.slice();
+        try {
+            for (var i = 0; i < localStorage.length; i++) {
+                var k = localStorage.key(i);
+                if (k && k.indexOf('customProductSubCategories_') === 0 && out.indexOf(k) === -1) out.push(k);
+            }
+        } catch (e) {}
+        return out;
+    }
+
     // ── کاهشِ مصرفِ پهنای‌باندِ سوپابیس (Egress) ──────────────────────────────────
     // قبلاً polling هر ۱٫۵ ثانیه بود و در هر چرخه ۱۴ درخواست (برای ۱۴ جدول) می‌فرستاد؛
     // یعنی ~۹ درخواست در ثانیه، همیشه و برای هر دستگاه — همین سقفِ رایگانِ Egress را سریع
@@ -529,6 +552,19 @@
                 metaByRid[rid] = { id: k, h: h, deleted: false };
             }
         });
+        // ── حذفِ یک فهرست/کتگوری هم باید به ابر برسد ───────────────────────────
+        //  پیش‌تر فقط «وجودِ» کلیدها بررسی می‌شد و حلقه با return از کلیدِ حذف‌شده
+        //  رد می‌شد؛ پس وقتی کاربر یک کتگوری/واحد را پاک می‌کرد، ردیفِ ابری دست‌نخورده
+        //  می‌ماند و اولین pull همان را دوباره روی دستگاه برمی‌گرداند. حالا کلیدی که
+        //  در snapshot هست ولی دیگر در localStorage نیست، به‌صورتِ tombstone بالا
+        //  می‌رود تا روی همهٔ دستگاه‌های همان حساب هم حذف شود.
+        Object.keys(prev).forEach(function (k) {
+            if (LS_get(k) != null) return;                       // هنوز هست
+            if (prev[k] && prev[k].deleted) return;              // قبلاً tombstone شده
+            var rid = (prev[k] && prev[k].rid) ? prev[k].rid : ('setting:' + k);
+            rows.push({ workspace_id: workspaceId, record_id: rid, data: {}, deleted_at: nowIso(), device_key: shortDevice() });
+            metaByRid[rid] = { id: k, h: '', deleted: true };
+        });
         if (!rows.length) return null;
         return { table: STORE_SETTINGS_TABLE, key: '__settings__', rows: rows, metaByRid: metaByRid };
     }
@@ -682,6 +718,24 @@
                   .then(function () { return step(i + 1); });
             };
             return step(0).then(function () {
+                // ── فهرست‌های ساختهٔ کاربر هم باید از ابر پاک شوند ────────────────
+                //  کتگوری جنس/شخص/مصرف، واحدهای شمارش و فیلدهای دلخواه در جدولِ
+                //  store_settings می‌نشینند، نه در جدول‌های دادهٔ کسب‌وکار؛ پس حلقهٔ بالا
+                //  آن‌ها را پاک نمی‌کرد و پس از «پاکسازی پیشرفته» اولین pull دوباره
+                //  همه را برمی‌گرداند. فقط همین ردیف‌ها tombstone می‌شوند — ردیفِ
+                //  «اطلاعاتِ فروشگاه» (setting:settings) عمداً دست‌نخورده می‌ماند.
+                var rids = userListKeys().map(function (k) { return 'setting:' + k; });
+                if (!rids.length) return;
+                var inList = '(' + rids.map(function (r) { return '"' + r + '"'; }).join(',') + ')';
+                var q = '/rest/v1/' + STORE_SETTINGS_TABLE +
+                        '?workspace_id=eq.' + encodeURIComponent(workspaceId) +
+                        '&record_id=in.' + encodeURIComponent(inList);
+                return Sb.req(q, {
+                    method: 'PATCH',
+                    headers: { 'Prefer': 'return=minimal' },
+                    body: { data: {}, deleted_at: stamp, device_key: dk }
+                }).catch(function (e) { failed.push(STORE_SETTINGS_TABLE + ' (' + ((e && e.message) || e) + ')'); });
+            }).then(function () {
                 // لاگِ تعارض‌های ابری هم نسخه‌هایی از رکوردهای مالیِ کاربر را نگه می‌دارد → پاک شود
                 return Sb.req('/rest/v1/' + CONFLICT_TABLE + '?workspace_id=eq.' + encodeURIComponent(workspaceId),
                     { method: 'DELETE', headers: { 'Prefer': 'return=minimal' } }).catch(function () {});
@@ -713,6 +767,15 @@
                 //    این رکوردها را «حذف‌شده» نمی‌بیند → هیچ deleted_at/Delete برای Cloud نمی‌سازد.
                 var snap = snapRead();
                 keys.forEach(function (k) { var t = TABLE_BY_KEY[k]; if (t && snap[t]) delete snap[t]; });
+                // کلیدهای «تنظیماتی» (کتگوری/واحد/فیلدهای دلخواه) جدولِ اختصاصی ندارند و در
+                // store_settings می‌نشینند. اگر ورودیِ snapshotِ آن‌ها بماند، detectSettingsChanges
+                // نبودشان را «حذفِ کاربر» می‌بیند و برای ابر tombstone می‌سازد — در حالی که این
+                // عملیات عمداً «فقط محلی» است و ابر باید دست‌نخورده بماند. پس این‌جا هم پاک می‌شوند.
+                if (snap[STORE_SETTINGS_TABLE]) {
+                    keys.forEach(function (k) {
+                        if (!TABLE_BY_KEY[k] && snap[STORE_SETTINGS_TABLE][k]) delete snap[STORE_SETTINGS_TABLE][k];
+                    });
+                }
                 snapWrite(snap);
                 // ۴) outbox/pending را برای ایمنی خالی کن (در مسیرِ push استفاده نمی‌شود ولی محضِ احتیاط).
                 try { outWrite([]); } catch (e) {}
@@ -973,8 +1036,11 @@
                 }
                 LS_set(k, JSON.stringify(incomingVal));
                 applied++;
+            } else if (r.deleted_at && k) {
+                // tombstone: همان کتگوری/واحد روی دستگاهِ دیگر حذف شده → این‌جا هم برود
+                if (LS_get(k) != null) { try { localStorage.removeItem(k); } catch (e) {} applied++; }
             }
-            snap[STORE_SETTINGS_TABLE][k] = { rid: r.record_id, h: recHash(r.data), rev: r.revision, u: r.updated_at };
+            snap[STORE_SETTINGS_TABLE][k] = { rid: r.record_id, h: recHash(r.data), rev: r.revision, u: r.updated_at, deleted: !!r.deleted_at };
         });
         return applied;
     }
@@ -1276,6 +1342,9 @@
         maybeReleaseLocalOnly: maybeReleaseLocalOnly,
         // مجموعه‌های آمادهٔ کلیدها (منبعِ واحدِ حقیقت برای دکمه‌های سایدبار):
         ALL_BUSINESS_KEYS: COLLECTIONS.map(function (c) { return c.key; }).concat(['jouya-reference-rates', 'dashboardStats', 'backupHistory', 'activeWarehouseId', 'cashboxTypes']),
+        // فهرست‌های ساختهٔ کاربر (کتگوری/واحد/فیلدهای دلخواه) — تابع است چون کلیدهای
+        // کتگوریِ فرعی پویا هستند و باید در لحظه خوانده شوند.
+        userListKeys: userListKeys,
         PERSONS_KEYS: ['persons'],
 
         // بررسیِ مهاجرت: هم شمارش و هم «هویتِ رکوردها» (record_id) را Verify می‌کند — نه فقط تعداد.

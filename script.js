@@ -5223,6 +5223,8 @@ function showPersonForm(personId = null, opts = null) {
         if (currentVal) personCatSelect.value = currentVal;
         // افزودن کتگوری از داخل خود دراپ‌داون (مثل فرم ثبت جنس) — بدون دکمهٔ + جداگانه
         setupProductAddSelect(personCatSelect, 'customPersonCategories', 'کتگوری شخص');
+        // دکمهٔ ✕ برای حذفِ کتگوریِ ساختهٔ کاربر (کتگوری‌های پایهٔ سیستم دکمه نمی‌گیرند)
+        if (typeof setupSelectDeleteBtn === 'function') setupSelectDeleteBtn(personCatSelect, 'customPersonCategories', 'کتگوری شخص');
     }
     
     if (personId) {
@@ -7783,6 +7785,7 @@ function initProductForm() {
         
         // افزودن مقدار از داخل خود دراپ‌داون (به‌جای دکمهٔ + جداگانه)
         setupProductAddSelect(mainCategorySelect, 'customProductCategories', 'گتگوری');
+        if (typeof setupSelectDeleteBtn === 'function') setupSelectDeleteBtn(mainCategorySelect, 'customProductCategories', 'کتگوری');
     }
     
     // رویداد تغییر دسته‌بندی اصلی
@@ -7816,6 +7819,7 @@ function initProductForm() {
             unitSelect.value = currentUnitVal;
         }
         setupProductAddSelect(unitSelect, 'customProductUnits', 'واحد شمارش');
+        if (typeof setupSelectDeleteBtn === 'function') setupSelectDeleteBtn(unitSelect, 'customProductUnits', 'واحد شمارش');
     }
 
     // واحد شمارش فرعی — همان لیست واحدهای سفارشی
@@ -7839,6 +7843,7 @@ function initProductForm() {
             secondaryUnitSelect.value = currentSecUnitVal;
         }
         setupProductAddSelect(secondaryUnitSelect, 'customProductUnits', 'واحد شمارش(فرعی)');
+        if (typeof setupSelectDeleteBtn === 'function') setupSelectDeleteBtn(secondaryUnitSelect, 'customProductUnits', 'واحد شمارش(فرعی)');
     }
 
     // بارگذاری تامین‌کنندگان (در صورت موجود بودن فیلد)
@@ -7891,6 +7896,7 @@ function updateSubCategories() {
     
     // افزودن مقدار از داخل خود دراپ‌داون (کتگوری فرعی)
     setupProductAddSelect(subCategorySelect, 'customProductSubCategories_' + mainCategory, 'کتگوری فرعی');
+    if (typeof setupSelectDeleteBtn === 'function') setupSelectDeleteBtn(subCategorySelect, 'customProductSubCategories_' + mainCategory, 'کتگوری فرعی');
 }
 
 // توابع مدیریت فرم فروش
@@ -27408,7 +27414,7 @@ function ssbClearAll() {
         // Local-Only Wipe: فقط داده‌های Localِ همین دستگاه پاک می‌شوند و هیچ Delete/Soft-Delete در
         // Cloud ساخته نمی‌شود (snapshot هم atomically پاک می‌شود تا detectChanges tombstone نسازد).
         if (window.JouyaSync && typeof window.JouyaSync.localOnlyWipe === 'function') {
-            var keys = window.JouyaSync.ALL_BUSINESS_KEYS;
+            var keys = __hbWipeKeys(true);   // دادهٔ کسب‌وکار + فهرست‌های ساختهٔ کاربر
             var pre = window.JouyaSync.previewLocalOnlyWipe ? window.JouyaSync.previewLocalOnlyWipe(keys) : { unsynced: 0 };
             if (pre.unsynced > 0 && !confirm(pre.unsynced + ' تغییرِ همگام‌نشده وجود دارد که فقط روی این دستگاه است و با پاک‌کردن از بین می‌رود (در فضای ابری نیست). ادامه می‌دهید؟')) return;
             window.JouyaSync.localOnlyWipe(keys).then(function () {
@@ -27426,6 +27432,41 @@ function ssbClearAll() {
     } catch(e) { ssbShowMsg('خطا در پاک‌سازی', true); }
 }
 
+// ── کلیدهایی که با هر «حذف/ریسیت» باید کامل از این دستگاه بروند ───────────────
+//  دادهٔ کسب‌وکار + «فهرست‌های ساختهٔ کاربر» (کتگوری جنس اصلی/فرعی، واحد شمارش اصلی/
+//  فرعی، کتگوری شخص، کتگوری مصرف و فیلدهای دلخواهِ جنس). پیش‌تر فقط دادهٔ کسب‌وکار
+//  پاک می‌شد و همین کتگوری‌ها روی دستگاه جا می‌ماندند؛ برای همین بعد از «حذف کامل
+//  دیتابیس» یا «ریسیت» باز هم در دراپ‌داون‌ها دیده می‌شدند و حتی از حسابِ قبلی
+//  باقی می‌ماندند. (نوعیتِ حساب و فرمِ کارمند عمداً دست نمی‌خورند.)
+function __hbUserListKeys() {
+    var S = (typeof window !== 'undefined') ? window.JouyaSync : null;
+    var lists = [];
+    try { if (S && typeof S.userListKeys === 'function') lists = S.userListKeys(); } catch (e) {}
+    if (!lists.length) {
+        lists = ['customProductCategories','customProductSubCategories',
+                 'customProductUnits','customPersonCategories','customExpenseCategories',
+                 'customExpenseCategoriesRemoved','customProductFields'];
+    }
+    try {
+        for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            if (k && k.indexOf('customProductSubCategories_') === 0 && lists.indexOf(k) === -1) lists.push(k);
+        }
+    } catch (e) {}
+    return lists;
+}
+function __hbWipeKeys(includeLists) {
+    var S = (typeof window !== 'undefined') ? window.JouyaSync : null;
+    var base = (S && S.ALL_BUSINESS_KEYS) ? S.ALL_BUSINESS_KEYS.slice() : [
+        'persons','products','transactions','expenses','cashboxes','cashboxTransactions',
+        'returns','warehouses','warehouseTransfers','services','jouya-currencies',
+        'jouya-exchange-rates','jouya-reference-rates','backupHistory','dashboardStats',
+        'activeWarehouseId','cashboxTypes'];
+    if (includeLists === false) return base;
+    __hbUserListKeys().forEach(function (k) { if (base.indexOf(k) === -1) base.push(k); });
+    return base;
+}
+
 // ریسیت کامل برنامه — دقیقاً همان دستورِ کنسول: حذفِ نشست/ورود/لایسنس/وضعیتِ سینکِ این دستگاه
 // و سپس بارگذاریِ مجدد. (با یک تأیید برای جلوگیری از کلیکِ اشتباهی؛ خودِ دستور بدون تغییر اجرا می‌شود.)
 function ssbFullReset() {
@@ -27435,6 +27476,9 @@ function ssbFullReset() {
              'jouya_cloud_linked','jouya_sync_session','jouya_sync_workspace',
              'jouya_sync_snapshot','jouya_sync_cursor','jouya_sync_migrated',
              'jouya_sync_outbox','jouya_used_license_codes'].forEach(function (k) { localStorage.removeItem(k); });
+            // فهرست‌های ساختهٔ کاربر (کتگوری/واحد/فیلدهای دلخواه) هم باید از دستگاه بروند.
+            // عمداً فقط همین‌ها — دادهٔ کسب‌وکار دست‌نخورده می‌ماند تا رفتارِ این دکمه عوض نشود.
+            __hbUserListKeys().forEach(function (k) { try { localStorage.removeItem(k); } catch (e) {} });
         } catch (e) {}
         location.reload();
     };
@@ -27455,7 +27499,7 @@ if (typeof window !== 'undefined') window.ssbFullReset = ssbFullReset;
 function ssbAdvancedCleanup() {
     var _run = function () {
         var S = (typeof window !== 'undefined') ? window.JouyaSync : null;
-        var keys = (S && S.ALL_BUSINESS_KEYS) ? S.ALL_BUSINESS_KEYS : null;
+        var keys = __hbWipeKeys(true);   // دادهٔ کسب‌وکار + فهرست‌های ساختهٔ کاربر
         var finishLocal = function (cloudMsg) {
             var after = function () {
                 ssbShowMsg(cloudMsg);
@@ -36671,7 +36715,12 @@ function setupProductAddSelect(selectElement, storageKey, label) {
             var _key = selectElement._addStorageKey || storageKey;
             if (!val) { inputRow.style.display = 'none'; selectElement.value = ''; return; }
             var customs = JSON.parse(localStorage.getItem(_key) || '[]');
-            if (!customs.includes(val)) { customs.push(val); localStorage.setItem(_key, JSON.stringify(customs)); }
+            if (!customs.includes(val)) {
+                customs.push(val); localStorage.setItem(_key, JSON.stringify(customs));
+                // فهرست‌های ساختهٔ کاربر از مسیرِ store_settings سینک می‌شوند؛ این رویداد
+                // باعث می‌شود همان لحظه به فضای ابریِ همین حساب برود، نه در چرخهٔ بعدیِ poll.
+                try { window.dispatchEvent(new CustomEvent('jouya-data-change', { detail: { reason: 'custom-list-add' } })); } catch (e) {}
+            }
             // درج گزینه قبل از گزینهٔ «اضافه کردن»
             if (!Array.prototype.find.call(selectElement.options, function (o) { return o.value === val; })) {
                 var opt = document.createElement('option'); opt.value = val; opt.textContent = val;
@@ -36760,6 +36809,9 @@ function setupSelectDeleteBtn(selectElement, storageKey, label) {
             if (op && op.parentNode) op.parentNode.removeChild(op);
             selectElement.value = '';
             sync();
+            // حذف هم مثلِ افزودن باید فوری به ابر برود تا روی دستگاه‌های دیگرِ همین
+            // حساب هم برداشته شود (ردیفِ ابری tombstone می‌شود، نه اینکه برگردد).
+            try { window.dispatchEvent(new CustomEvent('jouya-data-change', { detail: { reason: 'custom-list-del' } })); } catch (e) {}
             try { selectElement.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
         };
         if (typeof showConfirm === 'function') showConfirm('حذف ' + label, 'کتگوری «' + v + '» از فهرست حذف شود؟ (مصارفِ ثبت‌شده دست‌نخورده می‌مانند)', run);
@@ -40921,9 +40973,9 @@ function ndBindFit() {
 //  ⚠ مثلِ بالا: «تابع» و نه «var» — وگرنه به‌خاطرِ خطای سطحِ‌بالای این فایل مقدارشان
 //  undefined می‌ماند و querySelectorAll(undefined) خطا می‌دهد و پیمایش کار نمی‌کند.
 function __hbKbPanelSel() {
-    return '.product-search-results, .search-results, .wh-search-results, ' +
-           '.sr-product-results, .pr-product-results, .autocomplete-results, ' +
-           '[id$="-results"], [id$="-result"], [data-kb-panel]';
+    return '.product-search-results, .search-results, .search-results-list, ' +
+           '.wh-search-results, .sr-product-results, .pr-product-results, ' +
+           '.autocomplete-results, [id$="-results"], [id$="-result"], [data-kb-panel]';
 }
 function __hbKbItemSel() {
     return '.product-search-result-item, .search-item, .search-result-item, ' +
@@ -40931,21 +40983,32 @@ function __hbKbItemSel() {
 }
 function __hbKbClass() { return 'hb-kb-active'; }
 
+//  وضعیتِ پیمایش. «شمارهٔ نتیجهٔ فعال» عمداً این‌جا نگه داشته می‌شود و نه فقط روی DOM:
+//  بیشترِ فیلدهای جستجو در onkeyup دوباره فهرست را می‌سازند (innerHTML عوض می‌شود) و
+//  اگر نشانهٔ فعال فقط روی عنصر بود، با هر فشارِ کلید پاک می‌شد — دقیقاً علتِ اینکه
+//  فلش‌ها در فرم‌های فروش/خرید/دریافت/پرداخت «حرکت نمی‌کردند» و روی نتیجهٔ اول می‌ماندند.
+//  (جستجوی داشبورد درست کار می‌کرد چون شمارهٔ خودش را جدا نگه می‌داشت.)
+function __hbKbS() {
+    if (!window.__hbKbState) window.__hbKbState = { input: null, idx: -1, swallow: '' };
+    return window.__hbKbState;
+}
 function __hbKbVisible(el) {
     if (!el) return false;
     try {
-        if (el.offsetParent === null && getComputedStyle(el).position !== 'fixed') return false;
         var cs = getComputedStyle(el);
         if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+        if (el.offsetParent === null && cs.position !== 'fixed') return false;
         return el.getClientRects().length > 0;
     } catch (e) { return false; }
 }
 // ظرفِ نتایجِ مربوط به همین فیلد را پیدا کن (بدونِ هیچ فرضی دربارهٔ id/ساختار)
 function __hbKbFindPanel(input) {
+    // جستجوی سراسریِ داشبورد پیمایشِ کیبوردیِ خودش را دارد → دست نمی‌زنیم
+    try { if (input && input.id === 'nd-global-search') return null; } catch (e) {}
     // ۱) دراپ‌داونِ سراسریِ اجناس که مستقیم روی body است و فیلدِ فعالش را می‌شناسد
     try {
         var bd = document.getElementById('_psr_body_dd');
-        if (bd && __hbKbVisible(bd) && bd._activeInput === input) return bd;
+        if (bd && __hbKbVisible(bd) && bd._activeInput === input && __hbKbItems(bd).length) return bd;
     } catch (e) {}
     // ۲) نزدیک‌ترین ظرفِ بازِ اطرافِ فیلد (حداکثر پنج سطح بالاتر)
     var node = input, lvl = 0;
@@ -40964,10 +41027,7 @@ function __hbKbItems(panel) {
     try { list = panel.querySelectorAll(__hbKbItemSel()); } catch (e) { list = []; }
     if (!list.length) list = panel.children;      // فهرست‌هایی که کلاسِ شناخته‌شده ندارند
     for (i = 0; i < list.length; i++) {
-        var el = list[i];
-        if (!__hbKbVisible(el)) continue;
-        // فقط عناصرِ قابلِ انتخاب (یا هر عنصرِ فهرستِ ساده)
-        out.push(el);
+        if (__hbKbVisible(list[i])) out.push(list[i]);
     }
     return out;
 }
@@ -40984,7 +41044,7 @@ function __hbKbActivate(items, idx, panel) {
     el.classList.add(__hbKbClass());
     try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {}
 }
-// همان رویدادی را بفرست که خودِ آیتم به آن گوش می‌دهد (نه بیشتر)
+// همان رویدادی را بفرست که خودِ آیتم به آن گوش می‌دهد (نه بیشتر، تا دوبار اجرا نشود)
 function __hbKbChoose(el) {
     if (!el) return;
     var hasDown = false;
@@ -40999,50 +41059,77 @@ function __hbKbChoose(el) {
 }
 function __hbKbClosePanel(panel) {
     __hbKbClear(panel);
-    try {
-        panel.classList.remove('show');
-        panel.style.display = 'none';
-    } catch (e) {}
+    try { panel.classList.remove('show'); panel.style.display = 'none'; } catch (e) {}
+}
+function __hbKbIsTextInput(t) {
+    if (!t || !t.tagName) return false;
+    var tag = t.tagName.toUpperCase();
+    if (tag === 'TEXTAREA') return true;
+    if (tag !== 'INPUT') return false;
+    return !/^(checkbox|radio|range|color|file|submit|button|reset)$/i.test(t.type || '');
 }
 function __hbInstallKeyboardNav() {
     if (typeof document === 'undefined' || window.__hbKbNavInstalled) return;
     window.__hbKbNavInstalled = true;
+
     document.addEventListener('keydown', function (e) {
-        var k = e.key;
-        if (k !== 'ArrowDown' && k !== 'ArrowUp' && k !== 'Enter' && k !== 'Escape') return;
         var t = e.target;
-        if (!t || !t.tagName) return;
-        var tag = t.tagName.toUpperCase();
-        if (tag !== 'INPUT' && tag !== 'TEXTAREA') return;
-        if (tag === 'INPUT' && /^(checkbox|radio|range|color|file|submit|button|reset)$/i.test(t.type || '')) return;
+        if (!__hbKbIsTextInput(t)) return;
+        var k = e.key;
+        var st = __hbKbS();
+
+        // تایپِ هر کلیدِ دیگر یعنی فهرست عوض می‌شود → انتخابِ قبلی بی‌اعتبار است
+        if (k !== 'ArrowDown' && k !== 'ArrowUp' && k !== 'Enter' && k !== 'Escape') {
+            if (st.input === t) st.idx = -1;
+            return;
+        }
 
         var panel = __hbKbFindPanel(t);
-        if (!panel) return;
+        if (!panel) { if (st.input === t) st.idx = -1; return; }
         var items = __hbKbItems(panel);
-        if (!items.length) return;
+        if (!items.length) { st.idx = -1; return; }
 
-        var cur = -1;
-        for (var i = 0; i < items.length; i++) {
-            if (items[i].classList && items[i].classList.contains(__hbKbClass())) { cur = i; break; }
-        }
+        if (st.input !== t) { st.input = t; st.idx = -1; }
+        if (st.idx >= items.length) st.idx = items.length - 1;
 
         if (k === 'ArrowDown') {
-            e.preventDefault(); e.stopPropagation();
-            __hbKbActivate(items, (cur + 1) % items.length, panel);
+            st.idx = (st.idx + 1) % items.length;
+            __hbKbActivate(items, st.idx, panel);
         } else if (k === 'ArrowUp') {
-            e.preventDefault(); e.stopPropagation();
-            __hbKbActivate(items, (cur <= 0 ? items.length - 1 : cur - 1), panel);
+            st.idx = (st.idx <= 0) ? items.length - 1 : st.idx - 1;
+            __hbKbActivate(items, st.idx, panel);
         } else if (k === 'Enter') {
-            // اگر چیزی فعال نیست، Enter دست‌نخورده به منطقِ قبلیِ فرم می‌رسد
-            if (cur < 0) return;
-            e.preventDefault(); e.stopPropagation();
-            var pick = items[cur];
+            // بدونِ نتیجهٔ فعال، Enter دست‌نخورده به منطقِ قبلیِ فرم می‌رسد
+            if (st.idx < 0) return;
+            var pick = items[st.idx];
+            st.idx = -1;
             __hbKbClear(panel);
             __hbKbChoose(pick);
-        } else if (k === 'Escape') {
-            e.preventDefault(); e.stopPropagation();
+        } else {   // Escape
+            st.idx = -1;
             __hbKbClosePanel(panel);
         }
+        // این کلید را ما مصرف کردیم → نه به هندلرِ خودِ فیلد برسد، نه به مرورگر
+        e.preventDefault();
+        e.stopPropagation();
+        st.swallow = k;
     }, true);
+
+    // ── چرا keyup/keypress هم باید بلعیده شود ────────────────────────────────
+    //  تقریباً همهٔ فیلدهای جستجو onkeyup="..." دارند و با هر کلید فهرست را از نو
+    //  می‌سازند. اگر فقط keydown گرفته می‌شد، keyupِ همان فلش باعثِ بازسازیِ فهرست و
+    //  پاک‌شدنِ نشانهٔ انتخاب می‌شد؛ نتیجه: فلش‌ها «تکان نمی‌خوردند». فقط همان کلیدی
+    //  که در keydown واقعاً مصرف شده بلعیده می‌شود، پس هیچ منطقِ دیگری نمی‌شکند.
+    var swallower = function (e) {
+        var st = __hbKbS();
+        if (!st.swallow) return;
+        if (!__hbKbIsTextInput(e.target)) { st.swallow = ''; return; }
+        if (e.key !== st.swallow) { st.swallow = ''; return; }
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.type === 'keyup') st.swallow = '';
+    };
+    document.addEventListener('keypress', swallower, true);
+    document.addEventListener('keyup', swallower, true);
 }
 if (typeof window !== 'undefined') window.__hbInstallKeyboardNav = __hbInstallKeyboardNav;
