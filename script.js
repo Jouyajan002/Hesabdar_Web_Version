@@ -4994,7 +4994,9 @@ function saveReceipt() {
             rateUsed: _dayRateFor(currency), baseCurrency: _baseC
         });
         var _rf2 = document.getElementById('receiptForm'); if (_rf2) delete _rf2.dataset.editId;
-        showMessage('موفقیت', 'انتقال ثبت شد: پرداختِ ' + personName + ' → دریافتیِ ' + destPersonName + '.');
+        // پیامِ نتیجه دقیقاً جهتِ مالیِ ثبت‌شده را می‌گوید تا با ماندهٔ دو حساب هم‌خوان باشد:
+        // پرداخت‌کننده طلبکار می‌شود و حسابِ دریافت‌کننده تسویه می‌گردد.
+        showMessage('موفقیت', 'انتقال ثبت شد: ' + personName + ' به مبلغ ' + amount + ' ' + currency + ' طلبکار شد و حسابِ ' + destPersonName + ' به همین مبلغ تسویه گردید.');
         addChangelog('ثبت', 'دریافت', { fromId: personId, toId: destPersonId, amount: amount, currency: currency }, 'انتقال از ' + personName + ' به ' + destPersonName);
         if (typeof resetReceiptForm === 'function') resetReceiptForm();
         if (typeof loadDashboard === 'function') loadDashboard();
