@@ -9887,117 +9887,215 @@ body.dark-mode .pf-del-field-btn { background: rgba(248,113,113,.16); color: #f8
 #product-custom-fields .pf-custom-field { margin-top: 10px; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   انعطافِ محتوای ردیف‌های لیست‌ها روی دسکتاپ (Tauri + وب)
+   چیدمانِ محتوای ردیف‌های لیست‌ها روی دسکتاپ (Tauri + وب) — فقط ≥761px
    ---------------------------------------------------------------------------
-   ریشهٔ مشکل: ستون‌های کارتِ ردیف‌ها با کسرِ ثابت (fr) تعریف شده بودند
-   (مثلاً 1.6fr 1.6fr 1fr 1.05fr auto). کسرِ ثابت به محتوا کاری ندارد؛ پس:
-     • ستونی مثلِ «نوع معامله» که متنِ کوتاهی دارد، فضای خالیِ بزرگی می‌گرفت،
-     • و در همان لحظه ستونِ «اطلاعات» (تاریخ/نمبر بل/تعداد/طرف معامله) جا کم
-       می‌آورد و محتوایش بریده می‌شد — دقیقاً همان ناحیهٔ سرخ و سبزِ تصویر.
-   راهکار: هر ستون دقیقاً به اندازهٔ محتوای خودش می‌شود (با یک سقفِ منطقی تا یک
-   نامِ خیلی بلند ردیف را به‌هم نریزد) و فضای اضافیِ صفحه به‌طورِ مساوی میانِ
-   ستون‌ها پخش می‌شود؛ پس نه حفرهٔ خالی می‌ماند و نه ستونی جا کم می‌آورد. اگر در
-   عرضِ کوچک باز هم جا کم آمد، محتوا به‌جای بریده‌شدن به خطِ بعد می‌شکند و ارتفاعِ
-   ردیف فقط به‌اندازهٔ نیاز بیشتر می‌شود. فقط چیدمانِ نمایشی؛ هیچ داده،
-   منطق، رنگ یا اندازهٔ قلمی تغییر نمی‌کند و قواعدِ موبایل (≤760px) دست‌نخورده است.
+   هدف: فاصله‌های خالیِ میانِ اطلاعات کم شود، هر قلم سرِ جای خودش و هم‌تراز با
+   همان قلم در ردیف‌های دیگر بنشیند، و متنِ بلند به‌جای بریده‌شدن با «…» کوتاه شود.
+
+   دو خانوادهٔ کارت داریم:
+     • کارت‌های کم‌محتوا (فروش/خرید/دریافت/پرداخت، اشخاص، اجناس): یک خط کافی است،
+       فقط ستون‌ها فشرده‌تر و متن‌ها تک‌خطی با «…».
+     • کارت‌های پرمحتوا (ورود/خروج جنس و معاملاتِ شخص با چهار قلم اطلاعات، و
+       لیستِ مصارف با پنج ستون داده): خطِ دوم می‌گیرند. سطرِ اول نام/مبلغ/مانده و
+       سطرِ دوم اطلاعات؛ هم جا باز می‌شود، هم کارت کمی بلندتر و خواناتر می‌شود.
+
+   ستون‌ها عمداً کسری (fr) می‌مانند تا ستونِ هر قلم در همهٔ ردیف‌ها دقیقاً زیرِ هم
+   بیفتد. قواعدِ موبایل (≤760px) اصلاً دست نخورده‌اند.
    ═══════════════════════════════════════════════════════════════════════════ */
 @media (min-width: 761px) {
 
-    /* ── کارت‌های فروش/خرید/دریافت/پرداخت/معاملات/ورود و خروج جنس ─────────── */
-    /*   ستون‌ها: نوع یا نام | اطلاعات | مبلغ | موجودی یا مانده | عملیات        */
-    .sales-card,
-    .sales-card.ptx-sales-card {
-        grid-template-columns:
-            fit-content(26ch)      /* نام/نوع — فقط به اندازهٔ متنِ خودش */
-            minmax(0, max-content) /* اطلاعات — تا جایی که لازم دارد، نه بیشتر */
-            fit-content(22ch)      /* مبلغ/قیمت واحد */
-            fit-content(22ch)      /* موجودی/مانده */
-            auto;                  /* عملیات */
-        /* فضای اضافیِ صفحه به‌جای تلنبارشدن در یک ستون، به‌طورِ مساوی میانِ ستون‌ها
-           پخش می‌شود → نه حفرهٔ خالی می‌ماند و نه چیزی به هم می‌چسبد. */
-        justify-content: space-between;
-        gap: 8px 18px;
-        align-items: center;
+    /* ── پایه: هر چیزی تک‌خطی و با «…» ──────────────────────────────────────── */
+    .sales-card-name,
+    .sales-card-amount,
+    .sales-card-remaining,
+    .person-card-name, .person-card-balance, .person-card-debt,
+    .product-card-name, .product-card-cell-data {
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
     }
-
-    /* خطِ «اطلاعات» دیگر بریده نمی‌شود: اگر جا نبود به خطِ بعد می‌شکند */
+    /*  قاعدهٔ قدیمی‌تری بالاتر در همین فایل، این چهار قلم را با !important وادار به
+        «شکستنِ متن» می‌کرد (white-space:normal / overflow:visible / text-overflow:clip).
+        درخواستِ جدید «کوتاه‌شدن با …» است، پس فقط همان سه ویژگی این‌جا بازنویسی
+        می‌شود؛ بقیهٔ آن قاعده (min-width و line-height) دست‌نخورده می‌ماند. */
+    .product-card-name,
+    .product-card-cell-data,
+    .person-card-name,
+    .person-card-balance,
+    .person-card-debt {
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+    }
+    /*  عدد/مبلغِ داخلِ span یک جعبهٔ inline-block است و «…» روی آن اثر ندارد؛
+        با inline شدن، متنش بخشی از همان خط می‌شود و درست کوتاه می‌شود. */
+    .product-card-cell-data > span,
+    .person-card-balance > span,
+    .person-card-debt > span,
+    .sales-card-amount > span,
+    .sales-card-remaining > span {
+        display: inline; white-space: nowrap;
+    }
     .sales-card-meta {
-        flex-wrap: wrap;
-        white-space: normal;
-        overflow: visible;
-        gap: 4px 18px;
-        min-width: 0;
+        display: flex; flex-wrap: nowrap; align-items: center;
+        gap: 16px; min-width: 0; overflow: hidden; white-space: nowrap;
     }
     .sales-card-meta-item {
-        overflow: visible;
-        text-overflow: clip;
-        white-space: nowrap;       /* برچسب و مقدارِ هر قلم کنارِ هم می‌مانند */
-        max-width: 100%;
-        min-width: 0;
+        display: inline-flex; align-items: baseline; gap: 5px;
+        min-width: 0; flex: 0 1 auto; overflow: hidden;
     }
+    .sales-card-meta-item .sales-meta-label { flex: 0 0 auto; }
     .sales-card-meta-item .sales-meta-val {
-        white-space: normal;
-        overflow-wrap: anywhere;
-        overflow: visible;
+        min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        /*  مقدارها در CSS پایه direction:ltr دارند تا اعداد و تاریخ درست بنشینند؛
+            ولی همان باعث می‌شد «…» برای متنِ فارسی سرِ جملهٔ اول بیاید و اولِ نام
+            بریده شود. با plaintext، جهتِ هر مقدار از خودِ متنش گرفته می‌شود:
+            عدد و تاریخ LTR می‌مانند و نامِ فارسی RTL می‌شود، پس «…» همیشه در
+            انتهای متن می‌نشیند. */
+        unicode-bidi: plaintext;
     }
-    /* مبلغ و موجودی هم کامل دیده شوند (ستونشان به اندازهٔ محتوا است) */
-    .sales-card-amount,
-    .sales-card-remaining { overflow: visible; text-overflow: clip; min-width: 0; }
-    /* نامِ بلند هنوز با سه‌نقطه کوتاه می‌شود تا ردیف به‌هم نریزد */
-    .sales-card-name { min-width: 0; }
 
-    /* ── کارت‌های لیستِ اشخاص ──────────────────────────────────────────────── */
-    /*   نام تا سقفِ ۳۴ نویسه؛ باقیداری و طلب فقط به اندازهٔ عددِ خودشان.        */
+    /* ── کارت‌های کم‌محتوا: یک خط، فشرده ─────────────────────────────────────── */
+    .sales-card {
+        grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+        gap: 6px 14px;
+        padding: 13px 18px;
+        align-items: center;
+    }
     .person-card {
-        grid-template-columns:
-            fit-content(34ch)      /* نام شخص */
-            minmax(0, max-content) /* باقیداری */
-            minmax(0, max-content) /* طلب */
-            auto;                  /* عملیات */
-        justify-content: space-between;
+        grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+        gap: 6px 14px;
+        padding: 16px 20px;
     }
-    .person-card-balance,
-    .person-card-debt { overflow: visible; text-overflow: clip; min-width: 0; }
-
-    /* ── کارت‌های لیستِ اجناس و مصارف ──────────────────────────────────────── */
     .product-card {
-        grid-template-columns:
-            fit-content(32ch)      /* نام جنس */
-            minmax(0, max-content)
-            minmax(0, max-content)
-            minmax(0, max-content)
-            auto;
-        justify-content: space-between;
+        grid-template-columns: minmax(0, 1.7fr) minmax(0, .85fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+        gap: 6px 14px;
+        padding: 16px 20px;
     }
-    .product-card.with-purchase {
-        grid-template-columns:
-            fit-content(28ch)      /* نام جنس */
-            minmax(0, max-content)
-            minmax(0, max-content)
-            minmax(0, max-content)
-            minmax(0, max-content)
-            minmax(0, max-content)
-            auto;
-        justify-content: space-between;
+
+    /* ── کارت‌های پرمحتوا (۱): ورود/خروج جنس و معاملاتِ شخص → دو سطری ────────── */
+    .sales-card.ptx-sales-card {
+        grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+        grid-template-areas:
+            "main amount remaining actions"
+            "meta meta   meta      actions";
+        row-gap: 8px; column-gap: 16px;
+        padding: 14px 18px;
+        align-items: center;
     }
-    .product-card-cell-data {
-        overflow: visible; text-overflow: clip; min-width: 0;
-        white-space: normal; overflow-wrap: anywhere;
+    .sales-card.ptx-sales-card .sales-card-main      { grid-area: main; }
+    .sales-card.ptx-sales-card .sales-card-amount    { grid-area: amount; }
+    .sales-card.ptx-sales-card .sales-card-remaining { grid-area: remaining; }
+    .sales-card.ptx-sales-card .sales-card-actions   { grid-area: actions; align-self: center; }
+    .sales-card.ptx-sales-card .sales-card-meta {
+        grid-area: meta;
+        padding-top: 7px;
+        border-top: 1px solid rgba(148, 163, 184, .22);   /* جداکنندهٔ ملایم، سازگار با حالت تاریک */
+        /*  چهار قلمِ اطلاعات روی یک شبکهٔ ثابت می‌نشینند، پس در همهٔ ردیف‌ها دقیقاً
+            زیرِ هم قرار می‌گیرند و فضای خالی هم به‌جای یک حفرهٔ بزرگ، منظم پخش
+            می‌شود. ردیفی که یک قلم کمتر دارد، بقیه را هم‌تراز نگه می‌دارد. */
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0 16px;
+        align-items: baseline;
+    }
+
+    /* ── کارت‌های پرمحتوا (۲): لیستِ مصارف (پنج قلم اطلاعات) → دو سطری ────────── */
+    /*   عمداً فقط به #expenses-table محدود است: ساختارِ آن ثابت و پنج‌قلمی است،     */
+    /*   در حالی که کارتِ لیستِ اجناس همین کلاس را دارد ولی تعدادِ ستون‌هایش به      */
+    /*   تعدادِ ارزهای فعال بستگی دارد و نباید چیدمانِ ثابت بگیرد.                   */
+    #expenses-table .product-card.with-purchase {
+        grid-template-columns: minmax(0, 1.5fr) repeat(4, minmax(0, 1fr)) auto;
+        row-gap: 8px; column-gap: 16px;
+        padding: 15px 20px;
+        align-items: center;
+    }
+    #expenses-table .product-card.with-purchase > .product-card-main {
+        grid-column: 1; grid-row: 1 / span 2; align-self: center;
+    }
+    /* قلمِ پنجم («اطلاعات») معمولاً بلندترین است → تمامِ سطرِ دوم را می‌گیرد */
+    #expenses-table .product-card.with-purchase > div:nth-child(6) {
+        grid-column: 2 / 6; grid-row: 2;
+        padding-top: 7px;
+        border-top: 1px solid rgba(148, 163, 184, .22);
+    }
+    #expenses-table .product-card.with-purchase > .product-card-actions {
+        grid-column: 6; grid-row: 1 / span 2; align-self: center;
     }
 
     /* ── ردیف‌های جدول‌مانند (صندوق، مصارف، کارمندان، معاملاتِ شخص) ─────────── */
-    /*   این‌ها باید ستون‌هایشان بینِ ردیف‌ها هم‌تراز بماند، پس کسرِ ستون‌ها حفظ   */
-    /*   می‌شود؛ فقط به‌جای «بریده‌شدن»، متنِ بلند به خطِ بعد می‌شکند تا چیزی      */
-    /*   پنهان نماند و ارتفاعِ ردیف هم فقط در صورتِ نیاز بیشتر شود.               */
-    /* (overflowِ خودِ ردیف عمداً دست‌نخورده می‌ماند: با شکستنِ متن ارتفاعِ ردیف
-       خودش بیشتر می‌شود و چیزی بیرون نمی‌زند، پس نیازی به تغییرش نیست.) */
+    /*   ستون‌هایشان باید بینِ ردیف‌ها هم‌تراز بماند، پس کسرِ ستون‌ها حفظ می‌شود؛   */
+    /*   متنِ بلند هم به‌جای بریده‌شدنِ خام، با «…» کوتاه می‌شود.                   */
     .ptx-cell, .cbtx-cell, .exp-cell, .emp-cell {
-        white-space: normal;
-        overflow: visible;
-        text-overflow: clip;
-        overflow-wrap: anywhere;
-        line-height: 1.5;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        min-width: 0; line-height: 1.6;
     }
-    /* ستون‌های عملیات نباید بشکنند */
-    .ptx-c-ops, .cbtx-c-ops, .exp-c-ops, .emp-c-ops { white-space: nowrap; }
+    .ptx-c-ops, .cbtx-c-ops, .exp-c-ops, .emp-c-ops { white-space: nowrap; overflow: visible; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   دیالوگِ «نحوهٔ ورود اطلاعات» + نوارِ «حالت آزمایشی»
+   کلاس‌های پایه (modal / modal-alert / modal-content ...) همان دیالوگِ هشدارِ
+   برنامه است؛ این‌جا فقط دو کارتِ انتخاب و نوارِ بالای صفحه استایل می‌شوند.
+   ═══════════════════════════════════════════════════════════════════════════ */
+/*  بدنهٔ دیالوگ‌های هشدارِ برنامه سرمه‌ای و وسط‌چین است؛ این دیالوگ هم باید دقیقاً
+    همان حس را بدهد، پس متن راست‌چین و کارت‌های انتخاب «روشن روی سرمه‌ای» هستند. */
+#hbImportModeModal .modal-body { text-align: right !important; direction: rtl; }
+.hb-imp-warn {
+    background: rgba(239, 68, 68, .18); border: 1px solid rgba(248, 113, 113, .55);
+    color: #fecaca; border-radius: 10px; padding: 10px 12px; margin: 0 0 12px;
+    font-size: .92rem; line-height: 1.9; font-weight: 600; text-align: right;
+}
+.hb-imp-warn i { margin-left: 6px; }
+.hb-imp-sum {
+    display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0 0 14px;
+    color: #cbd5e1; font-size: .88rem; justify-content: flex-start;
+}
+.hb-imp-sum b { color: #fff; font-weight: 700; }
+.hb-imp-opt {
+    background: rgba(255, 255, 255, .08); border: 1.6px solid rgba(255, 255, 255, .22);
+    border-radius: 12px; padding: 12px 14px; margin: 0 0 10px; cursor: pointer;
+    text-align: right; transition: background .15s, border-color .15s, box-shadow .15s;
+}
+.hb-imp-opt:hover { background: rgba(255, 255, 255, .16); border-color: #93c5fd; }
+.hb-imp-opt-h { font-weight: 800; color: #fff; font-size: 1rem; margin-bottom: 5px; }
+.hb-imp-opt-h i { margin-left: 7px; color: #93c5fd; }
+.hb-imp-opt-d { color: #cbd5e1; font-size: .88rem; line-height: 1.95; }
+.hb-imp-opt-d b { color: #fff; font-weight: 700; }
+.hb-imp-opt.hb-imp-danger:hover { border-color: #fca5a5; }
+.hb-imp-opt.hb-imp-danger .hb-imp-opt-h i { color: #fca5a5; }
+
+#hb-trial-banner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9998;
+    background: linear-gradient(90deg, #b45309, #d97706);
+    color: #fff; direction: rtl; display: flex; align-items: center;
+    justify-content: center; gap: 14px; flex-wrap: wrap;
+    padding: 8px 14px; font-size: .9rem; font-weight: 600;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, .2);
+}
+#hb-trial-banner .hb-trial-txt i { margin-left: 6px; }
+#hb-trial-banner .hb-trial-exit {
+    background: rgba(255, 255, 255, .95); color: #b45309; border: none;
+    border-radius: 8px; padding: 5px 14px; cursor: pointer;
+    font-family: inherit; font-size: .85rem; font-weight: 800; white-space: nowrap;
+}
+#hb-trial-banner .hb-trial-exit:hover { background: #fff; }
+body.hb-trial-on { padding-top: 40px; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   نتیجهٔ «فعال» هنگامِ پیمایش با کلیدهای جهت‌دار (↑ ↓ Enter Esc)
+   همان رنگِ hoverِ موجودِ فهرست‌ها تا تجربه یکدست بماند.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.hb-kb-active,
+.product-search-result-item.hb-kb-active,
+.search-item.hb-kb-active,
+.nd-sr-item.hb-kb-active {
+    background: #e0efff !important;
+    box-shadow: inset 3px 0 0 #2563eb;
+    border-radius: 4px;
+}
+body.dark-mode .hb-kb-active,
+body.dark-mode .product-search-result-item.hb-kb-active,
+body.dark-mode .search-item.hb-kb-active,
+body.dark-mode .nd-sr-item.hb-kb-active {
+    background: rgba(37, 99, 235, .30) !important;
+    box-shadow: inset 3px 0 0 #60a5fa;
 }

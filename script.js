@@ -27652,27 +27652,246 @@ function __hbApplyForeignImport(savedSettings, silent) {
             '</div>');
     }
 }
-// در دسترسِ drive-backup.js (بازیابی از Google Drive از همین نگهبان رد می‌شود)
-if (typeof window !== 'undefined') {
-    window.JouyaImportGuard = {
-        classify: __hbClassifyImport,
-        resolveUnknown: __hbResolveUnknown,
-        applyForeign: __hbApplyForeignImport,
-        myOwner: __hbMyOwner,
-        cloudLinked: __hbCloudLinked
-    };
+// ═════════════════════════════════════════════════════════════════════════════
+//  «حالتِ آزمایشی» در برابرِ «جایگزینیِ کامل» هنگامِ ورودِ فایلِ پشتیبان
+//  ---------------------------------------------------------------------------
+//  هنگامِ وارد کردنِ هر فایلِ JSON از کاربر پرسیده می‌شود که کدام را می‌خواهد:
+//
+//   • جایگزینیِ کامل → دادهٔ فایل هم روی این دستگاه و هم در فضای ابریِ همین حساب
+//     جایگزین می‌شود (رفتارِ ماندگار؛ دقیقاً مثلِ بازیابیِ پشتیبانِ خودِ کاربر).
+//
+//   • حالتِ آزمایشی → دادهٔ فایل «موقتاً» جای دادهٔ کاربر را می‌گیرد (صفر تا صد،
+//     شاملِ اطلاعاتِ فروشگاه و همهٔ فهرست‌ها/کتگوری‌ها) و برنامه کاملاً عادی با آن
+//     کار می‌کند، اما هیچ همگام‌سازی‌ای — نه بالا و نه پایین — انجام نمی‌شود. با
+//     بسته‌شدنِ برنامه، نشستِ آزمایشی از بین می‌رود و دادهٔ اصلیِ کاربر برمی‌گردد.
+//
+//  سازوکارِ ایمنیِ نشست:
+//    ۱) پیش از ورودِ فایل، از «همهٔ» کلیدهای دادهٔ کاربر یک نسخهٔ کامل در
+//       jouya_trial_backup گرفته می‌شود (کلیدهای هویت/نشست/لایسنس/وضعیتِ سینک
+//       اصلاً دست نمی‌خورند تا پس از پایانِ آزمایش، سینک دقیقاً از همان‌جا ادامه دهد).
+//    ۲) jouya_trial_active در sessionStorage نشانهٔ «زنده‌بودنِ نشست» است؛ با بستنِ
+//       برنامه خودبه‌خود پاک می‌شود، پس این حالت هرگز نمی‌تواند ماندگار شود.
+//    ۳) jouya_trial_flag در localStorage می‌ماند تا در اجرای بعدی، اسکریپتِ ابتدای
+//       index.html بفهمد نشست تمام شده و دادهٔ اصلی را برگرداند — پیش از آنکه
+//       database.js چیزی از localStorage بخواند.
+// ═════════════════════════════════════════════════════════════════════════════
+//  ⚠ این‌ها عمداً «تابع» هستند و نه «var»: در این فایل یک خطای سطحِ‌بالا وجود دارد
+//  (settingsForm) و هر انتسابِ var که بعد از آن نوشته شود هرگز اجرا نمی‌شود و مقدارش
+//  undefined می‌ماند. تعریفِ تابع اما hoist می‌شود و همیشه در دسترس است.
+function __hbTrialFlagKey() { return 'jouya_trial_flag'; }
+function __hbTrialSessKey() { return 'jouya_trial_active'; }
+function __hbTrialBakKey()  { return 'jouya_trial_backup'; }
+
+// کلیدهایی که نشستِ آزمایشی هرگز لمس نمی‌کند (باید دقیقاً با اسکریپتِ index.html یکی باشد)
+function __hbTrialPreserved(k) {
+    if (!k) return true;
+    if (k === __hbTrialFlagKey() || k === __hbTrialBakKey()) return true;
+    if (k.indexOf('jouya_') === 0) return true;     // jouya_sync_*, jouya_user_account, jouya_license_info, ...
+    if (k.indexOf('print-') === 0) return true;     // ترجیحاتِ چاپِ دستگاه
+    return ({ darkMode: 1, numberSystem: 1, dbLockEnabled: 1, dbLockHash: 1,
+              sysPassword: 1, theme: 1 })[k] === 1;
 }
+function __hbTrialIsActive() {
+    try { return (typeof sessionStorage !== 'undefined') && sessionStorage.getItem(__hbTrialSessKey()) === '1'; }
+    catch (e) { return false; }
+}
+// شروعِ نشستِ آزمایشی — «پیش از» نوشتنِ دادهٔ فایل صدا زده می‌شود
+function __hbTrialBegin() {
+    var keys = {}, i, k;
+    try {
+        for (i = 0; i < localStorage.length; i++) {
+            k = localStorage.key(i);
+            if (__hbTrialPreserved(k)) continue;
+            keys[k] = localStorage.getItem(k);
+        }
+        localStorage.setItem(__hbTrialBakKey(), JSON.stringify({ at: new Date().toISOString(), keys: keys }));
+        localStorage.setItem(__hbTrialFlagKey(), '1');
+    } catch (e) {
+        try { console.error('[trial] ساختِ نسخهٔ پشتیبانِ نشست ناموفق:', e); } catch (x) {}
+        return false;
+    }
+    try { sessionStorage.setItem(__hbTrialSessKey(), '1'); } catch (e) {}
+    // همگام‌سازی کاملاً خاموش شود و هیچ pushِ معلقی باقی نماند
+    try { var S = window.JouyaSync; if (S && typeof S.stop === 'function') S.stop(); } catch (e) {}
+    try { clearTimeout(window._syncPushDebounce); window._syncPushDebounce = null; } catch (e) {}
+    return true;
+}
+// پایانِ دستیِ نشستِ آزمایشی — نشانهٔ نشست برداشته و صفحه بازخوانی می‌شود؛ اسکریپتِ
+// ابتدای index.html همان لحظه دادهٔ اصلی را برمی‌گرداند. (همان مسیرِ «بستنِ برنامه»،
+// پس فقط یک راهِ بازگردانی وجود دارد و امکانِ ناهماهنگی نیست.)
+function __hbTrialEnd() {
+    try { sessionStorage.removeItem(__hbTrialSessKey()); } catch (e) {}
+    try { location.reload(); } catch (e) {}
+}
+// نوارِ هشدارِ بالای صفحه در حالتِ آزمایشی
+function __hbTrialBanner() {
+    try {
+        var old = document.getElementById('hb-trial-banner');
+        if (!__hbTrialIsActive()) { if (old) old.remove(); document.body.classList.remove('hb-trial-on'); return; }
+        if (old) return;
+        var bar = document.createElement('div');
+        bar.id = 'hb-trial-banner';
+        bar.innerHTML =
+            '<span class="hb-trial-txt"><i class="fas fa-flask"></i> ' +
+            '<b>حالت آزمایشی</b> — این اطلاعات موقتی است و با فضای ابری همگام نمی‌شود. ' +
+            'با بستنِ برنامه، اطلاعات اصلیِ حساب شما برمی‌گردد.</span>' +
+            '<button type="button" class="hb-trial-exit">پایان حالت آزمایشی</button>';
+        bar.querySelector('.hb-trial-exit').onclick = function () {
+            if (typeof showStyledConfirm === 'function') {
+                showStyledConfirm('پایان حالت آزمایشی',
+                    'اطلاعات آزمایشی پاک می‌شود و اطلاعات اصلیِ حساب شما برمی‌گردد. ادامه می‌دهید؟',
+                    __hbTrialEnd);
+            } else if (confirm('پایان حالت آزمایشی و بازگشت به اطلاعات اصلی؟')) { __hbTrialEnd(); }
+        };
+        document.body.appendChild(bar);
+        document.body.classList.add('hb-trial-on');
+    } catch (e) {}
+}
+
+// خواندن و تجزیهٔ فایلِ JSON پیش از هر تغییری (تا بتوان اول پرسید، بعد نوشت)
+function __hbReadJsonFile(file) {
+    return new Promise(function (resolve, reject) {
+        try {
+            var r = new FileReader();
+            r.onload = function (e) {
+                try { resolve(JSON.parse(e.target.result) || {}); }
+                catch (err) { reject({ success: false, error: 'فایل نامعتبر است' }); }
+            };
+            r.onerror = function () { reject({ success: false, error: 'خطا در خواندن فایل' }); };
+            r.readAsText(file);
+        } catch (err) { reject({ success: false, error: err.message }); }
+    });
+}
+
+// دیالوگِ انتخابِ حالت — با همان کلاس‌ها و استایلِ دیالوگ‌های هشدارِ برنامه
+// (modal / modal-alert / modal-content / modal-header / modal-body / modal-footer)
+// پس در حالتِ روشن و تاریک و در هر سه نسخه یکسان دیده می‌شود.
+function __hbShowImportModeDialog(allData, verdict, onChoice) {
+    var old = document.getElementById('hbImportModeModal');
+    if (old) old.remove();
+
+    var s = (allData && allData.settings) || {};
+    var storeName = String(s.storeName || '').trim();
+    var ownerName = String(s.storeOwner || s.ownerName || '').trim();
+    var who = storeName || ownerName;
+    var cnt = function (k) { var v = allData && allData[k]; return Array.isArray(v) ? v.length : 0; };
+
+    var foreignNote = (verdict === 'own') ? '' :
+        '<div class="hb-imp-warn"><i class="fas fa-triangle-exclamation"></i> ' +
+        'این فایل متعلق به <b>حساب کاربریِ دیگری</b> است' + (who ? (' («' + who + '»)') : '') + '.' +
+        '</div>';
+
+    var modal = document.createElement('div');
+    modal.id = 'hbImportModeModal';
+    modal.className = 'modal modal-alert';
+    modal.innerHTML =
+        '<div class="modal-content">' +
+            '<div class="modal-header">' +
+                '<h3><i class="fas fa-file-import"></i> نحوهٔ ورود اطلاعات</h3>' +
+                '<span class="close-modal" data-act="cancel">&times;</span>' +
+            '</div>' +
+            '<div class="modal-body">' +
+                foreignNote +
+                '<div class="hb-imp-sum">' +
+                    '<span><b>اشخاص:</b> ' + cnt('persons') + '</span>' +
+                    '<span><b>اجناس:</b> ' + cnt('products') + '</span>' +
+                    '<span><b>معاملات:</b> ' + cnt('transactions') + '</span>' +
+                    '<span><b>مصارف:</b> ' + cnt('expenses') + '</span>' +
+                '</div>' +
+                '<div class="hb-imp-opt" data-act="trial">' +
+                    '<div class="hb-imp-opt-h"><i class="fas fa-flask"></i> حالت آزمایشی</div>' +
+                    '<div class="hb-imp-opt-d">اطلاعات این فایل فقط تا زمانی که برنامه باز است نمایش داده می‌شود و ' +
+                    '<b>هیچ همگام‌سازی‌ای با فضای ابری انجام نمی‌شود</b>. با بستنِ برنامه، اطلاعات اصلیِ حساب شما برمی‌گردد.</div>' +
+                '</div>' +
+                '<div class="hb-imp-opt hb-imp-danger" data-act="replace">' +
+                    '<div class="hb-imp-opt-h"><i class="fas fa-rotate"></i> جایگزینی کامل</div>' +
+                    '<div class="hb-imp-opt-d">اطلاعات این فایل به‌طور دائمی جای اطلاعات فعلی را می‌گیرد و ' +
+                    '<b>در فضای ابریِ حساب شما هم همگام می‌شود</b>. این کار برگشت‌پذیر نیست.</div>' +
+                '</div>' +
+            '</div>' +
+            '<div class="modal-footer">' +
+                '<button class="btn-secondary" data-act="cancel">لغو</button>' +
+            '</div>' +
+        '</div>';
+
+    var done = false;
+    var finish = function (mode) {
+        if (done) return; done = true;
+        try { modal.remove(); } catch (e) {}
+        document.removeEventListener('keydown', onKey, true);
+        if (typeof onChoice === 'function') onChoice(mode);
+    };
+    var onKey = function (ev) { if (ev.key === 'Escape') { ev.preventDefault(); finish(null); } };
+
+    modal.addEventListener('click', function (ev) {
+        var t = ev.target.closest ? ev.target.closest('[data-act]') : null;
+        if (!t) { if (ev.target === modal) finish(null); return; }
+        var act = t.getAttribute('data-act');
+        if (act === 'cancel') return finish(null);
+        if (act === 'trial') return finish('trial');
+        if (act === 'replace') {
+            // تاییدِ دوم با همان دیالوگِ استانداردِ هشدار (برگشت‌ناپذیر است)
+            try { modal.style.display = 'none'; } catch (e) {}
+            var ask = 'تمام اطلاعات فعلی این حساب — روی این دستگاه و در فضای ابری — با اطلاعات این فایل جایگزین می‌شود.\n\nاین کار برگشت‌پذیر نیست. ادامه می‌دهید؟';
+            if (typeof showStyledConfirm === 'function') {
+                var answered = false;
+                showStyledConfirm('جایگزینی کامل اطلاعات', ask, function () { answered = true; finish('replace'); });
+                // اگر کاربر دیالوگِ تایید را ببندد، به انتخابِ حالت برگردد
+                var back = setInterval(function () {
+                    var cm = document.getElementById('confirmModal');
+                    if (answered || done) { clearInterval(back); return; }
+                    if (cm && cm.style.display !== 'block') { clearInterval(back); try { modal.style.display = 'block'; } catch (e) {} }
+                }, 250);
+            } else if (confirm(ask)) { finish('replace'); } else { try { modal.style.display = 'block'; } catch (e) {} }
+        }
+    });
+
+    document.body.appendChild(modal);
+    modal.style.display = 'block';
+    document.addEventListener('keydown', onKey, true);
+}
+
 function __hbGuardedImport(file, label) {
-    var savedSettings = null;
-    try { savedSettings = localStorage.getItem('settings'); } catch (e) {}
-    return db.importData(file).then(function (res) {
-        var allData = (res && res.data) || {};
+    return __hbReadJsonFile(file).then(function (allData) {
+        var savedSettings = null;
+        try { savedSettings = localStorage.getItem('settings'); } catch (e) {}
         var verdict = __hbClassifyImport(allData, savedSettings);
-        if (verdict === 'unknown') verdict = __hbResolveUnknown(allData);
-        if (verdict === 'own') return __ssbSyncImportedToCloud(label);
-        __hbApplyForeignImport(savedSettings);
-        ssbShowMsg('داده‌ها فقط روی همین دستگاه وارد شد ✓');
-        return Promise.resolve();
+        return new Promise(function (resolve, reject) {
+            __hbShowImportModeDialog(allData, verdict, function (mode) {
+                if (!mode) { ssbShowMsg('ورود اطلاعات لغو شد'); return resolve(); }
+
+                if (mode === 'trial') {
+                    // ۱) نسخهٔ کاملِ دادهٔ کاربر را نگه دار  ۲) سینک را خاموش کن  ۳) بعد بنویس
+                    if (!__hbTrialBegin()) { ssbShowMsg('شروع حالت آزمایشی ناموفق بود', true); return resolve(); }
+                    return resolve(db.importData(file).then(function () {
+                        try { if (typeof window.rebuildAllDerivedData === 'function') window.rebuildAllDerivedData(); } catch (e) {}
+                        try { window.dispatchEvent(new CustomEvent('jouya-data-change', { detail: { reason: 'trial-import', remote: true } })); } catch (e) {}
+                        __hbTrialBanner();
+                        ssbShowMsg('حالت آزمایشی فعال شد ✓ (بدون همگام‌سازی)');
+                        if (typeof showMessage === 'function') {
+                            showMessage('حالت آزمایشی فعال شد',
+                                '<div style="text-align:right;direction:rtl;line-height:2">' +
+                                'اطلاعات این فایل به‌صورت موقت جایگزین شد.<br><br>' +
+                                '• همگام‌سازی با فضای ابری <b>کاملاً متوقف</b> است (نه ارسال، نه دریافت).<br>' +
+                                '• هیچ تغییری در اطلاعات ابریِ حساب شما ایجاد نمی‌شود.<br>' +
+                                '• با <b>بستنِ برنامه</b> اطلاعات اصلیِ شما خودبه‌خود برمی‌گردد.<br><br>' +
+                                'برای بازگشتِ فوری، دکمهٔ «پایان حالت آزمایشی» در نوار بالای صفحه را بزنید.' +
+                                '</div>');
+                        }
+                    }).catch(function (e) {
+                        // ورود ناموفق → نشست آزمایشی نباید نیمه‌کاره بماند
+                        try { __hbTrialEnd(); } catch (x) {}
+                        throw e;
+                    }));
+                }
+
+                // جایگزینیِ کامل — ماندگار و همگام با فضای ابریِ همین حساب
+                return resolve(db.importData(file).then(function () {
+                    try { var S = window.JouyaSync; if (S && typeof S.setLocalOnly === 'function') S.setLocalOnly(false); } catch (e) {}
+                    return __ssbSyncImportedToCloud(label);
+                }));
+            });
+        });
     });
 }
 function ssbRestoreFromFile() {
@@ -40242,14 +40461,33 @@ function __hbAndPlugin(name) {
 }
 
 // ── بازکردنِ نصب‌کنندهٔ اندروید برای فایلِ APK ─────────────────────────────────────
-//  ۱) FileOpener → نصب‌کنندهٔ بسته مستقیم باز می‌شود (حالتِ مطلوب).
-//  ۲) اگر افزونه نبود → پنلِ اشتراکِ سیستم، که «نصب‌کنندهٔ بسته» در آن هست.
+//  ⚠ اصلاحِ ریشه‌ایِ «نصب پیش نمی‌رود»:
+//  نسخهٔ قبلی اگر FileOpener در دسترس نبود، به «پنلِ اشتراکِ سیستم» برمی‌گشت. در آن
+//  پنل کاربر «Package Installer» را می‌دید و انتخاب می‌کرد، ولی نصب هرگز شروع نمی‌شد:
+//  اشتراک، نشانیِ فایل را بدونِ «اجازهٔ خواندنِ موقت» (FLAG_GRANT_READ_URI_PERMISSION)
+//  به نصب‌کننده می‌دهد، پس نصب‌کننده فایل را باز نمی‌کند و صفحه بی‌حرکت می‌ماند.
+//  نصبِ APK فقط با یک content:// از FileProvider کار می‌کند — دقیقاً کاری که افزونهٔ
+//  FileOpener انجام می‌دهد. پس مسیرِ اشتراک برای APK کاملاً حذف شد و به‌جایش، اگر
+//  افزونه نبود، خطای روشن داده می‌شود تا کاربر بداند چه باید بکند.
 function __hbAndroidOpenApk(uri) {
     if (!uri) return Promise.reject(new Error('نشانیِ فایل نامعتبر است'));
     var APK = 'application/vnd.android.package-archive';
-    return __jouyaAndCall('FileOpener', 'open', { filePath: uri, contentType: APK })
-        .catch(function () { return __jouyaAndCall('FileOpener', 'open', { filePath: uri, fileMimeType: APK }); })
-        .catch(function () { return __jouyaAndCall('Share', 'share', { title: 'نصب بروزرسانی', url: uri }); });
+    // مسیرِ خام بدونِ پیشوندِ file:// — بعضی نسخه‌های افزونه فقط همین را می‌پذیرند
+    var plain = String(uri).replace(/^file:\/\//, '');
+    var attempts = [
+        { filePath: uri,   contentType: APK },
+        { filePath: plain, contentType: APK },
+        { filePath: plain, contentType: APK, openWithDefault: true },
+        { filePath: plain, fileMimeType: APK }               // نام‌گذاریِ قدیمی‌ترِ افزونه
+    ];
+    var step = function (i, lastErr) {
+        if (i >= attempts.length) {
+            return Promise.reject(new Error('نصب‌کنندهٔ بسته باز نشد' + (lastErr ? (' — ' + (lastErr.message || lastErr)) : '')));
+        }
+        return Promise.resolve(__jouyaAndCall('FileOpener', 'open', attempts[i]))
+            .catch(function (e) { return step(i + 1, e); });
+    };
+    return step(0, null);
 }
 
 // ── دانلود + نصبِ کاملاً درون‌برنامه‌ای در اندروید ────────────────────────────────
@@ -40276,8 +40514,11 @@ function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
     } catch (e) {}
     var cleanup = function () { try { if (subHandle && typeof subHandle.remove === 'function') subHandle.remove(); } catch (e) {} };
 
-    // چند پوشه به‌ترتیب امتحان می‌شود تا روی همهٔ نسخه‌های اندروید بنویسد
-    var DIRS = ['CACHE', 'EXTERNAL', 'DOCUMENTS', 'DATA'];
+    // چند پوشه به‌ترتیب امتحان می‌شود تا روی همهٔ نسخه‌های اندروید بنویسد.
+    // ترتیب مهم است: فایل باید در پوشه‌ای بنشیند که FileProvider اجازهٔ ساختِ
+    // content:// از آن را دارد، وگرنه نصب‌کننده فایل را نمی‌خواند. CACHE (حافظهٔ
+    // داخلی) امن‌ترین و همیشه‌در‌دسترس‌ترین است و در file_paths پوشش داده شده.
+    var DIRS = ['CACHE', 'EXTERNAL_CACHE', 'EXTERNAL', 'DOCUMENTS', 'DATA'];
     var tryDir = function (i) {
         if (i >= DIRS.length) return Promise.reject(new Error('ذخیرهٔ فایلِ بروزرسانی ممکن نشد'));
         return Promise.resolve(FS.downloadFile({
@@ -40295,19 +40536,49 @@ function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
             .then(function (u) { return (u && (u.uri || u.path)) || (d.res && (d.res.uri || d.res.path)) || ''; })
             .catch(function () { return (d.res && (d.res.uri || d.res.path)) || ''; });
     }).then(function (uri) {
-        return __hbAndroidOpenApk(uri).then(function () { return uri; });
-    }).then(function () {
-        setTimeout(function () {
+        // از این‌جا به بعد فایل روی گوشی هست. اگر بازکردنِ نصب‌کننده شکست بخورد،
+        // دیگر نباید به مرورگر برگردیم (دانلودِ دوباره بی‌فایده است) — باید همان
+        // فایلِ دانلودشده را دوباره به نصب‌کننده بدهیم. پس نشانی را نگه می‌داریم.
+        try { window.__hbPendingApkUri = uri; } catch (e) {}
+        return __hbAndroidOpenApk(uri).then(function () {
+            setTimeout(function () {
+                closeOv();
+                ndUpdSetStatus('بروزرسانی دانلود شد و نصب‌کننده باز شد. روی «نصب» بزنید؛ ' +
+                    'روی نسخهٔ فعلی نصب می‌شود و اطلاعاتِ شما دست‌نخورده می‌ماند.' +
+                    '<br><small>اگر اندروید اجازه خواست، «نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید ' +
+                    'و بعد دکمهٔ «باز کردن نصب‌کننده» را بزنید.</small>' +
+                    '<br><button type="button" class="btn-primary" style="margin-top:8px" ' +
+                    'onclick="__hbRetryOpenApk()">باز کردن نصب‌کننده</button>', 'ok');
+            }, 700);
+        }, function (openErr) {
+            // دانلود موفق بود ولی نصب‌کننده باز نشد → راهنماییِ دقیق + دکمهٔ تلاشِ دوباره
             closeOv();
-            ndUpdSetStatus('بروزرسانی دانلود شد و نصب آغاز شد. «نصب» را تأیید کنید؛ ' +
-                'روی نسخهٔ فعلی نصب می‌شود و اطلاعاتِ شما دست‌نخورده می‌ماند.' +
-                '<br><small>اگر اندروید اجازه خواست، «نصب برنامه‌های ناشناس» را برای حسابدار فعال کنید.</small>', 'ok');
-        }, 700);
+            ndUpdSetStatus('فایلِ بروزرسانی دانلود شد، اما نصب‌کنندهٔ اندروید باز نشد.' +
+                '<br><small>' + ((openErr && openErr.message) || '') + '</small>' +
+                '<br><small>در تنظیماتِ گوشی، «نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید، ' +
+                'سپس دکمهٔ زیر را بزنید.</small>' +
+                '<br><button type="button" class="btn-primary" style="margin-top:8px" ' +
+                'onclick="__hbRetryOpenApk()">باز کردن نصب‌کننده</button>', 'warn');
+        });
     }).catch(function (err) {
         cleanup();
         onFail(err);
     });
 }
+// تلاشِ دوبارهٔ بازکردنِ نصب‌کننده برای فایلی که قبلاً دانلود شده (بدونِ دانلودِ مجدد)
+function __hbRetryOpenApk() {
+    var uri = '';
+    try { uri = window.__hbPendingApkUri || ''; } catch (e) {}
+    if (!uri) { ndUpdSetStatus('فایلِ بروزرسانی پیدا نشد — دوباره «بررسی بروزرسانی» را بزنید.', 'warn'); return; }
+    ndUpdSetStatus('در حال بازکردنِ نصب‌کننده…', 'info');
+    __hbAndroidOpenApk(uri).then(function () {
+        ndUpdSetStatus('نصب‌کننده باز شد — روی «نصب» بزنید.', 'ok');
+    }).catch(function (e) {
+        ndUpdSetStatus('نصب‌کننده باز نشد: ' + ((e && e.message) || '') +
+            '<br><small>«نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید و دوباره تلاش کنید.</small>', 'warn');
+    });
+}
+if (typeof window !== 'undefined') window.__hbRetryOpenApk = __hbRetryOpenApk;
 function ndUpdSaveRepo() {
     var el = document.getElementById('nd-upd-repo');
     ndUpdSetRepo(el ? el.value : '');
@@ -40628,3 +40899,150 @@ function ndBindFit() {
     // ناوبری: فقط یک پاس → بازگشت به داشبورد روان‌تر و سریع‌تر می‌شود (پاسِ دومِ ۲۴۰ms حذف شد).
     try { document.addEventListener('sectionChanged', function () { runOnce(); }); } catch (e) {}
 }
+
+// ═════════════════════════════════════════════════════════════════════════════
+//  پیمایشِ نتایجِ جستجو و دراپ‌داون‌ها با کلیدهای جهت‌دار — سراسریِ برنامه
+//  ---------------------------------------------------------------------------
+//  تا امروز نتایجِ جستجو (جنس در فروش فوری، مشتری، تأمین‌کننده، گدام، جستجوی
+//  سراسری و …) فقط با موس انتخاب می‌شدند. این موتور یک بار روی document می‌نشیند و
+//  برای «همهٔ» این فهرست‌ها کار می‌کند، بدونِ آنکه حتی یک خط از خودِ آن فهرست‌ها
+//  تغییر کند:
+//      ↓ / ↑ : حرکت میانِ نتایج (از اولین/آخرین شروع و چرخشی)
+//      Enter : انتخابِ نتیجهٔ فعال
+//      Esc   : بستنِ فهرست
+//
+//  دو نکتهٔ ظریف که رعایت شده تا هیچ منطقِ موجودی نشکند:
+//   ۱) Enter فقط وقتی گرفته می‌شود که واقعاً یک نتیجه «فعال» باشد؛ در غیرِ این صورت
+//      دقیقاً مثلِ قبل به فرم/فیلد می‌رسد (ثبتِ بل، پرشِ فیلد و … دست‌نخورده).
+//   ۲) بعضی فهرست‌ها به‌جای onclick از onmousedown استفاده می‌کنند (برای جلوگیری از
+//      بسته‌شدنِ زودهنگامِ دراپ‌داون). پس برای هر نتیجه همان رویدادی فرستاده می‌شود
+//      که خودش به آن گوش می‌دهد؛ نه دوتا، تا انتخاب دوبار اجرا نشود.
+// ═════════════════════════════════════════════════════════════════════════════
+//  ⚠ مثلِ بالا: «تابع» و نه «var» — وگرنه به‌خاطرِ خطای سطحِ‌بالای این فایل مقدارشان
+//  undefined می‌ماند و querySelectorAll(undefined) خطا می‌دهد و پیمایش کار نمی‌کند.
+function __hbKbPanelSel() {
+    return '.product-search-results, .search-results, .wh-search-results, ' +
+           '.sr-product-results, .pr-product-results, .autocomplete-results, ' +
+           '[id$="-results"], [id$="-result"], [data-kb-panel]';
+}
+function __hbKbItemSel() {
+    return '.product-search-result-item, .search-item, .search-result-item, ' +
+           '.nd-sr-item, .autocomplete-item, [data-kb-item]';
+}
+function __hbKbClass() { return 'hb-kb-active'; }
+
+function __hbKbVisible(el) {
+    if (!el) return false;
+    try {
+        if (el.offsetParent === null && getComputedStyle(el).position !== 'fixed') return false;
+        var cs = getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden') return false;
+        return el.getClientRects().length > 0;
+    } catch (e) { return false; }
+}
+// ظرفِ نتایجِ مربوط به همین فیلد را پیدا کن (بدونِ هیچ فرضی دربارهٔ id/ساختار)
+function __hbKbFindPanel(input) {
+    // ۱) دراپ‌داونِ سراسریِ اجناس که مستقیم روی body است و فیلدِ فعالش را می‌شناسد
+    try {
+        var bd = document.getElementById('_psr_body_dd');
+        if (bd && __hbKbVisible(bd) && bd._activeInput === input) return bd;
+    } catch (e) {}
+    // ۲) نزدیک‌ترین ظرفِ بازِ اطرافِ فیلد (حداکثر پنج سطح بالاتر)
+    var node = input, lvl = 0;
+    while (node && lvl < 5) {
+        var list;
+        try { list = node.querySelectorAll ? node.querySelectorAll(__hbKbPanelSel()) : []; } catch (e) { list = []; }
+        for (var i = 0; i < list.length; i++) {
+            if (__hbKbVisible(list[i]) && __hbKbItems(list[i]).length) return list[i];
+        }
+        node = node.parentElement; lvl++;
+    }
+    return null;
+}
+function __hbKbItems(panel) {
+    var out = [], i, list;
+    try { list = panel.querySelectorAll(__hbKbItemSel()); } catch (e) { list = []; }
+    if (!list.length) list = panel.children;      // فهرست‌هایی که کلاسِ شناخته‌شده ندارند
+    for (i = 0; i < list.length; i++) {
+        var el = list[i];
+        if (!__hbKbVisible(el)) continue;
+        // فقط عناصرِ قابلِ انتخاب (یا هر عنصرِ فهرستِ ساده)
+        out.push(el);
+    }
+    return out;
+}
+function __hbKbClear(panel) {
+    try {
+        var a = panel.querySelectorAll('.' + __hbKbClass());
+        for (var i = 0; i < a.length; i++) a[i].classList.remove(__hbKbClass());
+    } catch (e) {}
+}
+function __hbKbActivate(items, idx, panel) {
+    __hbKbClear(panel);
+    var el = items[idx];
+    if (!el) return;
+    el.classList.add(__hbKbClass());
+    try { el.scrollIntoView({ block: 'nearest' }); } catch (e) {}
+}
+// همان رویدادی را بفرست که خودِ آیتم به آن گوش می‌دهد (نه بیشتر)
+function __hbKbChoose(el) {
+    if (!el) return;
+    var hasDown = false;
+    try { hasDown = !!(el.onmousedown || el.getAttribute('onmousedown')); } catch (e) {}
+    if (hasDown) {
+        try {
+            el.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, cancelable: true, view: window }));
+            return;
+        } catch (e) {}
+    }
+    try { el.click(); } catch (e) {}
+}
+function __hbKbClosePanel(panel) {
+    __hbKbClear(panel);
+    try {
+        panel.classList.remove('show');
+        panel.style.display = 'none';
+    } catch (e) {}
+}
+function __hbInstallKeyboardNav() {
+    if (typeof document === 'undefined' || window.__hbKbNavInstalled) return;
+    window.__hbKbNavInstalled = true;
+    document.addEventListener('keydown', function (e) {
+        var k = e.key;
+        if (k !== 'ArrowDown' && k !== 'ArrowUp' && k !== 'Enter' && k !== 'Escape') return;
+        var t = e.target;
+        if (!t || !t.tagName) return;
+        var tag = t.tagName.toUpperCase();
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA') return;
+        if (tag === 'INPUT' && /^(checkbox|radio|range|color|file|submit|button|reset)$/i.test(t.type || '')) return;
+
+        var panel = __hbKbFindPanel(t);
+        if (!panel) return;
+        var items = __hbKbItems(panel);
+        if (!items.length) return;
+
+        var cur = -1;
+        for (var i = 0; i < items.length; i++) {
+            if (items[i].classList && items[i].classList.contains(__hbKbClass())) { cur = i; break; }
+        }
+
+        if (k === 'ArrowDown') {
+            e.preventDefault(); e.stopPropagation();
+            __hbKbActivate(items, (cur + 1) % items.length, panel);
+        } else if (k === 'ArrowUp') {
+            e.preventDefault(); e.stopPropagation();
+            __hbKbActivate(items, (cur <= 0 ? items.length - 1 : cur - 1), panel);
+        } else if (k === 'Enter') {
+            // اگر چیزی فعال نیست، Enter دست‌نخورده به منطقِ قبلیِ فرم می‌رسد
+            if (cur < 0) return;
+            e.preventDefault(); e.stopPropagation();
+            var pick = items[cur];
+            __hbKbClear(panel);
+            __hbKbChoose(pick);
+        } else if (k === 'Escape') {
+            e.preventDefault(); e.stopPropagation();
+            __hbKbClosePanel(panel);
+        }
+    }, true);
+}
+if (typeof window !== 'undefined') window.__hbInstallKeyboardNav = __hbInstallKeyboardNav;

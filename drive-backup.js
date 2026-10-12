@@ -347,7 +347,15 @@
         //  فعلی push می‌کرد — حتی اگر پشتیبان مالِ حسابِ دیگری بود. اکنون دقیقاً
         //  مثلِ واردکردنِ فایلِ JSON تصمیم‌گیری می‌شود: فقط پشتیبانی که اثبات شود
         //  مالِ همین حساب است اجازهٔ رفتن به ابر دارد.
-        const Guard = (typeof window !== 'undefined') ? window.JouyaImportGuard : null;
+        //  ⚠ عمداً به توابعِ سراسریِ script.js مستقیم وصل می‌شویم و نه به یک شیء:
+        //  در script.js یک خطای سطحِ‌بالا (settingsForm) وجود دارد، پس «انتسابِ شیء»
+        //  بعد از آن هرگز اجرا نمی‌شود؛ ولی «تعریفِ تابع» hoist می‌شود و روی window
+        //  می‌نشیند. پس تنها راهِ مطمئنِ دسترسی، همین توابع هستند.
+        const Guard = (typeof window !== 'undefined' && typeof window.__hbClassifyImport === 'function')
+            ? { classify: window.__hbClassifyImport,
+                resolveUnknown: window.__hbResolveUnknown,
+                applyForeign: window.__hbApplyForeignImport }
+            : null;
         const savedSettings = (() => { try { return localStorage.getItem('settings'); } catch (e) { return null; } })();
         let verdict = 'own';
         if (Guard && typeof Guard.classify === 'function') {

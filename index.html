@@ -5153,6 +5153,62 @@
     <!-- پلِ نسخهٔ نصبی (Tauri): electronAPI را می‌سازد تا «ذخیره در پوشهٔ دانلودها» و
          «بازکردنِ فایلِ اکسل» مثلِ نسخهٔ الکترون کار کند. در وب/موبایل بی‌اثر است. -->
     <script src="tauri-bridge.js" onerror="console.warn('tauri-bridge.js not found')"></script>
+    <!-- ═══════════════════════════════════════════════════════════════════════
+         پایانِ «حالتِ آزمایشیِ ورودِ اطلاعات» — باید پیش از database.js اجرا شود.
+         ---------------------------------------------------------------------
+         در حالتِ آزمایشی، دادهٔ یک فایلِ پشتیبانِ بیرونی موقتاً جای دادهٔ کاربر را
+         می‌گیرد. نشانهٔ «زنده‌بودنِ نشست» در sessionStorage است و با بسته‌شدنِ
+         برنامه از بین می‌رود؛ پس اگر پرچمِ localStorage باشد ولی نشانهٔ نشست نباشد،
+         یعنی برنامه بسته و دوباره باز شده → دادهٔ اصلیِ کاربر برگردانده می‌شود.
+         عمداً این‌جا و به‌صورتِ خام نوشته شده تا «پیش از» خواندنِ localStorage توسطِ
+         database.js/script.js اجرا شود؛ وگرنه نسخهٔ درون‌حافظه‌ایِ db دادهٔ آزمایشی
+         را برمی‌داشت. کلیدهای هویت/نشست/لایسنس/وضعیتِ سینک هرگز دست نمی‌خورند.
+         ═══════════════════════════════════════════════════════════════════════ -->
+    <script>
+    (function () {
+        'use strict';
+        var FLAG = 'jouya_trial_flag', SESS = 'jouya_trial_active', BAK = 'jouya_trial_backup';
+        // کلیدهایی که نه پشتیبان گرفته می‌شوند و نه پاک: هویتِ دستگاه، اکانت، لایسنس،
+        // نشست و وضعیتِ سینک، ترجیحاتِ دستگاه و توکنِ گوگل‌درایو.
+        function preserved(k) {
+            if (!k) return true;
+            if (k === FLAG || k === BAK) return true;
+            if (k.indexOf('jouya_') === 0) return true;   // jouya_sync_*, jouya_user_account, ...
+            if (k.indexOf('print-') === 0) return true;
+            return ({ darkMode: 1, numberSystem: 1, dbLockEnabled: 1, dbLockHash: 1,
+                      sysPassword: 1, theme: 1 })[k] === 1;
+        }
+        try {
+            if (localStorage.getItem(FLAG) !== '1') return;           // حالتِ آزمایشی در کار نیست
+            var alive = false;
+            try { alive = (sessionStorage.getItem(SESS) === '1'); } catch (e) { alive = false; }
+            if (alive) return;                                        // نشست هنوز زنده است → ادامه
+            // نشست تمام شده → بازگرداندنِ دادهٔ اصلی
+            var raw = localStorage.getItem(BAK), bak = null;
+            try { bak = JSON.parse(raw || 'null'); } catch (e) { bak = null; }
+            var i, k, kill = [];
+            for (i = 0; i < localStorage.length; i++) { k = localStorage.key(i); if (!preserved(k)) kill.push(k); }
+            for (i = 0; i < kill.length; i++) { try { localStorage.removeItem(kill[i]); } catch (e) {} }
+            if (bak && bak.keys) {
+                for (k in bak.keys) {
+                    if (Object.prototype.hasOwnProperty.call(bak.keys, k) && !preserved(k)) {
+                        try { localStorage.setItem(k, bak.keys[k]); } catch (e) {}
+                    }
+                }
+            }
+            try { localStorage.removeItem(BAK); } catch (e) {}
+            try { localStorage.removeItem(FLAG); } catch (e) {}
+            try { console.log('[trial] حالتِ آزمایشی پایان یافت — دادهٔ اصلیِ حساب بازگردانده شد.'); } catch (e) {}
+        } catch (e) { try { console.warn('[trial] بازگردانی ناموفق:', e); } catch (x) {} }
+    })();
+    // نوارِ «حالت آزمایشی» پس از آماده‌شدنِ صفحه. (در script.js یک خطای سطحِ‌بالا هست،
+    // پس شنوندهٔ DOMContentLoaded آن‌جا اجرا نمی‌شود؛ این‌جا مطمئن است.)
+    document.addEventListener('DOMContentLoaded', function () {
+        try { if (typeof window.__hbTrialBanner === 'function') window.__hbTrialBanner(); } catch (e) {}
+        // پیمایشِ نتایجِ جستجو/دراپ‌داون‌ها با ↑ ↓ Enter Esc (سراسریِ برنامه)
+        try { if (typeof window.__hbInstallKeyboardNav === 'function') window.__hbInstallKeyboardNav(); } catch (e) {}
+    });
+    </script>
     <script src="database.js"></script>
     <script src="script.js"></script>
     <script src="persian-date-utils.js" onerror="console.warn('persian-date-utils.js not found')"></script>

@@ -174,12 +174,31 @@
             pushConflicts();   // بهترین‌تلاش؛ آفلاین باشد بعداً retry می‌شود
         } catch (e) {}
     }
+    // ═══════════════════════════════════════════════════════════════════════
+    //  «حالتِ آزمایشیِ ورودِ اطلاعات» (Trial Session)
+    //  ---------------------------------------------------------------------
+    //  وقتی کاربر یک فایلِ پشتیبانِ بیرونی را «فقط برای آزمایش» وارد می‌کند، دادهٔ آن
+    //  موقتاً جای دادهٔ خودِ او را می‌گیرد. در این حالت باید همگام‌سازی «در هر دو جهت»
+    //  قطع باشد: نه چیزی بالا برود (وگرنه دادهٔ بیگانه واردِ ابرِ کاربر می‌شود) و نه
+    //  چیزی پایین بیاید (وگرنه دادهٔ ابریِ کاربر با دادهٔ آزمایشی قاطی می‌شود).
+    //
+    //  نشانهٔ این حالت عمداً در sessionStorage است، نه localStorage: با بسته‌شدنِ
+    //  برنامه خودبه‌خود از بین می‌رود، پس برخلافِ «فقط محلی» هرگز نمی‌تواند ماندگار
+    //  شود و حساب را خالی نگه دارد. بازگردانیِ دادهٔ اصلی در اسکریپتِ ابتدای
+    //  index.html انجام می‌شود (پیش از خوانده‌شدنِ localStorage توسطِ برنامه).
+    // ═══════════════════════════════════════════════════════════════════════
+    var TRIAL_SESSION_KEY = 'jouya_trial_active';
+    function isTrialActive() {
+        try { return (typeof sessionStorage !== 'undefined') && sessionStorage.getItem(TRIAL_SESSION_KEY) === '1'; }
+        catch (e) { return false; }
+    }
+
     // push تعارض‌های همگام‌نشده به ابر (upsert idempotent روی workspace_id,conflict_key).
     var _pushingConflicts = false;
     function pushConflicts() {
         // در حالتِ «فقط محلی» هیچ چیز بالا نمی‌رود — لاگِ تعارض هم نسخه‌ای از رکوردِ
         // محلی (losing) را حمل می‌کند، پس همین‌جا هم متوقف می‌شود.
-        if (isLocalOnly()) return Promise.resolve();
+        if (isLocalOnly() || isTrialActive()) return Promise.resolve();
         if (_pushingConflicts || !workspaceId || (typeof navigator !== 'undefined' && navigator && navigator.onLine === false)) return Promise.resolve();
         var arr = readConflicts();
         var pending = arr.filter(function (x) { return !x.synced; });
@@ -708,6 +727,7 @@
     }
 
     function pushNow() {
+        if (isTrialActive()) return Promise.resolve();   // حالتِ آزمایشی: هیچ همگام‌سازی‌ای نیست
         if (isLocalOnly()) return Promise.resolve();     // حالتِ «فقط محلی»: هیچ چیز به ابر نمی‌رود
         if (_wipeInProgress) return Promise.resolve();   // در حینِ Local-Only Wipe هیچ push/tombstone نساز
         if (!online || !workspaceId || _applyingRemote) return Promise.resolve();
@@ -793,6 +813,10 @@
         // ⚠ عمداً هیچ گاردِ «فقط محلی» این‌جا نیست: دانلود از ابرِ خودِ کاربر هرگز داده‌ای
         // را فاش نمی‌کند و متوقف‌کردنش باعثِ «حسابِ خالی» می‌شد (bootstrap هم روی همین
         // تابع ساخته شده). محافظت فقط در pushNow/pushConflicts اعمال می‌شود.
+        // اما «حالتِ آزمایشی» استثناست: آن‌جا دانلود هم باید قطع باشد تا دادهٔ ابریِ
+        // کاربر با دادهٔ آزمایشیِ روی دستگاه مخلوط نشود. آن پرچم در sessionStorage است
+        // و با بسته‌شدنِ برنامه از بین می‌رود، پس ماندگار نمی‌شود.
+        if (isTrialActive()) return Promise.resolve(0);
         if (!online || !workspaceId) return Promise.resolve(0);
         if (_pullInFlight) return Promise.resolve(0);   // از هم‌پوشانیِ pullها جلوگیری کن
         _pullInFlight = true;
@@ -979,6 +1003,8 @@
 
     function startLoops() {
         stopLoops();
+        // حالتِ آزمایشی: هیچ حلقه‌ای روشن نمی‌شود (نه push، نه pull، نه Realtime).
+        if (isTrialActive()) { warn('حالتِ آزمایشی فعال است — همگام‌سازی کاملاً متوقف می‌ماند.'); return; }
         if (!CFG.liveSyncEnabled || !workspaceId) return;
         // حلقه‌ها حتی در حالتِ «فقط محلی» شروع می‌شوند تا دانلود (pull/Realtime) زنده بماند
         // و حسابِ کاربر خالی نماند؛ خودِ pushNow در آن حالت چیزی بالا نمی‌فرستد.
@@ -1242,6 +1268,8 @@
         cloudWipe: cloudWipe,
         // حالتِ «فقط محلی» — پس از وارد کردنِ فایلِ پشتیبانِ حسابِ دیگر.
         // در این حالت فقط «آپلود» متوقف است؛ دانلود از ابرِ خودِ کاربر همیشه فعال می‌ماند.
+        // حالتِ آزمایشیِ ورودِ اطلاعات — همگام‌سازی در هر دو جهت قطع است
+        isTrialActive: isTrialActive,
         isLocalOnly: isLocalOnly,
         setLocalOnly: setLocalOnly,
         hasLocalBusinessData: hasLocalBusinessData,
