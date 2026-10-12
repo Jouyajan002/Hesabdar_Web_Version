@@ -1694,22 +1694,59 @@ recalculateAllProductsStock() {
                 reader.onload = (e) => {
                     try {
                         const allData = JSON.parse(e.target.result);
-                        if (!allData.version) throw new Error('فایل نامعتبر است');
-                        localStorage.setItem('persons', JSON.stringify(allData.persons || []));
-                        localStorage.setItem('products', JSON.stringify(allData.products || []));
-                        if (allData.warehouses) localStorage.setItem('warehouses', JSON.stringify(allData.warehouses));
-                        if (allData.activeWarehouseId) localStorage.setItem('activeWarehouseId', allData.activeWarehouseId);
-                        if (allData.warehouseTransfers) localStorage.setItem('warehouseTransfers', JSON.stringify(allData.warehouseTransfers));
-                        localStorage.setItem('transactions', JSON.stringify(allData.transactions || []));
-                        localStorage.setItem('expenses', JSON.stringify(allData.expenses || []));
-                        localStorage.setItem('cashboxes', JSON.stringify(allData.cashboxes || []));
-                        localStorage.setItem('settings', JSON.stringify(allData.settings || {}));
-                        localStorage.setItem('returns', JSON.stringify(allData.returns || []));
-                        if (allData.cashboxTransactions) localStorage.setItem('cashboxTransactions', JSON.stringify(allData.cashboxTransactions));
+                        // (ج) فایل‌های نسخه‌های خیلی قدیمی گاهی فیلدِ version ندارند و پیش‌تر
+                        // بی‌قید رد می‌شدند. حالا هر فایلی که دستِ‌کم یکی از جدول‌های شناخته‌شده را
+                        // داشته باشد پذیرفته می‌شود؛ ورودیِ بی‌ربط همچنان رد می‌شود.
+                        const _hasKnownTable = allData && typeof allData === 'object' && (
+                            allData.version != null || Array.isArray(allData.persons) ||
+                            Array.isArray(allData.products) || Array.isArray(allData.transactions) ||
+                            Array.isArray(allData.expenses) || Array.isArray(allData.cashboxes) ||
+                            (allData.settings && typeof allData.settings === 'object'));
+                        if (!_hasKnownTable) throw new Error('فایل نامعتبر است');
+                        // ── حداکثرسازیِ فضای حافظه برای دادهٔ واقعی ─────────────────────
+                        //  «backupHistory» بزرگ‌ترین مصرف‌کنندهٔ فضا و در عینِ حال غیرضروری است.
+                        //  پیش از نوشتنِ جدول‌ها کنار گذاشته می‌شود تا تمامِ سهمِ حافظه در اختیارِ
+                        //  دادهٔ کاربر باشد؛ در پایان، اگر جا شد، برگردانده می‌شود. به این ترتیب
+                        //  فایل‌هایی که تا مرزِ ظرفیتِ مرورگر بزرگ‌اند هم بدون خطا وارد می‌شوند.
+                        let _savedHistory = null;
+                        try { _savedHistory = localStorage.getItem('backupHistory'); } catch (eh0) { _savedHistory = null; }
+                        try { localStorage.removeItem('backupHistory'); } catch (eh1) {}
+                        //  نوشتنِ مقاوم: اگر ظرفیت پر شد، مصرف‌کننده‌های غیرضروری آزاد و دوباره تلاش
+                        //  می‌شود. هیچ دادهٔ کسب‌وکاری حذف نمی‌شود — فقط تاریخچه/کَش.
+                        const _impFree = () => {
+                            let freed = false;
+                            // فقط کَش/تاریخچهٔ دورریختنی — هرگز صفِ همگام‌سازی یا نسخهٔ پشتیبانِ
+                            // حالتِ آزمایشی (که دادهٔ واقعیِ کاربر در آن است) آزاد نمی‌شود.
+                            ['backupHistory', 'dashboardStats'].forEach(function (k) {
+                                try { if (localStorage.getItem(k) != null) { localStorage.removeItem(k); freed = true; } } catch (e) {}
+                            });
+                            return freed;
+                        };
+                        const _impSet = (k, v) => {
+                            try { localStorage.setItem(k, v); return true; }
+                            catch (e1) {
+                                if (_impFree()) {
+                                    try { localStorage.setItem(k, v); return true; } catch (e2) {}
+                                }
+                                console.warn('ظرفیتِ حافظه برای کلید «' + k + '» کافی نبود:', e1 && e1.name);
+                                throw e1;
+                            }
+                        };
+                        _impSet('persons', JSON.stringify(allData.persons || []));
+                        _impSet('products', JSON.stringify(allData.products || []));
+                        if (allData.warehouses) _impSet('warehouses', JSON.stringify(allData.warehouses));
+                        if (allData.activeWarehouseId) _impSet('activeWarehouseId', allData.activeWarehouseId);
+                        if (allData.warehouseTransfers) _impSet('warehouseTransfers', JSON.stringify(allData.warehouseTransfers));
+                        _impSet('transactions', JSON.stringify(allData.transactions || []));
+                        _impSet('expenses', JSON.stringify(allData.expenses || []));
+                        _impSet('cashboxes', JSON.stringify(allData.cashboxes || []));
+                        _impSet('settings', JSON.stringify(allData.settings || {}));
+                        _impSet('returns', JSON.stringify(allData.returns || []));
+                        if (allData.cashboxTransactions) _impSet('cashboxTransactions', JSON.stringify(allData.cashboxTransactions));
                         // اقلامِ همگام‌شونده — فقط اگر در فایل باشند بازیابی می‌شوند (سازگار با
                         // backupهای قدیمی که این‌ها را ندارند). شناسه‌ها عیناً حفظ می‌شوند
                         // (setItem آرایه را همان‌طور می‌نویسد؛ هیچ id/record_id جدیدی ساخته نمی‌شود).
-                        if (allData.services) localStorage.setItem('services', JSON.stringify(allData.services));
+                        if (allData.services) _impSet('services', JSON.stringify(allData.services));
                         // ارزها: ادغامِ idempotent بر اساسِ «code» (شناسهٔ واقعیِ ارز در CurrencySystem).
                         // تعریفِ فایل برای کدهای مشترک اولویت دارد (برای Restore درست باشد)، ارزهای
                         // محلیِ دیگر حفظ می‌شوند، و هیچ کدی دوبار نمی‌آید — پس Import (حتی چندباره یا
@@ -1727,9 +1764,9 @@ recalculateAllProductsStock() {
                                     c.code = code;
                                     _mergedCur.push(c);
                                 });
-                                localStorage.setItem('jouya-currencies', JSON.stringify(_mergedCur));
+                                _impSet('jouya-currencies', JSON.stringify(_mergedCur));
                             } catch (curErr) {
-                                localStorage.setItem('jouya-currencies', JSON.stringify(allData.currencies));
+                                _impSet('jouya-currencies', JSON.stringify(allData.currencies));
                             }
                         }
                         // نرخِ تبادل: ادغامِ idempotent بر اساسِ جفتِ (from,to) — تعریفِ فایل اولویت دارد،
@@ -1746,12 +1783,12 @@ recalculateAllProductsStock() {
                                     _seenPair[key] = true;
                                     _mergedRt.push(r);
                                 });
-                                localStorage.setItem('jouya-exchange-rates', JSON.stringify(_mergedRt));
+                                _impSet('jouya-exchange-rates', JSON.stringify(_mergedRt));
                             } catch (rtErr) {
-                                localStorage.setItem('jouya-exchange-rates', JSON.stringify(allData.exchangeRates));
+                                _impSet('jouya-exchange-rates', JSON.stringify(allData.exchangeRates));
                             }
                         }
-                        if (allData.referenceRates != null) localStorage.setItem('jouya-reference-rates', JSON.stringify(allData.referenceRates));
+                        if (allData.referenceRates != null) _impSet('jouya-reference-rates', JSON.stringify(allData.referenceRates));
                         // فهرست‌های سفارشیِ کاربر (کتگوری‌ها/واحدها/نوعِ حساب) — فقط اگر در فایل
                         // باشند بازیابی می‌شوند (سازگار با backupهای قدیمی). فهرستِ کلیدهای مجاز
                         // بسته است تا یک فایلِ دستکاری‌شده نتواند کلیدِ دلخواهی در حافظه بنویسد.
@@ -1766,35 +1803,62 @@ recalculateAllProductsStock() {
                                                    k.indexOf('customProductSubCategories_') === 0);
                                     if (!allowed) return;
                                     var v = allData.customLists[k];
-                                    if (typeof v === 'string') localStorage.setItem(k, v);
-                                    else if (v != null) localStorage.setItem(k, JSON.stringify(v));
+                                    if (typeof v === 'string') _impSet(k, v);
+                                    else if (v != null) _impSet(k, JSON.stringify(v));
                                 });
                             } catch (clErr) {}
                         }
-                        localStorage.setItem('dashboardStats', JSON.stringify(allData.dashboardStats || {}));
+                        _impSet('dashboardStats', JSON.stringify(allData.dashboardStats || {}));
                         // --- سیستم Migration: نسخهٔ شِمای فایل را اعمال و Migrationها را اجرا کن
                         try {
-                            if (allData.dbSchemaVersion != null) localStorage.setItem('db_schema_version', String(parseInt(allData.dbSchemaVersion, 10) || 0));
+                            if (allData.dbSchemaVersion != null) _impSet('db_schema_version', String(parseInt(allData.dbSchemaVersion, 10) || 0));
                             else localStorage.removeItem('db_schema_version');
                         } catch (mErr) {}
                         if (typeof window !== 'undefined' && typeof window.runDatabaseMigrations === 'function') {
                             try { window.runDatabaseMigrations(); } catch (mErr2) { console.error('migration after import:', mErr2); }
                         }
-                        // ثبت در تاریخچه پشتیبان
-                        const backupHistory = JSON.parse(localStorage.getItem('backupHistory') || '[]');
-                        const backup = {
-                            id: new Date().getTime(),
-                            name: `import_${new Date().getTime()}`,
-                            date: this.getCurrentDate(),
-                            description: 'وارد شده از فایل',
-                            data: e.target.result,
-                            size: e.target.result.length
-                        };
-                        backupHistory.push(backup);
-                        localStorage.setItem('backupHistory', JSON.stringify(backupHistory));
+                        // ── ثبت در تاریخچهٔ پشتیبان ─────────────────────────────────────
+                        //  (الف) این قدم دیگر هرگز نمی‌تواند ایمپورت را شکست بدهد. پیش‌تر یک نسخهٔ
+                        //  کاملِ خودِ فایل این‌جا در حافظه ذخیره می‌شد؛ روی فایل‌های بزرگ از سقفِ
+                        //  حافظهٔ مرورگر (~۵ مگابایت) عبور می‌کرد، خطای ظرفیت به catchِ بیرونی
+                        //  می‌رسید و به‌صورتِ «خطا در خواندن فایل» دیده می‌شد — در حالی که همهٔ
+                        //  داده‌ها از قبل با موفقیت نوشته شده بودند.
+                        //  (ب) سه مرحله‌ای عمل می‌کند تا بیشترین فضای ممکن برای دادهٔ واقعی بماند:
+                        //      ۱) نسخهٔ کامل در کنارِ تاریخچهٔ موجود
+                        //      ۲) اگر جا نشد: تاریخچهٔ قدیمی کنار گذاشته شود و فقط همین بماند
+                        //      ۳) اگر باز هم نشد: فقط شناسنامه (بدونِ نسخهٔ کامل)
+                        //  در هر سه حالت ایمپورت موفق است.
+                        try {
+                            const _raw = e.target.result;
+                            const _meta = {
+                                id: new Date().getTime(),
+                                name: `import_${new Date().getTime()}`,
+                                date: this.getCurrentDate(),
+                                description: 'وارد شده از فایل',
+                                size: _raw.length
+                            };
+                            let _prev = [];
+                            try {
+                                const _p = JSON.parse(_savedHistory || '[]');
+                                if (Array.isArray(_p)) _prev = _p;
+                            } catch (e1) { _prev = []; }
+                            const _try = (arr) => {
+                                try { localStorage.setItem('backupHistory', JSON.stringify(arr)); return true; }
+                                catch (e2) { return false; }
+                            };
+                            const _full = Object.assign({}, _meta, { data: _raw });
+                            if (!_try(_prev.concat([_full]))) {
+                                if (!_try([_full])) {
+                                    if (!_try(_prev.concat([Object.assign({}, _meta, { dataOmitted: true })]))) {
+                                        _try([Object.assign({}, _meta, { dataOmitted: true })]);
+                                    }
+                                }
+                            }
+                        } catch (bhErr) { console.warn('ثبتِ تاریخچهٔ پشتیبان انجام نشد (ایمپورت کامل است):', bhErr); }
                         resolve({ success: true, data: allData });
                     } catch (parseError) {
-                        reject({ success: false, error: 'خطا در خواندن فایل' });
+                        const _why = (parseError && parseError.message) ? (' — ' + parseError.message) : '';
+                        reject({ success: false, error: 'خطا در خواندن فایل' + _why });
                     }
                 };
                 reader.onerror = () => reject({ success: false, error: 'خطا در خواندن فایل' });
