@@ -247,6 +247,7 @@ jobs:
           fi
           echo "— مجوزها —"; grep -n 'uses-permission' "$MF" || true
 
+
           echo "— <application> پس از تنظیم —"
           grep -n '<application' "$MF" || true
 
@@ -306,6 +307,35 @@ jobs:
         run: npx cap sync android
 
       # ══════════════════════════════════════════════════════════════════════
+      #  مسیرهای FileProvider — لازم برای «نصبِ بروزرسانی از داخلِ برنامه»
+      #  ---------------------------------------------------------------------
+      #  اندروید فایلِ APK را فقط از یک نشانیِ content:// که FileProvider ساخته و
+      #  «اجازهٔ خواندنِ موقت» دارد نصب می‌کند. اگر پوشهٔ فایل در file_paths.xml
+      #  نیامده باشد، ساختِ آن نشانی شکست می‌خورد و نصب‌کنندهٔ بسته باز می‌شود ولی
+      #  نصب هرگز شروع نمی‌شود — دقیقاً همان مشکلِ گزارش‌شده. این‌جا همهٔ پوشه‌های
+      #  ممکن پوشش داده می‌شود. عمداً «پس از» cap sync اجرا می‌شود تا بازنویسی نشود.
+      # ══════════════════════════════════════════════════════════════════════
+      - name: تنظیمِ مسیرهای FileProvider
+        run: |
+          set -e
+          MF="android/app/src/main/AndroidManifest.xml"
+          FP="android/app/src/main/res/xml/file_paths.xml"
+          mkdir -p "$(dirname "$FP")"
+          cat > "$FP" <<'XML'
+          <?xml version="1.0" encoding="utf-8"?>
+          <paths xmlns:android="http://schemas.android.com/apk/res/android">
+              <files-path          name="files"           path="." />
+              <cache-path          name="cache"           path="." />
+              <external-path       name="external"        path="." />
+              <external-files-path name="external_files"  path="." />
+              <external-cache-path name="external_cache"  path="." />
+          </paths>
+          XML
+          echo "— file_paths.xml —"; cat "$FP"
+          echo "— FileProvider در مانیفست —"
+          grep -n 'FileProvider' -A 6 "$MF" || echo "::warning::FileProvider در مانیفست پیدا نشد."
+
+      # ══════════════════════════════════════════════════════════════════════
       #  بررسیِ ثبتِ افزونه‌های نیتیو (بدونِ نیاز به تستِ روی گوشی)
       #  ---------------------------------------------------------------------
       #  اشتراکِ فایلِ PDF در اندروید فقط با افزونه‌های Share و Filesystem ممکن است.
@@ -326,9 +356,10 @@ jobs:
           grep -q "capacitor-share" "$SETTINGS"      || MISSING="$MISSING @capacitor/share"
           grep -q "capacitor-filesystem" "$SETTINGS" || MISSING="$MISSING @capacitor/filesystem"
           grep -q "capacitor-app" "$SETTINGS"        || MISSING="$MISSING @capacitor/app"
-          # افزونهٔ بازکنندهٔ فایل فقط برای «نصبِ بروزرسانی از داخلِ برنامه» است؛ اگر نبود
-          # برنامه کار می‌کند و نصب از پنلِ اشتراک انجام می‌شود، پس فقط هشدار می‌دهیم.
-          grep -q "file-opener" "$SETTINGS" || echo "::warning::@capacitor-community/file-opener ثبت نشد — نصبِ بروزرسانی از پنلِ اشتراک انجام می‌شود." 
+          # افزونهٔ بازکنندهٔ فایل دیگر «اختیاری» نیست: نصبِ APK فقط با content:// از
+          # FileProvider کار می‌کند و همین افزونه آن را می‌سازد. بدونِ آن، نصب‌کنندهٔ
+          # بسته باز می‌شد ولی نصب هرگز شروع نمی‌شد. پس نبودنش خطای بیلد است.
+          grep -q "file-opener" "$SETTINGS" || MISSING="$MISSING @capacitor-community/file-opener"
           if [ -n "$MISSING" ]; then
             echo "::error::این افزونه‌ها در پروژهٔ اندروید ثبت نشده‌اند:$MISSING — ارسال به واتساپ کار نخواهد کرد."
             exit 1
