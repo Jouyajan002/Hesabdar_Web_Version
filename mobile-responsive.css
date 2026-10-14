@@ -523,6 +523,7 @@ body:has(#dashboard.section.active) #financial.section.active { display: none !i
     }
     #persons-list .list-header-filter,
     #products-list .list-header-filter,
+    #services-list .list-header-filter,
     #sales-list .list-header-filter {
         padding-left: 16px !important; padding-right: 16px !important;
         margin-left: -16px !important; margin-right: -16px !important;   /* نوارِ سرمه‌ای لبه‌تا‌لبه ولی محتوا با حاشیهٔ راحت */
@@ -644,6 +645,7 @@ body:has(#dashboard.section.active) #financial.section.active { display: none !i
     #sales-list .person-fab-add,
     #purchases-list .person-fab-add,
     #receipts-list .person-fab-add,
+    #services-list .person-fab-add,
     #payments-list .person-fab-add {
         font-size: 0 !important; gap: 0 !important; padding: 0 !important;
         width: 56px !important; height: 56px !important; border-radius: 50% !important;
@@ -654,6 +656,7 @@ body:has(#dashboard.section.active) #financial.section.active { display: none !i
     #sales-list .person-fab-add > i,
     #purchases-list .person-fab-add > i,
     #receipts-list .person-fab-add > i,
+    #services-list .person-fab-add > i,
     #payments-list .person-fab-add > i { font-size: 1.25rem !important; margin: 0 !important; }
     /* «حساب جدید»/«مصرف جدید»/«کارمند جدید» (btn-primary در بخش‌های مالی) فقط‌آیکن */
     #cash-boxes .section-header .btn-primary,

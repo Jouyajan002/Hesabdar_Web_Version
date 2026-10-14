@@ -2839,6 +2839,11 @@ const pageTitle = document.getElementById('page-title');
                     pageTitle.textContent = 'فهرست اجناس انبار';
                     loadProductsList();
                     break;
+                case 'services-list':
+                    pageTitle.textContent = 'لیست خدمات';
+                    try { if (typeof _svcOnEnterList === 'function') _svcOnEnterList(); } catch (e) {}
+                    try { if (typeof loadServicesList === 'function') loadServicesList(); } catch (e) {}
+                    break;
                 case 'person-form':
                     pageTitle.textContent = 'ثبت فرد جدید';
                     break;
@@ -11125,18 +11130,13 @@ function createOfflineBackup() {
             backupTime: new Date().toISOString()
         };
         const jsonStr = JSON.stringify(backupData, null, 2);
-        const blob = new Blob([jsonStr], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a');
         const ts = new Date();
         const fname = 'backup_offline_' + ts.getFullYear() + String(ts.getMonth()+1).padStart(2,'0') + String(ts.getDate()).padStart(2,'0') + '_' + String(ts.getHours()).padStart(2,'0') + String(ts.getMinutes()).padStart(2,'0') + '.json';
-        link.href = url;
-        link.download = fname;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
-        showMessage('موفقیت', 'پشتیبان آفلاین با موفقیت ذخیره شد در کامپیوتر شما.');
+        __hbSaveJsonFile(jsonStr, fname).then(function (res) {
+            showMessage(res.ok ? 'موفقیت' : 'خطا', __hbSavedJsonMsg(res));
+        }).catch(function () {
+            showMessage('خطا', 'خطا در ایجاد پشتیبان آفلاین');
+        });
     } catch (e) {
         console.error('خطا در ایجاد پشتیبان آفلاین:', e);
         showMessage('خطا', 'خطا در ایجاد پشتیبان آفلاین');
@@ -11169,15 +11169,11 @@ function downloadBackup(backupId) {
     const backupHistory = db.getBackups();
     const backup = backupHistory.find(b => b.id == backupId);
     if (backup) {
-        const dataBlob = new Blob([backup.data], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${backup.name}.json`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        __hbSaveJsonFile(String(backup.data || ''), `${backup.name}.json`).then(function (res) {
+            if (res && res.android) showMessage(res.ok ? 'موفقیت' : 'خطا', __hbSavedJsonMsg(res));
+        }).catch(function () {
+            showMessage('خطا', 'ذخیرهٔ فایلِ پشتیبان ممکن نشد');
+        });
     } else {
         showMessage('خطا', 'پشتیبان یافت نشد');
     }
@@ -11705,7 +11701,25 @@ function __jouyaAndIsNative() {
 }
 
 // سه راهِ دسترسی به افزونه — هرکدام جواب داد همان استفاده می‌شود
-var __jouyaAndRegCache = {};
+//
+// ⚠ باگِ ریشه‌ای که این‌جا بسته شد (علتِ «نصب‌کننده باز نمی‌شود»):
+//   این حافظهٔ موقت قبلاً `var __jouyaAndRegCache = {}` در سطحِ فایل بود. در این فایل
+//   یک خطای سطحِ‌بالا در خطِ ۱۱۲۴۵ وجود دارد (settingsForm نال است) و هر جملهٔ
+//   سطحِ‌بالا پس از آن اجرا نمی‌شود — پس این متغیر برای همیشه undefined می‌مانْد.
+//   در نتیجه خطِ `__jouyaAndRegCache[plugin]` خطا می‌داد، داخلِ try خورده می‌شد و
+//   راهِ `Capacitor.registerPlugin` عملاً هرگز کار نمی‌کرد. در Capacitor نسخهٔ ۴ به
+//   بعد `Capacitor.Plugins` برای بیشترِ افزونه‌ها پر نمی‌شود و registerPlugin تنها
+//   راهِ درست است؛ یعنی روی گوشی FileOpener «نصب‌نشده» گزارش می‌شد حتی وقتی نصب بود،
+//   برنامه به Browser/AppLauncher می‌افتاد، آن‌ها بدونِ خطا برمی‌گشتند («موفقِ دروغین»)
+//   و بعد برنامه بسته می‌شد بدونِ آن‌که نصبی شروع شده باشد — دقیقاً گزارشِ کاربر.
+//   حالا به‌جای متغیرِ سطحِ‌بالا، یک تابعِ hoisted روی window نگه‌داری می‌کند.
+function __jouyaAndReg() {
+    try {
+        if (typeof window === 'undefined') return {};
+        if (!window.__jouyaAndRegCacheObj) window.__jouyaAndRegCacheObj = {};
+        return window.__jouyaAndRegCacheObj;
+    } catch (e) { return {}; }
+}
 function __jouyaAndCall(plugin, method, options) {
     var C = window.Capacitor;
     if (!C) return Promise.reject(new Error('Capacitor موجود نیست'));
@@ -11715,8 +11729,9 @@ function __jouyaAndCall(plugin, method, options) {
     } catch (e) {}
     try {
         if (typeof C.registerPlugin === 'function') {
-            if (!__jouyaAndRegCache[plugin]) __jouyaAndRegCache[plugin] = C.registerPlugin(plugin);
-            var P2 = __jouyaAndRegCache[plugin];
+            var _rc = __jouyaAndReg();
+            if (!_rc[plugin]) _rc[plugin] = C.registerPlugin(plugin);
+            var P2 = _rc[plugin];
             if (P2 && typeof P2[method] === 'function') return Promise.resolve(P2[method](options));
         }
     } catch (e) {}
@@ -11770,6 +11785,111 @@ function __jouyaAndWrite(name, data, isText) {
             });
     }
     return step(0);
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  ذخیرهٔ فایلِ JSON (پشتیبان/خروجی) در جایِ قابلِ پیداکردن                        ║
+// ║  درخواستِ کاربر: «از این به بعد فایلِ JSON در پوشهٔ دانلودها و یک پوشه به اسمِ   ║
+// ║  خودِ اپلیکیشن دانلود شود.»                                                    ║
+// ║  مسیرِ نهایی روی اندروید:  /storage/emulated/0/Download/Hesabdar/<نام فایل>     ║
+// ║  روی وب/ویندوز رفتارِ قبلی (دانلودِ مرورگر) دست‌نخورده می‌ماند.                   ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+// ⚠ به‌صورتِ تابعِ hoisted نوشته شده، نه متغیرِ سطحِ‌بالا: در این فایل جمله‌های
+//   سطحِ‌بالا پس از یک throwِ قدیمی اجرا نمی‌شوند و هر var آن‌جا undefined می‌مانَد.
+function __hbAppDir() { return 'Hesabdar'; }   // نامِ پوشهٔ اپلیکیشن داخلِ Downloads
+
+/** آیا روی اندرویدِ نیتیو (Capacitor) هستیم؟ */
+function __hbIsAndroidNative() {
+    try {
+        var C = window.Capacitor;
+        if (!C) return false;
+        if (typeof C.isNativePlatform === 'function' && !C.isNativePlatform()) return false;
+        if (typeof C.getPlatform === 'function') return C.getPlatform() === 'android';
+        return !!(C.Plugins && C.Plugins.Filesystem);
+    } catch (e) { return false; }
+}
+
+/** دانلودِ معمولیِ مرورگر — همان رفتارِ قبلی، بدونِ هیچ تغییری */
+function __hbBrowserDownloadJson(text, fileName) {
+    var url = '';
+    try {
+        var blob = new Blob([text], { type: 'application/json' });
+        url = URL.createObjectURL(blob);
+        var a = document.createElement('a');
+        a.href = url; a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        return true;
+    } catch (e) {
+        return false;
+    } finally {
+        try { if (url) setTimeout(function () { URL.revokeObjectURL(url); }, 1500); } catch (e) {}
+    }
+}
+
+/**
+ * ذخیرهٔ متنِ JSON.
+ *  • اندرویدِ نیتیو → Download/Hesabdar/<نام>  (چند پوشه به‌ترتیب امتحان می‌شود)
+ *  • غیرِ آن       → دانلودِ مرورگر (رفتارِ قبلی)
+ * خروجی: Promise با { ok, where, path, android }
+ */
+function __hbSaveJsonFile(text, fileName) {
+    var name = __jouyaAndSafeName(fileName, 'json');
+    if (!__hbIsAndroidNative()) {
+        var ok = __hbBrowserDownloadJson(text, name);
+        return Promise.resolve({ ok: ok, android: false, where: 'مرورگر', path: name });
+    }
+    // روی اندروید: Download/Hesabdar/<نام>
+    // ترتیبِ پوشه‌ها: اول حافظهٔ مشترکِ دستگاه (که کاربر با فایل‌منیجر می‌بیند)،
+    // بعد پوشه‌های اختصاصیِ برنامه به‌عنوان پشتیبان.
+    var APPDIR = __hbAppDir();
+    var PLAN = [
+        { dir: 'EXTERNAL_STORAGE', sub: 'Download/' + APPDIR + '/', human: 'حافظهٔ گوشی ← Download ← ' + APPDIR },
+        { dir: 'DOCUMENTS',        sub: APPDIR + '/',               human: 'Documents ← ' + APPDIR },
+        { dir: 'EXTERNAL',         sub: 'Download/' + APPDIR + '/', human: 'پوشهٔ برنامه ← Download ← ' + APPDIR },
+        { dir: 'EXTERNAL',         sub: APPDIR + '/',               human: 'پوشهٔ برنامه ← ' + APPDIR },
+        { dir: 'DATA',             sub: APPDIR + '/',               human: 'حافظهٔ داخلیِ برنامه ← ' + APPDIR },
+        { dir: 'CACHE',            sub: APPDIR + '/',               human: 'حافظهٔ موقتِ برنامه ← ' + APPDIR }
+    ];
+    var step = function (i, lastErr) {
+        if (i >= PLAN.length) {
+            // آخرین راه: دانلودِ مرورگر تا دست‌کم فایل از دست نرود
+            var ok2 = __hbBrowserDownloadJson(text, name);
+            return Promise.resolve({ ok: ok2, android: true, where: 'دانلودِ مرورگر (پوشه‌های دستگاه در دسترس نبود)',
+                                     path: name, error: (lastErr && lastErr.message) || String(lastErr || '') });
+        }
+        var pl = PLAN[i];
+        var full = pl.sub + name;
+        return __jouyaAndCall('Filesystem', 'writeFile', {
+            path: full, data: text, directory: pl.dir, encoding: 'utf8', recursive: true
+        }).then(function () {
+            return __jouyaAndCall('Filesystem', 'getUri', { path: full, directory: pl.dir })
+                .then(function (r) { return (r && (r.uri || r.path)) || full; })
+                .catch(function () { return full; });
+        }).then(function (uri) {
+            try { __jouyaAndLog('ذخیرهٔ JSON', pl.dir + ':' + full + ' ✓'); } catch (e) {}
+            return { ok: true, android: true, where: pl.human, path: String(uri).replace(/^file:\/\//, ''), dir: pl.dir };
+        }).catch(function (e) {
+            try { __jouyaAndLog('ذخیرهٔ JSON در ' + pl.dir, 'خطا: ' + ((e && (e.message || e.errorMessage)) || e)); } catch (e2) {}
+            return step(i + 1, e);
+        });
+    };
+    return step(0, null);
+}
+
+/** پیامِ یکدستِ «کجا ذخیره شد» برای هر چهار مسیرِ خروجیِ JSON */
+function __hbSavedJsonMsg(res) {
+    if (!res || !res.ok) return 'ذخیرهٔ فایل ممکن نشد.';
+    if (!res.android) return 'فایل JSON دانلود شد ✓';
+    return 'فایل JSON ذخیره شد ✓\nمحلِ فایل: ' + (res.where || '') +
+           (res.path ? ('\n' + res.path) : '');
+}
+if (typeof window !== 'undefined') {
+    window.__hbSaveJsonFile = __hbSaveJsonFile;
+    window.__hbSavedJsonMsg = __hbSavedJsonMsg;
+    window.__hbIsAndroidNative = __hbIsAndroidNative;
+    window.__hbAppDir = __hbAppDir;
 }
 
 // ── اشتراکِ PDF در اندروید: همهٔ راه‌ها به‌ترتیب ─────────────────────────────────
@@ -27697,15 +27817,12 @@ function ssbCreateBackup() {
         if (result && result.success) {
             const data = db.exportData ? db.exportData() : { success: false };
             if (data.success) {
-                const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
-                const url  = URL.createObjectURL(blob);
-                const a    = document.createElement('a');
-                a.href     = url;
-                a.download = `backup_${Date.now()}.json`;
-                a.click();
-                URL.revokeObjectURL(url);
+                __hbSaveJsonFile(JSON.stringify(data.data, null, 2), `backup_${Date.now()}.json`)
+                    .then(function (res) { ssbShowMsg('پشتیبان ایجاد شد ✓\n' + __hbSavedJsonMsg(res), !res.ok); })
+                    .catch(function () { ssbShowMsg('پشتیبان ایجاد شد، اما ذخیرهٔ فایل ممکن نشد', true); });
+            } else {
+                ssbShowMsg('پشتیبان ایجاد شد ✓');
             }
-            ssbShowMsg('پشتیبان ایجاد و دانلود شد ✓');
             ssbLoadBackupList();
         } else {
             ssbShowMsg('خطا در ایجاد پشتیبان', true);
@@ -28137,14 +28254,9 @@ function ssbExportData() {
     try {
         const data = db.exportData ? db.exportData() : { success: false };
         if (data.success) {
-            const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
-            const url  = URL.createObjectURL(blob);
-            const a    = document.createElement('a');
-            a.href     = url;
-            a.download = `export_${Date.now()}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-            ssbShowMsg('فایل JSON دانلود شد ✓');
+            __hbSaveJsonFile(JSON.stringify(data.data, null, 2), `export_${Date.now()}.json`)
+                .then(function (res) { ssbShowMsg(__hbSavedJsonMsg(res), !res.ok); })
+                .catch(function (e) { ssbShowMsg('خطا در خروجی: ' + ((e && e.message) || ''), true); });
         }
     } catch(e) { ssbShowMsg('خطا در خروجی', true); }
 }
@@ -32632,8 +32744,24 @@ function _svcOpenPicker(mode) {
     _svcBack(active ? active.id : (mode === 'purchase' ? 'purchase-form' : 'sales-form'));
     // بازگشت به بل نباید فرمِ بل را ریست کند (همان پرچمِ قبلی)
     window._returningFromServicePicker = _svcBack();
+    _svcState().arm = true; // فقط همین یک‌بار اجازهٔ ورود در «حالتِ انتخاب»
     showSection('services-list');
     loadServicesList();
+}
+
+/**
+ * هر بار که کاربر واردِ «لیست خدمات» می‌شود این تابع اجرا می‌گردد.
+ * اگر ورود از راهِ بلِ فروش/خرید باشد (پرچمِ arm) حالتِ انتخاب حفظ می‌شود؛
+ * در غیرِ این صورت (داشبورد، لیست‌های سریع، سایدبار) حالت به نورمال برمی‌گردد
+ * و نوارِ «افزودن به بل» غیرفعال می‌ماند.
+ */
+function _svcOnEnterList() {
+    var st = _svcState();
+    if (st.arm) { st.arm = false; return; }
+    st.mode = null;
+    st.back = null;
+    st.sel.length = 0;
+    try { window._returningFromServicePicker = null; } catch (e) {}
 }
 
 /** دکمهٔ برگشتِ هدرِ لیست */
@@ -32691,7 +32819,7 @@ function sortServicesList(v) { _svcSort(v || 'name-asc'); loadServicesList(); }
 function resetServicesFilter() {
     var u = document.getElementById('filter-service-unit'); if (u) u.value = 'all';
     var p = document.getElementById('filter-service-price'); if (p) p.value = 'all';
-    var s = document.getElementById('search-services'); if (s) s.value = '';
+    var s = document.getElementById('global-search-services'); if (s) s.value = '';
     loadServicesList();
 }
 function filterServicesList() { loadServicesList(); }
@@ -32737,7 +32865,7 @@ function loadServicesList() {
         uSel.value = cur;
     }
 
-    var searchVal = ((document.getElementById('search-services') || {}).value || '').trim().toLowerCase();
+    var searchVal = ((document.getElementById('global-search-services') || {}).value || '').trim().toLowerCase();
     var fUnit = ((document.getElementById('filter-service-unit') || {}).value) || 'all';
     var fPrice = ((document.getElementById('filter-service-price') || {}).value) || 'all';
 
@@ -32873,6 +33001,9 @@ function showServiceForm(serviceId, returnTo) {
 /** خروج از فرم خدمت — به لیست برمی‌گردد و نشستِ انتخاب را حفظ می‌کند */
 function _exitServiceForm() {
     window._serviceFormReturnTo = null;
+    // اگر کاربر در «حالتِ انتخاب» بود (از بلِ فروش/خرید آمده)، برگشت از فرمِ خدمت
+    // نباید نشست را پاک کند — پس همان پرچمِ ورودِ مجاز را دوباره می‌گذاریم.
+    if (_svcMode()) _svcState().arm = true;
     showSection('services-list');
     loadServicesList();
 }
@@ -32920,6 +33051,7 @@ function saveService() {
 
     // در حالتِ انتخاب: خدمتِ تازه از پیش انتخاب می‌شود و نشست دست‌نخورده می‌ماند
     if (_svcMode() && !editId && _svcSel().indexOf(data.id) < 0) _svcSel().push(data.id);
+    if (_svcMode()) _svcState().arm = true;   // نشستِ انتخاب پس از ثبت هم باید بماند
 
     showSection('services-list');
     loadServicesList();
@@ -40609,10 +40741,15 @@ function ndUpdRunWebAndroidInstall(url) {
             };
             return step(0);
         }).then(function (uri) {
-            // تلاش برای بازکردنِ نصب‌کننده
-            return __jouyaAndCall('Browser', 'open', { url: uri }).then(function () { return uri; });
-        }).then(function () {
+            // تلاش برای بازکردنِ نصب‌کننده — از همان زنجیرهٔ تأییدشده (Browser.open
+            // به‌تنهایی نشانیِ file:// را می‌پذیرد ولی نصب را هرگز شروع نمی‌کند).
+            try { window.__hbPendingApkUri = uri; __hbInstReset(); } catch (e) {}
+            return __hbAndroidOpenApkVerified(uri).then(function (opened) {
+                return { uri: uri, opened: opened };
+            });
+        }).then(function (st) {
             setPct(100);
+            if (!st || !st.opened) { closeOv(); return; }
             note('فایل آماده شد؛ «نصب» را تایید کنید.');
             setTimeout(function () {
                 closeOv();
@@ -40698,8 +40835,9 @@ function __hbAndPlugin(name) {
     try { if (C.Plugins && C.Plugins[name]) return C.Plugins[name]; } catch (e) {}
     try {
         if (typeof C.registerPlugin === 'function') {
-            if (!__jouyaAndRegCache[name]) __jouyaAndRegCache[name] = C.registerPlugin(name);
-            return __jouyaAndRegCache[name];
+            var _rc2 = __jouyaAndReg();
+            if (!_rc2[name]) _rc2[name] = C.registerPlugin(name);
+            return _rc2[name];
         }
     } catch (e) {}
     return null;
@@ -40714,6 +40852,253 @@ function __hbAndPlugin(name) {
 //  نصبِ APK فقط با یک content:// از FileProvider کار می‌کند — دقیقاً کاری که افزونهٔ
 //  FileOpener انجام می‌دهد. پس مسیرِ اشتراک برای APK کاملاً حذف شد و به‌جایش، اگر
 //  افزونه نبود، خطای روشن داده می‌شود تا کاربر بداند چه باید بکند.
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  تشخیصِ نصبِ اندروید (تست درخواستیِ کاربر)                                      ║
+// ║  قاعده: اگر نصب‌کننده واقعاً باز شد → هیچ چیزی چاپ نمی‌شود و برنامه بسته می‌شود. ║
+// ║  اگر باز نشد → برنامه بسته نمی‌شود و یک گزارشِ کاملِ فنی روی صفحه ظاهر می‌شود.   ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+// (همان دلیلِ بالا: هیچ متغیرِ سطحِ‌بالایی این‌جا اجرا نمی‌شود، پس حالت روی window)
+function __hbInstS() {
+    try {
+        if (typeof window === 'undefined') return { log: [], t0: 0 };
+        if (!window.__hbInstStore) window.__hbInstStore = { log: [], t0: 0 };
+        if (!Array.isArray(window.__hbInstStore.log)) window.__hbInstStore.log = [];
+        return window.__hbInstStore;
+    } catch (e) { return { log: [], t0: 0 }; }
+}
+function __hbIlog(step, state, detail) {
+    try {
+        var S = __hbInstS();
+        if (!S.t0) S.t0 = Date.now();
+        S.log.push({
+            t: Date.now() - S.t0,
+            step: String(step || ''),
+            state: String(state || ''),
+            detail: (detail === undefined || detail === null) ? '' :
+                    (typeof detail === 'string' ? detail : ((detail && detail.message) || String(detail)))
+        });
+        if (S.log.length > 200) S.log.shift();
+    } catch (e) {}
+}
+function __hbInstReset() { var S = __hbInstS(); S.log = []; S.t0 = Date.now(); }
+
+/** عکسِ لحظه‌ای از محیطِ اجرا — همان چیزی که برای ریشه‌یابی لازم است */
+function __hbInstEnv() {
+    var o = { platform: '؟', native: '؟', capacitor: false, plugins: {}, ua: '' };
+    try { o.ua = String(navigator.userAgent || '').slice(0, 180); } catch (e) {}
+    try {
+        var C = window.Capacitor;
+        o.capacitor = !!C;
+        if (C) {
+            try { o.platform = (typeof C.getPlatform === 'function') ? C.getPlatform() : '؟'; } catch (e) {}
+            try { o.native = (typeof C.isNativePlatform === 'function') ? String(C.isNativePlatform()) : '؟'; } catch (e) {}
+        }
+        // متدِ شاخصِ هر افزونه — فقط «وجودِ شیء» کافی نیست، باید همان متد را داشته باشد
+        var KEY = { FileOpener: 'open', Filesystem: 'writeFile', AppLauncher: 'openUrl',
+                    Browser: 'open', App: 'exitApp', Share: 'share' };
+        Object.keys(KEY).forEach(function (n) {
+            var how = 'ندارد';
+            var has = function (P) { try { return !!(P && typeof P[KEY[n]] === 'function'); } catch (e) { return false; } };
+            try {
+                if (window.Capacitor && window.Capacitor.Plugins && has(window.Capacitor.Plugins[n])) how = 'Plugins';
+                else if (has(__hbAndPlugin(n))) how = 'registerPlugin';
+                else if (window.Capacitor && typeof window.Capacitor.nativePromise === 'function') how = 'شاید از راهِ bridge';
+            } catch (e) { how = 'خطا' ; }
+            o.plugins[n] = how;
+        });
+    } catch (e) {}
+    return o;
+}
+
+/**
+ * آیا برنامه واقعاً به پس‌زمینه رفت؟
+ * وقتی نصب‌کنندهٔ اندروید (Package Installer) جلو می‌آید، WebView پنهان می‌شود و
+ * یکی از این رویدادها می‌دهد. اگر هیچ‌کدام در مهلتِ داده‌شده نیامد یعنی هیچ صفحه‌ای
+ * جلو نیامده و نصب شروع نشده است — همان مشکلی که کاربر گزارش کرده.
+ */
+function __hbWatchInstaller(ms) {
+    return new Promise(function (resolve) {
+        var done = false, handle = null;
+        var finish = function (why) {
+            if (done) return; done = true;
+            try { clearTimeout(timer); } catch (e) {}
+            try { document.removeEventListener('visibilitychange', onVis); } catch (e) {}
+            try { window.removeEventListener('pagehide', onHide); } catch (e) {}
+            try { window.removeEventListener('blur', onHide); } catch (e) {}
+            try { if (handle && typeof handle.remove === 'function') handle.remove(); } catch (e) {}
+            __hbIlog('watch', why ? 'پس‌زمینه' : 'هیچ‌رویدادی', why || ('مهلت ' + ms + 'ms تمام شد'));
+            resolve(!!why);
+        };
+        var onVis = function () { if (document.visibilityState === 'hidden') finish('visibilitychange:hidden'); };
+        var onHide = function (e) { finish((e && e.type) || 'pagehide'); };
+        try { document.addEventListener('visibilitychange', onVis); } catch (e) {}
+        try { window.addEventListener('pagehide', onHide); } catch (e) {}
+        try { window.addEventListener('blur', onHide); } catch (e) {}
+        try {
+            var A = __hbAndPlugin('App');
+            if (A && typeof A.addListener === 'function') {
+                var r = A.addListener('appStateChange', function (st) {
+                    if (st && st.isActive === false) finish('appStateChange:isActive=false');
+                });
+                if (r && typeof r.then === 'function') r.then(function (h) { handle = h; }).catch(function () {});
+                else handle = r;
+            }
+        } catch (e) {}
+        var timer = setTimeout(function () { finish(null); }, Math.max(1200, parseInt(ms, 10) || 3500));
+    });
+}
+
+/** متنِ گزارش — همین را کاربر عکس می‌گیرد یا کپی می‌کند */
+function __hbInstReportText() {
+    var env = __hbInstEnv();
+    var L = ['── گزارشِ تشخیصیِ نصبِ بروزرسانی ──'];
+    try { L.push('زمان: ' + new Date().toLocaleString('fa-IR')); } catch (e) {}
+    try {
+        var v = (typeof window !== 'undefined') ? window.__hbInstVer : '';
+        if (v && typeof v === 'string') L.push('نسخهٔ فعلی: ' + v);
+    } catch (e) {}
+    L.push('سکو: ' + env.platform + ' | نیتیو: ' + env.native + ' | Capacitor: ' + (env.capacitor ? 'هست' : 'نیست'));
+    L.push('افزونه‌ها:');
+    try {
+        Object.keys(env.plugins).forEach(function (k) { L.push('   • ' + k + ': ' + env.plugins[k]); });
+    } catch (e) {}
+    try { if (window.__hbPendingApkUri) L.push('نشانیِ فایل: ' + String(window.__hbPendingApkUri)); } catch (e) {}
+    try {
+        var u = String(window.__hbPendingApkUri || '');
+        if (u) L.push('نوعِ نشانی: ' + (/^content:/i.test(u) ? 'content:// (درست)' :
+                      (/^file:/i.test(u) ? 'file:// ← نصب‌کننده این را نمی‌پذیرد' : 'نامشخص')));
+    } catch (e) {}
+    L.push('مراحل:');
+    try {
+        __hbInstS().log.forEach(function (r) {
+            L.push('   [' + String(r.t).padStart(5, ' ') + 'ms] ' + r.step + ' → ' + r.state +
+                   (r.detail ? ('  « ' + r.detail + ' »') : ''));
+        });
+    } catch (e) {}
+    L.push('── پایانِ گزارش ──');
+    return L.join('\n');
+}
+
+/** نمایشِ گزارش روی صفحه — فقط در حالتِ شکست فراخوانی می‌شود */
+function __hbShowInstDiag() {
+    var txt = __hbInstReportText();
+    try { console.warn(txt); } catch (e) {}
+    try {
+        var old = document.getElementById('hb-inst-diag');
+        if (old) old.remove();
+        var ov = document.createElement('div');
+        ov.id = 'hb-inst-diag';
+        ov.setAttribute('style',
+            'position:fixed;inset:0;z-index:2147483600;background:rgba(10,18,30,.93);' +
+            'display:flex;align-items:center;justify-content:center;padding:14px;direction:rtl;');
+        var box = document.createElement('div');
+        box.setAttribute('style',
+            'background:#fff;border-radius:14px;max-width:760px;width:100%;max-height:88vh;' +
+            'display:flex;flex-direction:column;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.45);');
+        var hdr = document.createElement('div');
+        hdr.setAttribute('style',
+            'background:#1e3a5f;color:#fff;padding:12px 16px;font-weight:800;font-size:15px;' +
+            'display:flex;align-items:center;justify-content:space-between;gap:10px;');
+        hdr.innerHTML = '<span>گزارشِ تشخیصیِ نصب — این صفحه را بفرستید</span>';
+        var closeB = document.createElement('button');
+        closeB.type = 'button'; closeB.textContent = '✕';
+        closeB.setAttribute('style', 'background:rgba(255,255,255,.16);color:#fff;border:none;border-radius:8px;' +
+            'width:32px;height:32px;font-size:16px;cursor:pointer;');
+        closeB.onclick = function () { try { ov.remove(); } catch (e) {} };
+        hdr.appendChild(closeB);
+        var pre = document.createElement('pre');
+        pre.textContent = txt;
+        pre.setAttribute('style',
+            'margin:0;padding:14px 16px;overflow:auto;flex:1;white-space:pre-wrap;word-break:break-word;' +
+            'font-family:monospace;font-size:12.5px;line-height:1.75;color:#0f172a;direction:ltr;text-align:left;');
+        var ft = document.createElement('div');
+        ft.setAttribute('style', 'padding:10px 16px;border-top:1px solid #e2e8f0;display:flex;gap:8px;flex-wrap:wrap;');
+        var mk = function (label, fn) {
+            var b = document.createElement('button');
+            b.type = 'button'; b.textContent = label;
+            b.setAttribute('style', 'background:#1e3a5f;color:#fff;border:none;border-radius:9px;' +
+                'padding:9px 16px;font-weight:700;font-size:13.5px;cursor:pointer;');
+            b.onclick = fn; return b;
+        };
+        ft.appendChild(mk('کپیِ متن', function () {
+            try {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(txt).then(function () { closeB.focus(); });
+                } else {
+                    var ta = document.createElement('textarea'); ta.value = txt;
+                    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+                }
+            } catch (e) {}
+        }));
+        ft.appendChild(mk('تلاشِ دوبارهٔ نصب', function () {
+            try { ov.remove(); } catch (e) {}
+            try { __hbRetryOpenApk(); } catch (e) {}
+        }));
+        box.appendChild(hdr); box.appendChild(pre); box.appendChild(ft);
+        ov.appendChild(box);
+        document.body.appendChild(ov);
+    } catch (e) {
+        try { alert(txt); } catch (e2) {}
+    }
+}
+
+/**
+ * بازکردنِ نصب‌کننده + تأییدِ واقعیِ بازشدن.
+ *   • اگر تأیید شد  → برنامه بسته می‌شود و هیچ گزارشی چاپ نمی‌شود (حالتِ سالم).
+ *   • اگر تأیید نشد → برنامه باز می‌ماند و گزارشِ فنی روی صفحه می‌آید.
+ * این تابع خودش ریشهٔ مشکل را هم می‌بندد: نسخهٔ قبلی بدونِ هیچ تأییدی برنامه را
+ * می‌بست، پس اگر زنجیرهٔ تلاش‌ها «موفقِ دروغین» می‌داد (Browser/AppLauncher نشانیِ
+ * file:// را می‌پذیرند ولی نصب را شروع نمی‌کنند) برنامه بسته می‌شد و نصبی در کار نبود.
+ */
+function __hbAndroidOpenApkVerified(uri) {
+    try { window.__hbPendingApkUri = uri || window.__hbPendingApkUri || ''; } catch (e) {}
+    try {
+        if (typeof ndUpdCurrentVersion === 'function') {
+            Promise.resolve(ndUpdCurrentVersion()).then(function (v) {
+                try { window.__hbInstVer = (v && typeof v === 'object') ? String(v.version || '') : String(v || ''); } catch (e) {}
+            }).catch(function () {});
+        }
+    } catch (e) {}
+    __hbIlog('آغاز', 'شروع', String(uri || ''));
+    var env = __hbInstEnv();
+    __hbIlog('محیط', env.platform + '/' + env.native,
+        'FileOpener=' + env.plugins.FileOpener + ' App=' + env.plugins.App);
+    if (!uri) {
+        __hbIlog('نشانی', 'خالی', 'uri تهی است');
+        __hbShowInstDiag();
+        return Promise.resolve(false);
+    }
+    if (/^file:/i.test(String(uri)) && env.plugins.FileOpener === 'ندارد') {
+        __hbIlog('پیش‌بررسی', 'هشدار', 'نشانی file:// است و FileOpener نصب نیست — نصب تقریباً حتماً شروع نمی‌شود');
+    }
+    var watch = __hbWatchInstaller(4000);
+    return __hbAndroidOpenApk(uri).then(function (who) {
+        __hbIlog('بازکردن', 'ادعایِ موفقیت', String(who || ''));
+        return watch;
+    }, function (err) {
+        __hbIlog('بازکردن', 'شکست', err);
+        return watch.then(function () { return false; });
+    }).then(function (reallyOpened) {
+        if (reallyOpened) {
+            __hbIlog('نتیجه', 'نصب‌کننده واقعاً جلو آمد', 'بستنِ برنامه');
+            __hbAndroidExitAfterInstaller(1400);
+            return true;
+        }
+        __hbIlog('نتیجه', 'نصب‌کننده جلو نیامد', 'برنامه بسته نمی‌شود — گزارش نمایش داده می‌شود');
+        __hbShowInstDiag();
+        return false;
+    });
+}
+if (typeof window !== 'undefined') {
+    window.__hbIlog = __hbIlog;
+    window.__hbInstReset = __hbInstReset;
+    window.__hbInstEnv = __hbInstEnv;
+    window.__hbInstReportText = __hbInstReportText;
+    window.__hbShowInstDiag = __hbShowInstDiag;
+    window.__hbWatchInstaller = __hbWatchInstaller;
+    window.__hbAndroidOpenApkVerified = __hbAndroidOpenApkVerified;
+}
+
 function __hbAndroidOpenApk(uri) {
     if (!uri) return Promise.reject(new Error('نشانیِ فایل نامعتبر است'));
     var APK = 'application/vnd.android.package-archive';
@@ -40726,38 +41111,39 @@ function __hbAndroidOpenApk(uri) {
     //  کاربر در عمل به صفحهٔ نصب برسد: AppLauncher، Browser، و در آخر خودِ WebView.
     //  هر کدام که موفق شد، همان‌جا متوقف می‌شویم.
     var tries = [];
+    var names = [];
     [
         { filePath: uri,   contentType: APK },
         { filePath: plain, contentType: APK },
         { filePath: plain, contentType: APK, openWithDefault: true },
         { filePath: plain, fileMimeType: APK }               // نام‌گذاریِ قدیمی‌ترِ افزونه
-    ].forEach(function (o) {
+    ].forEach(function (o, k) {
+        names.push('FileOpener.open#' + (k + 1));
         tries.push(function () { return __jouyaAndCall('FileOpener', 'open', o); });
     });
     // جایگزین‌ها — فقط وقتی FileOpener کار نکرد
+    names.push('AppLauncher.openUrl');
     tries.push(function () { return __jouyaAndCall('AppLauncher', 'openUrl', { url: uri }); });
+    names.push('Browser.open');
     tries.push(function () { return __jouyaAndCall('Browser', 'open', { url: uri }); });
-    tries.push(function () {
-        return new Promise(function (resolve, reject) {
-            try {
-                var a = document.createElement('a');
-                a.href = uri; a.type = APK; a.rel = 'noopener';
-                a.style.display = 'none';
-                document.body.appendChild(a);
-                a.click();
-                setTimeout(function () { try { a.remove(); } catch (e) {} }, 300);
-                resolve(true);
-            } catch (e) { reject(e); }
-        });
-    });
+    // ⚠ «کلیکِ لنگر» عمداً حذف شد: نشانیِ APK را هرگز به نصب‌کننده نمی‌دهد و در عوض
+    //   خودِ WebView را به آن نشانی می‌بَرَد، یعنی صفحهٔ برنامه از بین می‌رود و کاربر
+    //   با صفحهٔ سفید می‌مانَد. در آزمونِ شبیه‌سازی دقیقاً همین رخ داد.
 
     var step = function (i, lastErr) {
         if (i >= tries.length) {
             var hint = __hbAndPlugin('FileOpener') ? '' : ' — افزونهٔ FileOpener در این نسخه نصب نیست';
+            try { __hbIlog('زنجیره', 'همه شکست خوردند', 'آخرین خطا: ' + ((lastErr && lastErr.message) || lastErr || '—')); } catch (e) {}
             return Promise.reject(new Error('نصب‌کنندهٔ بسته باز نشد' + hint +
                 (lastErr ? (' — ' + (lastErr.message || lastErr)) : '')));
         }
-        return Promise.resolve().then(tries[i]).catch(function (e) { return step(i + 1, e); });
+        return Promise.resolve().then(tries[i]).then(function () {
+            try { __hbIlog(names[i], 'بدونِ خطا برگشت', ''); } catch (e) {}
+            return names[i];
+        }).catch(function (e) {
+            try { __hbIlog(names[i], 'خطا', e); } catch (e2) {}
+            return step(i + 1, e);
+        });
     };
     return step(0, null);
 }
@@ -40780,6 +41166,7 @@ function __hbAndroidExitAfterInstaller(delayMs) {
 
 // ── دانلود + نصبِ کاملاً درون‌برنامه‌ای در اندروید ────────────────────────────────
 function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
+    try { __hbInstReset(); __hbIlog('بروزرسانی', 'آغاز', String(fileName || '')); } catch (e) {}
     var FS = __hbAndPlugin('Filesystem');
     if (!FS || typeof FS.downloadFile !== 'function') {
         onFail(new Error('Filesystem.downloadFile در دسترس نیست'));
@@ -40819,6 +41206,7 @@ function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
     tryDir(0).then(function (d) {
         cleanup();
         setPct(100);
+        try { __hbIlog('دانلود', 'موفق', 'پوشه: ' + d.dir); } catch (e) {}
         note('در حال بازکردنِ نصب‌کننده…');
         return Promise.resolve(__jouyaAndCall('Filesystem', 'getUri', { path: fileName, directory: d.dir }))
             .then(function (u) { return (u && (u.uri || u.path)) || (d.res && (d.res.uri || d.res.path)) || ''; })
@@ -40828,8 +41216,10 @@ function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
         // دیگر نباید به مرورگر برگردیم (دانلودِ دوباره بی‌فایده است) — باید همان
         // فایلِ دانلودشده را دوباره به نصب‌کننده بدهیم. پس نشانی را نگه می‌داریم.
         try { window.__hbPendingApkUri = uri; } catch (e) {}
-        return __hbAndroidOpenApk(uri).then(function () {
-            __hbAndroidExitAfterInstaller(1400);
+        // تأییدِ واقعیِ بازشدنِ نصب‌کننده: اگر باز شد، برنامه بسته می‌شود و هیچ
+        // گزارشی چاپ نمی‌شود؛ اگر باز نشد، برنامه باز می‌ماند و گزارش می‌آید.
+        return __hbAndroidOpenApkVerified(uri).then(function (opened) {
+            if (!opened) { closeOv(); return; }
             setTimeout(function () {
                 closeOv();
                 ndUpdSetStatus('بروزرسانی دانلود شد و نصب‌کننده باز شد. روی «نصب» بزنید؛ ' +
@@ -40842,6 +41232,7 @@ function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
         }, function (openErr) {
             // دانلود موفق بود ولی نصب‌کننده باز نشد → راهنماییِ دقیق + دکمهٔ تلاشِ دوباره
             closeOv();
+            try { __hbIlog('مسیرِ نیتیو', 'خطا', openErr); __hbShowInstDiag(); } catch (e) {}
             ndUpdSetStatus('فایلِ بروزرسانی دانلود شد، اما نصب‌کنندهٔ اندروید باز نشد.' +
                 '<br><small>' + ((openErr && openErr.message) || '') + '</small>' +
                 '<br><small>در تنظیماتِ گوشی، «نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید، ' +
@@ -40860,10 +41251,13 @@ function __hbRetryOpenApk() {
     try { uri = window.__hbPendingApkUri || ''; } catch (e) {}
     if (!uri) { ndUpdSetStatus('فایلِ بروزرسانی پیدا نشد — دوباره «بررسی بروزرسانی» را بزنید.', 'warn'); return; }
     ndUpdSetStatus('در حال بازکردنِ نصب‌کننده…', 'info');
-    __hbAndroidOpenApk(uri).then(function () {
-        ndUpdSetStatus('نصب‌کننده باز شد — روی «نصب» بزنید.', 'ok');
-        __hbAndroidExitAfterInstaller(1400);
+    try { __hbInstReset(); } catch (e) {}
+    __hbAndroidOpenApkVerified(uri).then(function (opened) {
+        if (opened) ndUpdSetStatus('نصب‌کننده باز شد — روی «نصب» بزنید.', 'ok');
+        else ndUpdSetStatus('نصب‌کننده باز نشد — گزارشِ تشخیصی روی صفحه آمد؛ لطفاً همان را بفرستید.' +
+            '<br><small>«نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید و دوباره تلاش کنید.</small>', 'warn');
     }).catch(function (e) {
+        try { __hbIlog('تلاشِ دوباره', 'خطا', e); __hbShowInstDiag(); } catch (e2) {}
         ndUpdSetStatus('نصب‌کننده باز نشد: ' + ((e && e.message) || '') +
             '<br><small>«نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید و دوباره تلاش کنید.</small>', 'warn');
     });

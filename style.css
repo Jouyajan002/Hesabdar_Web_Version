@@ -10271,3 +10271,50 @@ body.dark-mode .product-search-wrapper .ble-pen { color: #7c8899; }
     .ble-modal .ble-grid .wh-field select,
     .ble-modal .ble-grid .wh-field textarea { min-height: var(--m-touch, 44px); }
 }
+
+/* ============================================================
+   لیست خدمات — هدر و دکمهٔ شناور عیناً مطابقِ «لیست فروش‌ها»
+   (الگویِ #sales-list) تا همهٔ لیست‌ها یکپارچه باشند.
+   ============================================================ */
+#services-list .list-header-filter {
+    background: #1e3a5f !important;
+    border-bottom: none !important;
+    padding: 14px 30px;
+    margin-left: -30px !important;
+    margin-right: -30px !important;
+    gap: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+}
+#services-list .section-title-in-filter { color: #fff; font-size: 1.15rem; font-weight: 800; }
+#services-list .section-title-in-filter .btn-back-header {
+    background: rgba(255,255,255,.14) !important; border: none !important; box-shadow: none !important;
+}
+#services-list .section-title-in-filter .btn-back-header:hover {
+    background: rgba(255,255,255,.26) !important; transform: none !important;
+}
+#services-list .section-title-in-filter .btn-back-header i { color: #fff !important; }
+#services-list .filter-icon-btn {
+    background: rgba(255,255,255,.14); border: none; color: #fff;
+    width: 38px; height: 38px; border-radius: 9px; cursor: pointer; font-size: 17px;
+    display: inline-flex; align-items: center; justify-content: center; transition: background .15s;
+}
+#services-list .filter-icon-btn:hover { background: rgba(255,255,255,.26); }
+#services-list #global-search-services { background: #fff; border: 1px solid #fff; color: #1e293b; }
+#services-list #global-search-services::placeholder { color: #94a3b8; }
+
+/* کانتینرِ کارتی و انیمیشن — مطابقِ لیست فروش‌ها */
+#services-list.section { animation: listFadeOpacityOnly 0.3s ease-out !important; }
+#services-list .persons-cards-container {
+    overflow: visible !important; overflow-x: visible !important; overflow-y: visible !important;
+    border: none !important; background: transparent !important; box-shadow: none !important;
+    border-radius: 0 !important; margin-top: 10px !important; padding: 2px 2px 160px 2px !important;
+}
+/* دکمهٔ شناورِ «خدمت جدید» — همان جایگاه و ظاهرِ «فروش جدید» */
+#services-list .person-fab-add {
+    position: fixed !important; bottom: 90px !important; left: 20px !important;
+    z-index: 1100 !important; animation: none !important;
+}
+/* رفع جستجو/فیلتر: سطرهای دارای display:none واقعاً پنهان شوند و بقیه block بمانند */
+#services-list .person-card-row { display: block !important; }
+#services-list .person-card-row[style*="display: none"],
+#services-list .person-card-row[style*="display:none"] { display: none !important; }
