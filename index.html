@@ -1728,7 +1728,7 @@
                             <button class="filter-icon-btn" onclick="toggleFilterMenu('services')"><i class="fas fa-filter"></i></button>
                         </div>
                         <h3 class="section-title-in-filter"><button class="btn-back-header" onclick="servicesListGoBack()" title="برگشت"><i class="fas fa-arrow-right"></i></button> لیست خدمات</h3>
-                        <input type="text" id="search-services" placeholder="جستجو..." onkeyup="filterServicesList()">
+                        <input type="text" id="search-services" placeholder="جستجوی خدمات" onkeyup="filterServicesList()">
                     </div>
 
                     <!-- منو مرتب‌سازی -->
@@ -1775,15 +1775,15 @@
                         </span>
                     </div>
 
-                    <div class="table-container persons-cards-container">
-                        <table class="persons-cards-table" id="services-table">
-                            <thead class="persons-cards-thead">
+                    <!-- جدول — دقیقاً ساختار و کلاس‌های «لیست اجناس» -->
+                    <div class="table-container products-cards-container">
+                        <table id="services-table" class="products-cards-table">
+                            <thead class="products-cards-thead">
                                 <tr>
                                     <th>نام خدمت</th>
                                     <th>واحد شمارش</th>
                                     <th>مبلغ تمام شده</th>
                                     <th>قیمت</th>
-                                    <th>اطلاعات بیشتر</th>
                                     <th>عملیات</th>
                                 </tr>
                             </thead>
@@ -1793,7 +1793,6 @@
                         </table>
                     </div>
 
-                    <!-- دکمهٔ شناور خدمت جدید -->
                     <button type="button" class="person-fab-add" onclick="showServiceForm(null, (typeof _svcMode==='function' && _svcMode()) ? 'picker' : null)">
                         <i class="fas fa-plus"></i> خدمت جدید
                     </button>
@@ -5280,6 +5279,8 @@
         try { if (typeof window.__hbTrialBanner === 'function') window.__hbTrialBanner(); } catch (e) {}
         // پیمایشِ نتایجِ جستجو/دراپ‌داون‌ها با ↑ ↓ Enter Esc (سراسریِ برنامه)
         try { if (typeof window.__hbInstallKeyboardNav === 'function') window.__hbInstallKeyboardNav(); } catch (e) {}
+        // کلیک‌پذیر شدنِ جنس/خدمتِ انتخاب‌شده در بل (فورمِ کوچکِ ویرایشِ همان قلم)
+        try { if (typeof window._bleInstall === 'function') window._bleInstall(); } catch (e) {}
     });
     </script>
     <script src="database.js"></script>

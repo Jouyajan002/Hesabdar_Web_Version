@@ -32740,9 +32740,10 @@ function loadServicesList() {
 
     tbody.innerHTML = '';
     if (!list.length) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:30px;">'
+        tbody.innerHTML = '<tr class="product-card-row"><td class="product-card-cell">'
+            + '<div class="product-card" style="justify-content:center;color:#94a3b8;">'
             + (services.length ? 'خدمتی با این مشخصات یافت نشد' : 'هنوز خدمتی ثبت نشده است')
-            + '</td></tr>';
+            + '</div></td></tr>';
         return;
     }
 
@@ -32750,32 +32751,38 @@ function loadServicesList() {
     var money = function (v, code) {
         var n = parseFloat(v) || 0;
         var txt = (typeof formatNumber === 'function') ? formatNumber(n) : String(n);
-        return txt + '(' + _svcCurLabel(code || _svcBaseCur()) + ')';
+        return txt + ' ' + _svcCurLabel(code || _svcBaseCur());
     };
 
     list.forEach(function (s) {
         var picked = _svcMode() && _svcSel().indexOf(s.id) >= 0;
         var row = document.createElement('tr');
-        row.className = 'person-card-row svc-card-row' + (picked ? ' is-picked' : '');
+        // ساختار و کلاس‌ها عیناً همان «لیست اجناس» تا طراحی یکدست باشد
+        row.className = 'product-card-row svc-card-row' + (picked ? ' is-picked' : '');
         row.dataset.svcId = s.id;
         if (_svcMode()) {
             row.style.cursor = 'pointer';
             row.onclick = function (e) {
-                if (e && e.target && e.target.closest && e.target.closest('.person-card-kebab')) return;
+                if (e && e.target && e.target.closest && e.target.closest('.product-card-kebab')) return;
                 svcPickToggle(s.id);
             };
         }
-        var kebab = _svcMode()
+        var actionsHtml = _svcMode()
             ? '<span class="svc-pick-check"><i class="fas ' + (picked ? 'fa-check-circle' : 'fa-circle') + '"></i></span>'
-            : '<button class="person-card-kebab action-trigger-btn" type="button" onmouseenter="showServiceActionBar(event,' + s.id + ')" onmouseleave="handleActionButtonMouseLeave(event)" title="عملیات"><i class="fas fa-ellipsis-v"></i></button>';
+            : '<button class="product-card-kebab action-trigger-btn" type="button" onmouseenter="showServiceActionBar(event,' + s.id + ')" onmouseleave="handleActionButtonMouseLeave(event)" onclick="event.stopPropagation();showServiceActionBar(event,' + s.id + ')" title="عملیات"><i class="fas fa-ellipsis-v"></i></button>';
+        var _cost = (parseFloat(s.cost) || 0);
         row.innerHTML =
-            '<td class="person-card-cell">'
-          +   '<div class="person-card">'
-          +     '<div class="person-card-main">'
-          +       '<span class="person-card-name">' + esc(s.name || '---') + '</span>'
+            '<td class="product-card-cell">'
+          +   '<div class="product-card svc-card">'
+          +     '<div class="product-card-main">'
+          +       '<div class="product-card-img"><i class="fas fa-concierge-bell"></i></div>'
+          +       '<div class="product-card-name">' + esc(s.name || '---') + '</div>'
           +     '</div>'
-          +     '<div class="person-card-balance">قیمت: <span>' + money(s.price, s.currency) + '</span></div>'
-          +     kebab
+          +     '<div class="product-card-cell-data">واحد: <span>' + esc(s.unit || 'عدد') + '</span></div>'
+          +     '<div class="product-card-cell-data">مبلغ تمام شده: <span>' + (_cost > 0 ? money(_cost, s.currency) : '—') + '</span></div>'
+          +     '<div class="product-card-cell-data">قیمت: <span>' + money(s.price, s.currency) + '</span></div>'
+          +     '<div class="product-card-actions">' + actionsHtml + '</div>'
+          +     '<span class="product-card-search" style="display:none">' + esc((s.unit || '') + ' ' + (s.notes || '')) + '</span>'
           +   '</div>'
           + '</td>';
         tbody.appendChild(row);
@@ -40687,20 +40694,63 @@ function __hbAndroidOpenApk(uri) {
     var APK = 'application/vnd.android.package-archive';
     // مسیرِ خام بدونِ پیشوندِ file:// — بعضی نسخه‌های افزونه فقط همین را می‌پذیرند
     var plain = String(uri).replace(/^file:\/\//, '');
-    var attempts = [
+
+    // ── زنجیرهٔ تلاش‌ها ────────────────────────────────────────────────────────
+    //  اول FileOpener (تنها راهِ درست: content:// از FileProvider با اجازهٔ خواندن).
+    //  اگر افزونه در این بیلد نبود یا شکست خورد، راه‌های جایگزین امتحان می‌شوند تا
+    //  کاربر در عمل به صفحهٔ نصب برسد: AppLauncher، Browser، و در آخر خودِ WebView.
+    //  هر کدام که موفق شد، همان‌جا متوقف می‌شویم.
+    var tries = [];
+    [
         { filePath: uri,   contentType: APK },
         { filePath: plain, contentType: APK },
         { filePath: plain, contentType: APK, openWithDefault: true },
         { filePath: plain, fileMimeType: APK }               // نام‌گذاریِ قدیمی‌ترِ افزونه
-    ];
+    ].forEach(function (o) {
+        tries.push(function () { return __jouyaAndCall('FileOpener', 'open', o); });
+    });
+    // جایگزین‌ها — فقط وقتی FileOpener کار نکرد
+    tries.push(function () { return __jouyaAndCall('AppLauncher', 'openUrl', { url: uri }); });
+    tries.push(function () { return __jouyaAndCall('Browser', 'open', { url: uri }); });
+    tries.push(function () {
+        return new Promise(function (resolve, reject) {
+            try {
+                var a = document.createElement('a');
+                a.href = uri; a.type = APK; a.rel = 'noopener';
+                a.style.display = 'none';
+                document.body.appendChild(a);
+                a.click();
+                setTimeout(function () { try { a.remove(); } catch (e) {} }, 300);
+                resolve(true);
+            } catch (e) { reject(e); }
+        });
+    });
+
     var step = function (i, lastErr) {
-        if (i >= attempts.length) {
-            return Promise.reject(new Error('نصب‌کنندهٔ بسته باز نشد' + (lastErr ? (' — ' + (lastErr.message || lastErr)) : '')));
+        if (i >= tries.length) {
+            var hint = __hbAndPlugin('FileOpener') ? '' : ' — افزونهٔ FileOpener در این نسخه نصب نیست';
+            return Promise.reject(new Error('نصب‌کنندهٔ بسته باز نشد' + hint +
+                (lastErr ? (' — ' + (lastErr.message || lastErr)) : '')));
         }
-        return Promise.resolve(__jouyaAndCall('FileOpener', 'open', attempts[i]))
-            .catch(function (e) { return step(i + 1, e); });
+        return Promise.resolve().then(tries[i]).catch(function (e) { return step(i + 1, e); });
     };
     return step(0, null);
+}
+
+// ── پس از بازشدنِ نصب‌کننده، برنامه بسته می‌شود ───────────────────────────────────
+//  درخواستِ کاربر: «بعد از تکمیل بروزرسانی برنامه بسته شود و گزینه انستال بیاید».
+//  نصب‌کنندهٔ اندروید یک اکتیویتیِ جداست و بسته‌شدنِ برنامه هیچ داده‌ای را نمی‌برد:
+//  بروزرسانی روی همان پکیج و همان امضا می‌نشیند، پس localStorage و کلِ دادهٔ برنامه
+//  دست‌نخورده باقی می‌ماند. کمی تأخیر می‌دهیم تا صفحهٔ نصب واقعاً جلو بیاید.
+function __hbAndroidExitAfterInstaller(delayMs) {
+    try {
+        setTimeout(function () {
+            __jouyaAndCall('App', 'exitApp', {}).catch(function () {
+                // اگر افزونهٔ App نبود، برنامه باز می‌ماند — صفحهٔ نصب جلوتر است و
+                // کاربر بعد از نصب خودش برمی‌گردد. هیچ اثر منفی ندارد.
+            });
+        }, Math.max(400, parseInt(delayMs, 10) || 1400));
+    } catch (e) {}
 }
 
 // ── دانلود + نصبِ کاملاً درون‌برنامه‌ای در اندروید ────────────────────────────────
@@ -40754,6 +40804,7 @@ function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
         // فایلِ دانلودشده را دوباره به نصب‌کننده بدهیم. پس نشانی را نگه می‌داریم.
         try { window.__hbPendingApkUri = uri; } catch (e) {}
         return __hbAndroidOpenApk(uri).then(function () {
+            __hbAndroidExitAfterInstaller(1400);
             setTimeout(function () {
                 closeOv();
                 ndUpdSetStatus('بروزرسانی دانلود شد و نصب‌کننده باز شد. روی «نصب» بزنید؛ ' +
@@ -40786,12 +40837,17 @@ function __hbRetryOpenApk() {
     ndUpdSetStatus('در حال بازکردنِ نصب‌کننده…', 'info');
     __hbAndroidOpenApk(uri).then(function () {
         ndUpdSetStatus('نصب‌کننده باز شد — روی «نصب» بزنید.', 'ok');
+        __hbAndroidExitAfterInstaller(1400);
     }).catch(function (e) {
         ndUpdSetStatus('نصب‌کننده باز نشد: ' + ((e && e.message) || '') +
             '<br><small>«نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید و دوباره تلاش کنید.</small>', 'warn');
     });
 }
-if (typeof window !== 'undefined') window.__hbRetryOpenApk = __hbRetryOpenApk;
+if (typeof window !== 'undefined') {
+    window.__hbRetryOpenApk = __hbRetryOpenApk;
+    window.__hbAndroidOpenApk = __hbAndroidOpenApk;
+    window.__hbAndroidExitAfterInstaller = __hbAndroidExitAfterInstaller;
+}
 function ndUpdSaveRepo() {
     var el = document.getElementById('nd-upd-repo');
     ndUpdSetRepo(el ? el.value : '');
@@ -41340,33 +41396,65 @@ function _bleHasItem(wrapper) {
     return !!(row && row.dataset && row.dataset.serviceId);
 }
 
-/** تزریقِ آیکنِ مداد روی wrapper (یک‌بار برای هر ردیف) */
+/** علامت‌گذاریِ ردیفی که جنس/خدمتِ انتخاب‌شده دارد (فقط برای نشانگرِ موس) */
 function _bleEnsureBtn(wrapper) {
-    if (!wrapper || !_bleHasItem(wrapper)) return;
-    if (wrapper.querySelector('.ble-edit-btn')) return;
-    var btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'ble-edit-btn';
-    btn.title = 'ویرایش این قلم در همین بل';
-    btn.innerHTML = '<i class="fas fa-pen"></i>';
-    btn.onclick = function (e) { e.preventDefault(); e.stopPropagation(); openBillLineEdit(wrapper); };
-    wrapper.appendChild(btn);
-    wrapper.classList.add('ble-has-item');
+    if (!wrapper) return;
+    if (_bleHasItem(wrapper)) wrapper.classList.add('ble-has-item');
+    else wrapper.classList.remove('ble-has-item');
 }
 
-/** شنوندهٔ سراسری (delegation) — بدونِ تغییر در سازندهٔ ردیف‌ها */
+/** شنوندهٔ سراسری (delegation) — بدونِ تغییر در سازندهٔ ردیف‌ها.
+ *  خودِ «فیلدِ جنس» کلیک‌پذیر است: اگر جنس/خدمتی در آن ردیف انتخاب شده باشد، کلیک
+ *  فورمِ کوچکِ ویرایشِ همان قلم را باز می‌کند. اگر ردیف خالی باشد، رفتارِ همیشگیِ
+ *  جستجو دست‌نخورده می‌ماند. */
 function _bleInstall() {
     if (typeof document === 'undefined' || document.__bleInstalled) return;
     document.__bleInstalled = true;
-    document.addEventListener('mouseover', function (e) {
+
+    var mark = function (e) {
         var w = e.target && e.target.closest ? e.target.closest('.product-search-wrapper') : null;
         if (w) _bleEnsureBtn(w);
+    };
+    document.addEventListener('mouseover', mark, true);
+    document.addEventListener('touchstart', mark, { capture: true, passive: true });
+
+    // کلیک روی فیلدِ جنسِ انتخاب‌شده → فورمِ کوچک
+    document.addEventListener('mousedown', function (e) {
+        var t = e.target;
+        if (!t || !t.closest) return;
+        var inp = t.closest('.product-search-input');
+        if (!inp) return;
+        var w = inp.closest('.product-search-wrapper');
+        if (!w || !_bleHasItem(w)) return;          // ردیفِ خالی = جستجوی عادی
+        if (!w.closest('#sales-items-body') && !w.closest('#purchase-items-body')) return;
+        e.preventDefault();
+        e.stopPropagation();
+        try { inp.blur(); } catch (e2) {}
+        openBillLineEdit(w);
     }, true);
-    // روی لمس (موبایل) هم همان رفتار
-    document.addEventListener('touchstart', function (e) {
-        var w = e.target && e.target.closest ? e.target.closest('.product-search-wrapper') : null;
-        if (w) _bleEnsureBtn(w);
-    }, { capture: true, passive: true });
+}
+
+/** پاک‌کردنِ جنسِ همین ردیف تا کاربر بتواند دوباره جستجو کند */
+function _bleClearLine() {
+    var overlay = document.getElementById('ble-modal');
+    var wrapper = overlay ? overlay._bleWrapper : null;
+    _bleClose();
+    if (!wrapper) return;
+    var row = wrapper.closest('tr');
+    var hid = wrapper.querySelector('input[type="hidden"]');
+    var inp = wrapper.querySelector('.product-search-input');
+    if (hid) hid.value = '';
+    if (inp) { inp.value = ''; inp.removeAttribute('readonly'); }
+    if (row) {
+        delete row.dataset.serviceId;
+        ['lineDetails', 'lineExpiry', 'lineCost', 'lineFrom', 'lineTo'].forEach(function (k) { delete row.dataset[k]; });
+    }
+    wrapper.classList.remove('ble-has-item');
+    try {
+        if (row && row.closest('#purchase-items-body')) { if (typeof calculatePurchaseTotal === 'function') calculatePurchaseTotal(); }
+        else if (typeof calculateSalesTotal === 'function') calculateSalesTotal();
+    } catch (e) {}
+    if (inp) { try { inp.focus(); } catch (e) {} }
 }
 
 function _bleClose() {
@@ -41449,6 +41537,7 @@ function openBillLineEdit(wrapper) {
                 '<span class="close-modal" onclick="_bleClose()">&times;</span></div>' +
             '<div class="modal-body"><div class="wh-form-grid ble-grid">' + fields + '</div></div>' +
             '<div class="modal-footer">' +
+                '<button type="button" class="btn-secondary ble-clear-btn" onclick="_bleClearLine()" title="پاک‌کردنِ این جنس تا دوباره جستجو کنید"><i class="fas fa-eraser"></i> تغییر جنس</button>' +
                 '<button type="button" class="btn-secondary" onclick="_bleClose()">لغو</button>' +
                 '<button type="button" class="btn-primary" onclick="_bleSave()"><i class="fas fa-folder"></i> ثبت</button>' +
             '</div>' +
@@ -41536,6 +41625,8 @@ if (typeof window !== 'undefined') {
     window._bleSyncPct = _bleSyncPct;
     window._bleSyncAmt = _bleSyncAmt;
     window._bleInstall = _bleInstall;
+    window._bleEnsureBtn = _bleEnsureBtn;
+    window._bleClearLine = _bleClearLine;
     try { _bleInstall(); } catch (e) {}
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () { try { _bleInstall(); } catch (e) {} });
