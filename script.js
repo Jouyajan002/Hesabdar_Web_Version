@@ -24190,6 +24190,7 @@ function toggleSortMenu(section) {
 }
 
 function toggleFilterMenu(section) {
+    try { if (typeof __hbInstallAutoFilter === 'function') __hbInstallAutoFilter(); } catch (e) {}
     _attachFsCloseHandler();
     const menu = document.getElementById(`filter-menu-${section}`);
     if (!menu) return;
@@ -24312,6 +24313,106 @@ function applySort(section = '', criteria) {
 // ==========================================================================
 // 3. اعمال فیلتر پیشرفته و بسته شدن منو
 // ==========================================================================
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  فیلترِ خودکار — بدونِ دکمهٔ «اعمال فیلتر»                                      ║
+// ║  درخواستِ کاربر: در هیدرِ همهٔ لیست‌ها، به‌محضِ تغییرِ هر گزینهٔ فیلتر، فیلتر خودش ║
+// ║  اجرا شود. در هر سه نسخه (وب، اندروید، وبِ موبایل) یکسان کار می‌کند، چون روی    ║
+// ║  رویدادهای استانداردِ change/input سوار است، نه روی کلیکِ یک دکمه.              ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+/** بخش‌هایی که قبلاً دکمهٔ «اعمال فیلتر» داشتند — فقط همین‌ها خودکار می‌شوند.
+ *  بخش‌هایی مثل مصارف و کارمندان از قبل onchange خودشان را دارند و دست‌نخورده می‌مانند. */
+function __hbAutoFilterSections() {
+    return {
+        'financial': 1, 'persons': 1, 'person-transactions': 1, 'products': 1,
+        'product-inout': 1, 'transactions': 1, 'sales-list': 1, 'purchases-list': 1,
+        'receipts-list': 1, 'payments-list': 1, 'sales-returns-list': 1,
+        'purchase-returns-list': 1, 'proforma-list': 1, 'changelog-list': 1,
+        'cashbox-transactions': 1, 'services': 1
+    };
+}
+
+/**
+ * اجرای فیلترِ یک بخش، با نگه‌داشتنِ منو در حالتِ باز.
+ * چرا: applyAdvancedFilter در پایانِ کار منوی فیلتر را می‌بندد (رفتاری که برای
+ * دکمهٔ «اعمال» درست بود). حالا که فیلتر با هر تغییر اجرا می‌شود، اگر منو بسته
+ * شود کاربر نمی‌تواند فیلترِ دوم را بگذارد. پس همان حالتِ قبلیِ منو برگردانده
+ * می‌شود. خودِ applyAdvancedFilter اصلاً دست نخورده است.
+ */
+function __hbRunAutoFilter(section) {
+    if (!section) return;
+    var menu = document.getElementById('filter-menu-' + section);
+    var wasOpen = false, inlineDisp = '';
+    try {
+        if (menu) {
+            inlineDisp = menu.style.display;
+            wasOpen = (getComputedStyle(menu).display !== 'none');
+        }
+    } catch (e) {}
+    try {
+        if (section === 'services') {
+            if (typeof filterServicesList === 'function') filterServicesList();
+        } else if (typeof applyAdvancedFilter === 'function') {
+            applyAdvancedFilter(section);
+        }
+    } catch (e) { try { console.warn('[auto-filter]', section, e); } catch (e2) {} }
+    // منو همان‌طور که بود بماند
+    try { if (menu && wasOpen) menu.style.display = inlineDisp; } catch (e) {}
+}
+
+/** از روی عنصرِ تغییرکرده، بخشِ مربوطه را پیدا کن */
+function __hbAutoFilterSectionOf(el) {
+    try {
+        var menu = el && el.closest ? el.closest('.filter-menu') : null;
+        if (!menu || !menu.id) return '';
+        var m = /^filter-menu-(.+)$/.exec(menu.id);
+        if (!m) return '';
+        var key = m[1];
+        return __hbAutoFilterSections()[key] ? key : '';
+    } catch (e) { return ''; }
+}
+
+/**
+ * نصبِ شنوندهٔ سراسری. چون تفویضی (delegation) روی document است، منوهایی که
+ * بعداً هم ساخته یا دوباره رندر شوند خودکار پوشش داده می‌شوند.
+ * دوبار نصب نمی‌شود.
+ */
+function __hbInstallAutoFilter() {
+    try {
+        if (typeof document === 'undefined') return;
+        if (document.__hbAutoFilterInstalled) return;
+        document.__hbAutoFilterInstalled = true;
+
+        // select و تاریخ و تیک‌ها: بی‌درنگ
+        document.addEventListener('change', function (e) {
+            var sec = __hbAutoFilterSectionOf(e.target);
+            if (sec) __hbRunAutoFilter(sec);
+        }, true);
+
+        // فیلدهای متنی: با کمی مکث تا با هر حرف لیست دوباره ساخته نشود
+        var timers = {};
+        var onType = function (e) {
+            var t = e.target;
+            if (!t || !t.tagName) return;
+            var tag = String(t.tagName).toLowerCase();
+            if (tag !== 'input' && tag !== 'textarea') return;
+            var ty = String(t.type || 'text').toLowerCase();
+            if (ty === 'checkbox' || ty === 'radio') return;   // اینها را change پوشش می‌دهد
+            var sec = __hbAutoFilterSectionOf(t);
+            if (!sec) return;
+            try { clearTimeout(timers[sec]); } catch (e2) {}
+            timers[sec] = setTimeout(function () { __hbRunAutoFilter(sec); }, 300);
+        };
+        document.addEventListener('input', onType, true);
+        // تقویم‌های جلالی گاهی مقدار را بدونِ رویدادِ input می‌گذارند
+        document.addEventListener('keyup', onType, true);
+    } catch (e) {}
+}
+if (typeof window !== 'undefined') {
+    window.__hbInstallAutoFilter = __hbInstallAutoFilter;
+    window.__hbRunAutoFilter = __hbRunAutoFilter;
+}
+
 function applyAdvancedFilter(section) {
     console.log('Applying filter for section:', section);
 
