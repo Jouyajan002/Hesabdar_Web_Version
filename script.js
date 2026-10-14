@@ -32707,12 +32707,12 @@ function loadServicesList() {
     try {
         var _tbl = document.getElementById('services-table');
         if (_tbl) {
-            _tbl.classList.add('products-cards-table');
-            _tbl.classList.remove('data-table', 'persons-cards-table');
+            _tbl.classList.add('persons-cards-table');
+            _tbl.classList.remove('data-table', 'products-cards-table');
             var _th = _tbl.querySelector('thead');
-            if (_th) { _th.classList.add('products-cards-thead'); _th.classList.remove('persons-cards-thead'); }
+            if (_th) { _th.classList.add('persons-cards-thead'); _th.classList.remove('products-cards-thead'); }
             var _cont = _tbl.closest('.table-container');
-            if (_cont) { _cont.classList.add('products-cards-container'); _cont.classList.remove('persons-cards-container'); }
+            if (_cont) { _cont.classList.add('persons-cards-container'); _cont.classList.remove('products-cards-container'); }
         }
     } catch (e) {}
 
@@ -32765,8 +32765,8 @@ function loadServicesList() {
 
     tbody.innerHTML = '';
     if (!list.length) {
-        tbody.innerHTML = '<tr class="product-card-row"><td class="product-card-cell">'
-            + '<div class="product-card" style="justify-content:center;color:#94a3b8;">'
+        tbody.innerHTML = '<tr class="person-card-row"><td class="person-card-cell">'
+            + '<div class="person-card" style="justify-content:center;color:#94a3b8;">'
             + (services.length ? 'خدمتی با این مشخصات یافت نشد' : 'هنوز خدمتی ثبت نشده است')
             + '</div></td></tr>';
         return;
@@ -32783,31 +32783,31 @@ function loadServicesList() {
         var picked = _svcMode() && _svcSel().indexOf(s.id) >= 0;
         var row = document.createElement('tr');
         // ساختار و کلاس‌ها عیناً همان «لیست اجناس» تا طراحی یکدست باشد
-        row.className = 'product-card-row svc-card-row' + (picked ? ' is-picked' : '');
+        row.className = 'person-card-row svc-card-row' + (picked ? ' is-picked' : '');
         row.dataset.svcId = s.id;
         if (_svcMode()) {
             row.style.cursor = 'pointer';
             row.onclick = function (e) {
-                if (e && e.target && e.target.closest && e.target.closest('.product-card-kebab')) return;
+                if (e && e.target && e.target.closest && e.target.closest('.person-card-kebab')) return;
                 svcPickToggle(s.id);
             };
         }
         var actionsHtml = _svcMode()
             ? '<span class="svc-pick-check"><i class="fas ' + (picked ? 'fa-check-circle' : 'fa-circle') + '"></i></span>'
-            : '<button class="product-card-kebab action-trigger-btn" type="button" onmouseenter="showServiceActionBar(event,' + s.id + ')" onmouseleave="handleActionButtonMouseLeave(event)" onclick="event.stopPropagation();showServiceActionBar(event,' + s.id + ')" title="عملیات"><i class="fas fa-ellipsis-v"></i></button>';
+            : '<button class="person-card-kebab action-trigger-btn" type="button" onmouseenter="showServiceActionBar(event,' + s.id + ')" onmouseleave="handleActionButtonMouseLeave(event)" onclick="event.stopPropagation();showServiceActionBar(event,' + s.id + ')" title="عملیات"><i class="fas fa-ellipsis-v"></i></button>';
         var _cost = (parseFloat(s.cost) || 0);
         row.innerHTML =
-            '<td class="product-card-cell">'
-          +   '<div class="product-card svc-card">'
-          +     '<div class="product-card-main">'
-          +       '<div class="product-card-img"><i class="fas fa-concierge-bell"></i></div>'
-          +       '<div class="product-card-name">' + esc(s.name || '---') + '</div>'
+            '<td class="person-card-cell">'
+          +   '<div class="person-card svc-card">'
+          +     '<div class="person-card-main">'
+          +       '<span class="person-card-avatar"><i class="fas fa-concierge-bell"></i></span>'
+          +       '<span class="person-card-name">' + esc(s.name || '---') + '</span>'
           +     '</div>'
-          +     '<div class="product-card-cell-data">واحد: <span>' + esc(s.unit || 'عدد') + '</span></div>'
-          +     '<div class="product-card-cell-data">مبلغ تمام شده: <span>' + (_cost > 0 ? money(_cost, s.currency) : '—') + '</span></div>'
-          +     '<div class="product-card-cell-data">قیمت: <span>' + money(s.price, s.currency) + '</span></div>'
-          +     '<div class="product-card-actions">' + actionsHtml + '</div>'
-          +     '<span class="product-card-search" style="display:none">' + esc((s.unit || '') + ' ' + (s.notes || '')) + '</span>'
+          +     '<div class="person-card-balance">قیمت: <span>' + money(s.price, s.currency) + '</span></div>'
+          +     '<div class="person-card-balance svc-card-cost">مبلغ تمام شده: <span>' + (_cost > 0 ? money(_cost, s.currency) : '—') + '</span></div>'
+          +     '<div class="person-card-balance svc-card-unit">واحد: <span>' + esc(s.unit || 'عدد') + '</span></div>'
+          +     '<div class="person-card-actions">' + actionsHtml + '</div>'
+          +     '<span class="person-card-search" style="display:none">' + esc((s.unit || '') + ' ' + (s.notes || '')) + '</span>'
           +   '</div>'
           + '</td>';
         tbody.appendChild(row);
@@ -41421,65 +41421,67 @@ function _bleHasItem(wrapper) {
     return !!(row && row.dataset && row.dataset.serviceId);
 }
 
-/** علامت‌گذاریِ ردیفی که جنس/خدمتِ انتخاب‌شده دارد (فقط برای نشانگرِ موس) */
+/** قلمِ بسیار ظریف کنارِ جنس/خدمتِ انتخاب‌شده — تنها راهِ بازکردنِ فورمِ کوچک.
+ *  خودِ فیلد دست‌نخورده می‌ماند: تایپ، جستجو و پاک‌کردن با Backspace مثلِ همیشه کار
+ *  می‌کند. اگر ردیف خالی شود، قلم خودبه‌خود برداشته می‌شود. */
 function _bleEnsureBtn(wrapper) {
     if (!wrapper) return;
-    if (_bleHasItem(wrapper)) wrapper.classList.add('ble-has-item');
-    else wrapper.classList.remove('ble-has-item');
+    var inBill = wrapper.closest('#sales-items-body') || wrapper.closest('#purchase-items-body');
+    var has = inBill && _bleHasItem(wrapper);
+    var btn = wrapper.querySelector('.ble-pen');
+    if (!has) {
+        wrapper.classList.remove('ble-has-item');
+        if (btn) btn.remove();
+        return;
+    }
+    wrapper.classList.add('ble-has-item');
+    if (btn) return;
+    btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ble-pen';
+    btn.tabIndex = -1;
+    btn.title = 'ویرایش این قلم در همین بل';
+    btn.innerHTML = '<i class="fas fa-pen"></i>';
+    btn.addEventListener('mousedown', function (e) { e.preventDefault(); e.stopPropagation(); });
+    btn.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        openBillLineEdit(wrapper);
+    });
+    wrapper.appendChild(btn);
 }
 
-/** شنوندهٔ سراسری (delegation) — بدونِ تغییر در سازندهٔ ردیف‌ها.
- *  خودِ «فیلدِ جنس» کلیک‌پذیر است: اگر جنس/خدمتی در آن ردیف انتخاب شده باشد، کلیک
- *  فورمِ کوچکِ ویرایشِ همان قلم را باز می‌کند. اگر ردیف خالی باشد، رفتارِ همیشگیِ
- *  جستجو دست‌نخورده می‌ماند. */
+/** شنوندهٔ سراسری (delegation) — بدونِ تغییر در سازندهٔ ردیف‌ها. */
 function _bleInstall() {
     if (typeof document === 'undefined' || document.__bleInstalled) return;
     document.__bleInstalled = true;
 
     var mark = function (e) {
-        var w = e.target && e.target.closest ? e.target.closest('.product-search-wrapper') : null;
-        if (w) _bleEnsureBtn(w);
+        var t = e.target;
+        if (!t || !t.closest) return;
+        var w = t.closest('.product-search-wrapper');
+        if (w) { _bleEnsureBtn(w); return; }
+        // هنگامِ حرکت در جدولِ بل، همهٔ ردیف‌ها یک‌بار هم‌سان می‌شوند
+        var body = t.closest('#sales-items-body') || t.closest('#purchase-items-body');
+        if (body) _bleRefresh(body);
     };
     document.addEventListener('mouseover', mark, true);
     document.addEventListener('touchstart', mark, { capture: true, passive: true });
-
-    // کلیک روی فیلدِ جنسِ انتخاب‌شده → فورمِ کوچک
-    document.addEventListener('mousedown', function (e) {
+    // با تایپ/پاک‌کردن در فیلدِ جستجو، وضعیتِ قلم به‌روز می‌شود (Backspace → حذفِ قلم)
+    document.addEventListener('input', function (e) {
         var t = e.target;
         if (!t || !t.closest) return;
-        var inp = t.closest('.product-search-input');
-        if (!inp) return;
-        var w = inp.closest('.product-search-wrapper');
-        if (!w || !_bleHasItem(w)) return;          // ردیفِ خالی = جستجوی عادی
-        if (!w.closest('#sales-items-body') && !w.closest('#purchase-items-body')) return;
-        e.preventDefault();
-        e.stopPropagation();
-        try { inp.blur(); } catch (e2) {}
-        openBillLineEdit(w);
+        var w = t.closest('.product-search-wrapper');
+        if (w) _bleEnsureBtn(w);
     }, true);
 }
 
-/** پاک‌کردنِ جنسِ همین ردیف تا کاربر بتواند دوباره جستجو کند */
-function _bleClearLine() {
-    var overlay = document.getElementById('ble-modal');
-    var wrapper = overlay ? overlay._bleWrapper : null;
-    _bleClose();
-    if (!wrapper) return;
-    var row = wrapper.closest('tr');
-    var hid = wrapper.querySelector('input[type="hidden"]');
-    var inp = wrapper.querySelector('.product-search-input');
-    if (hid) hid.value = '';
-    if (inp) { inp.value = ''; inp.removeAttribute('readonly'); }
-    if (row) {
-        delete row.dataset.serviceId;
-        ['lineDetails', 'lineExpiry', 'lineCost', 'lineFrom', 'lineTo'].forEach(function (k) { delete row.dataset[k]; });
-    }
-    wrapper.classList.remove('ble-has-item');
+/** هم‌سان‌سازیِ قلمِ همهٔ ردیف‌های یک جدولِ بل */
+function _bleRefresh(scope) {
     try {
-        if (row && row.closest('#purchase-items-body')) { if (typeof calculatePurchaseTotal === 'function') calculatePurchaseTotal(); }
-        else if (typeof calculateSalesTotal === 'function') calculateSalesTotal();
+        var root = scope || document;
+        var list = root.querySelectorAll ? root.querySelectorAll('.product-search-wrapper') : [];
+        Array.prototype.forEach.call(list, function (w) { _bleEnsureBtn(w); });
     } catch (e) {}
-    if (inp) { try { inp.focus(); } catch (e) {} }
 }
 
 function _bleClose() {
@@ -41505,7 +41507,7 @@ function openBillLineEdit(wrapper) {
         title = 'ویرایش خدمت در بل';
         fields =
             '<div class="wh-field full"><label>نام خدمت</label>' +
-                '<input type="text" id="ble-name" value="' + _bleEsc(name) + '" readonly></div>' +
+                '<input type="text" id="ble-name" value="' + _bleEsc(name) + '"></div>' +
             '<div class="wh-field"><label>تعداد (با ذکر واحد)</label>' +
                 '<input type="number" id="ble-qty" step="any" min="0" value="' + _bleEsc(qty) + '"></div>' +
             '<div class="wh-field"><label>قیمت تمام شده</label>' +
@@ -41522,7 +41524,7 @@ function openBillLineEdit(wrapper) {
         title = 'ویرایش جنس در بل خرید';
         fields =
             '<div class="wh-field full"><label>نام جنس</label>' +
-                '<input type="text" id="ble-name" value="' + _bleEsc(name) + '" readonly></div>' +
+                '<input type="text" id="ble-name" value="' + _bleEsc(name) + '"></div>' +
             '<div class="wh-field full"><label>تعداد' + (unit ? ' (' + _bleEsc(unit) + ')' : '') + '</label>' +
                 '<input type="number" id="ble-qty" step="any" min="0" value="' + _bleEsc(qty) + '"></div>' +
             '<div class="wh-field"><label>قیمت خرید</label>' +
@@ -41539,7 +41541,7 @@ function openBillLineEdit(wrapper) {
         title = 'ویرایش جنس در بل فروش';
         fields =
             '<div class="wh-field full"><label>نام جنس</label>' +
-                '<input type="text" id="ble-name" value="' + _bleEsc(name) + '" readonly></div>' +
+                '<input type="text" id="ble-name" value="' + _bleEsc(name) + '"></div>' +
             '<div class="wh-field full"><label>تعداد' + (unit ? ' (' + _bleEsc(unit) + ')' : '') + '</label>' +
                 '<input type="number" id="ble-qty" step="any" min="0" value="' + _bleEsc(qty) + '"></div>' +
             '<div class="wh-field full"><label>قیمت فروش</label>' +
@@ -41556,15 +41558,19 @@ function openBillLineEdit(wrapper) {
     overlay.className = 'modal ble-modal';
     overlay.id = 'ble-modal';
     overlay.style.display = 'block';
+    // هدر و دکمهٔ ثبت عیناً با همان کلاس‌های فرمِ «فروش فوری» ساخته می‌شوند
+    // (bill-header-bar / bill-header-title / bill-btn-save) تا یکدست باشند.
     overlay.innerHTML =
         '<div class="modal-content wh-modal-content ble-modal-content">' +
-            '<div class="modal-header"><h3>' + title + '</h3>' +
-                '<span class="close-modal" onclick="_bleClose()">&times;</span></div>' +
+            '<div class="bill-header-bar ble-header">' +
+                '<button type="button" class="btn-back-header" onclick="_bleClose()" title="برگشت"><i class="fas fa-arrow-right"></i></button>' +
+                '<h3 class="bill-header-title">' + title + '</h3>' +
+            '</div>' +
             '<div class="modal-body"><div class="wh-form-grid ble-grid">' + fields + '</div></div>' +
-            '<div class="modal-footer">' +
-                '<button type="button" class="btn-secondary ble-clear-btn" onclick="_bleClearLine()" title="پاک‌کردنِ این جنس تا دوباره جستجو کنید"><i class="fas fa-eraser"></i> تغییر جنس</button>' +
-                '<button type="button" class="btn-secondary" onclick="_bleClose()">لغو</button>' +
-                '<button type="button" class="btn-primary" onclick="_bleSave()"><i class="fas fa-folder"></i> ثبت</button>' +
+            '<div class="modal-footer bill-footer">' +
+                '<span class="bill-footer-actions">' +
+                    '<button type="button" class="bill-btn-save" onclick="_bleSave()"><i class="fas fa-folder"></i> ثبت</button>' +
+                '</span>' +
             '</div>' +
         '</div>';
     overlay.addEventListener('click', function (e) { if (e.target === overlay) _bleClose(); });
@@ -41613,6 +41619,9 @@ function _bleSave() {
     if (!c) { _bleClose(); return; }
     var v = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
 
+    // نامِ ویرایش‌شده فقط روی همین قلمِ همین بل می‌نشیند (کارتِ خودِ جنس/خدمت دست‌نخورده)
+    var _newName = String(v('ble-name') || '').trim();
+    if (c.nameInput && _newName) c.nameInput.value = _newName;
     if (c.qtyInput)   c.qtyInput.value   = v('ble-qty');
     if (c.priceInput) c.priceInput.value = v('ble-price');
     if (c.discInput && document.getElementById('ble-disc')) c.discInput.value = v('ble-disc') || '0';
@@ -41651,7 +41660,7 @@ if (typeof window !== 'undefined') {
     window._bleSyncAmt = _bleSyncAmt;
     window._bleInstall = _bleInstall;
     window._bleEnsureBtn = _bleEnsureBtn;
-    window._bleClearLine = _bleClearLine;
+    window._bleRefresh = _bleRefresh;
     try { _bleInstall(); } catch (e) {}
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () { try { _bleInstall(); } catch (e) {} });
