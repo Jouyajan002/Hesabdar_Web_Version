@@ -41398,7 +41398,12 @@ function _bleCtx(wrapper) {
     var row = wrapper ? wrapper.closest('tr') : null;
     if (!row) return null;
     var isPurchase = !!row.closest('#purchase-items-body');
-    var isService = !!(row.dataset && row.dataset.serviceId);
+    // تشخیصِ «خدمت» در هر دو بل: ردیفِ بلِ فروش dataset.serviceId می‌گیرد و ردیفِ بلِ
+    // خرید شناسه را با پیشوندِ svc- در فیلدِ پنهان نگه می‌دارد. هر دو حالت پذیرفته
+    // می‌شود تا فورمِ کوچکِ خدمت در بلِ خرید هم دقیقاً مثلِ بلِ فروش باز شود.
+    var _hidEl = wrapper.querySelector('input[type="hidden"]');
+    var _hidVal = _hidEl ? String(_hidEl.value || '') : '';
+    var isService = !!(row.dataset && row.dataset.serviceId) || /^svc-/i.test(_hidVal);
     var q = function (sel) { return row.querySelector(sel); };
     return {
         row: row,
