@@ -1329,3 +1329,47 @@ body:has(#dashboard.section.active) #financial.section.active { display: none !i
     }
     .ssb-btn { padding: 9px 12px !important; font-size: 0.84rem !important; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   عملیه‌های حساب (صندوق) — چیدمانِ تک‌ستونه در موبایل، دقیقاً مثلِ فورمِ ثبتِ شخص
+   ---------------------------------------------------------------------------
+   «افزودن به حساب»، «برداشت از حساب»، «انتقال مبلغ»، «ثبت حساب جدید» و «تبدیل ارز»
+   همگی از .bill-row-fields استفاده می‌کنند. قاعدهٔ عمومیِ موبایل این شبکه را با
+   auto-fit می‌چیند، پس روی گوشی‌های پهن‌تر دو ستون می‌شود و ترتیبِ خواندن به‌هم
+   می‌ریزد. اینجا همان فرم‌ها تک‌ستونه و تمام‌عرض می‌شوند تا فیلدها دقیقاً به ترتیب
+   از بالا به پایین بیایند — یکسان در وبِ موبایل و اپلیکیشنِ اندراید.
+   فقط چیدمانِ نمایشی؛ هیچ منطق یا شناسه‌ای تغییر نمی‌کند.
+   ═══════════════════════════════════════════════════════════════════════════ */
+@media (max-width: 820px) {
+    #cashbox-transfer-form-section .bill-row-fields,
+    #cashbox-deposit-form-section  .bill-row-fields,
+    #cashbox-withdraw-form-section .bill-row-fields,
+    #cashbox-form                  .bill-row-fields,
+    #currency-convert-form         .bill-row-fields {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+    }
+    #cashbox-transfer-form-section .bill-row-fields > .bill-field,
+    #cashbox-deposit-form-section  .bill-row-fields > .bill-field,
+    #cashbox-withdraw-form-section .bill-row-fields > .bill-field,
+    #cashbox-form                  .bill-row-fields > .bill-field,
+    #currency-convert-form         .bill-row-fields > .bill-field {
+        width: 100% !important;
+        min-width: 0 !important;
+    }
+    /* ورودی‌ها/انتخابگرها تمام‌عرض و با ارتفاعِ لمسیِ یکسان */
+    #cashbox-transfer-form-section .bill-row-fields .bill-field > input,
+    #cashbox-transfer-form-section .bill-row-fields .bill-field > select,
+    #cashbox-deposit-form-section  .bill-row-fields .bill-field > input,
+    #cashbox-deposit-form-section  .bill-row-fields .bill-field > select,
+    #cashbox-withdraw-form-section .bill-row-fields .bill-field > input,
+    #cashbox-withdraw-form-section .bill-row-fields .bill-field > select,
+    #cashbox-form                  .bill-row-fields .bill-field > input,
+    #cashbox-form                  .bill-row-fields .bill-field > select,
+    #currency-convert-form         .bill-row-fields .bill-field > input,
+    #currency-convert-form         .bill-row-fields .bill-field > select {
+        width: 100% !important;
+        min-height: var(--m-touch, 44px) !important;
+    }
+}

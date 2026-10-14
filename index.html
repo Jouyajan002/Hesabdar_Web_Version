@@ -1719,29 +1719,69 @@
                     </form>
                 </section>
 
-                <!-- بخش لیست خدمات -->
+                <!-- بخش لیست خدمات — هم‌استایلِ «لیست اشخاص» -->
                 <section id="services-list" class="section">
-                    <div class="section-header">
-                        <h2><button class="btn-back-header" onclick="showSection('dashboard')" title="برگشت"><i class="fas fa-arrow-right"></i></button> <i class="fas fa-concierge-bell"></i> لیست خدمات</h2>
-                        <button class="btn-primary" onclick="showServiceForm()">
-                            <i class="fas fa-plus"></i> افزودن خدمت جدید
-                        </button>
+                    <!-- نوار فیلتر (آیکن‌ها + جستجو) — دقیقاً مانند لیست اشخاص -->
+                    <div class="list-header-filter">
+                        <div class="filter-icons-left">
+                            <button class="filter-icon-btn" onclick="toggleSortMenu('services')"><i class="fas fa-bars"></i></button>
+                            <button class="filter-icon-btn" onclick="toggleFilterMenu('services')"><i class="fas fa-filter"></i></button>
+                        </div>
+                        <h3 class="section-title-in-filter"><button class="btn-back-header" onclick="servicesListGoBack()" title="برگشت"><i class="fas fa-arrow-right"></i></button> لیست خدمات</h3>
+                        <input type="text" id="search-services" placeholder="جستجو..." onkeyup="filterServicesList()">
                     </div>
 
-                    <div class="search-filter-bar">
-                        <div class="search-box">
-                            <input type="text" id="search-services" placeholder="جستجوی خدمت..." onkeyup="filterServicesList()">
-                            <i class="fas fa-search"></i>
+                    <!-- منو مرتب‌سازی -->
+                    <div id="sort-menu-services" class="sort-menu">
+                        <h4>مرتب‌سازی</h4>
+                        <select onchange="sortServicesList(this.value)">
+                            <option value="name-asc">حروف الفبا</option>
+                            <option value="new">جدیدترین</option>
+                            <option value="old">قدیمی‌ترین</option>
+                            <option value="price-desc">بیشترین قیمت</option>
+                            <option value="price-asc">کمترین قیمت</option>
+                        </select>
+                    </div>
+
+                    <!-- منو فیلتر پیشرفته -->
+                    <div id="filter-menu-services" class="filter-menu">
+                        <h4>فیلتر پیشرفته</h4>
+                        <div class="filter-row">
+                            <div class="filter-group">
+                                <label>واحد شمارش:</label>
+                                <select id="filter-service-unit"><option value="all">همه</option></select>
+                            </div>
+                            <div class="filter-group">
+                                <label>وضعیت قیمت:</label>
+                                <select id="filter-service-price">
+                                    <option value="all">همه</option>
+                                    <option value="has">دارای قیمت</option>
+                                    <option value="none">بدون قیمت</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="filter-actions">
+                            <button type="button" class="btn-primary" onclick="filterServicesList()">اعمال</button>
+                            <button type="button" class="btn-secondary" onclick="resetServicesFilter()">پاک کردن</button>
                         </div>
                     </div>
 
-                    <div class="table-container">
-                        <table class="data-table" id="services-table">
-                            <thead>
+                    <!-- نوارِ حالتِ انتخاب (فقط وقتی از بلِ فروش/خرید آمده‌ایم) -->
+                    <div id="svc-pick-bar" class="svc-pick-bar" style="display:none;">
+                        <span class="svc-pick-info"><i class="fas fa-hand-pointer"></i> خدمات مورد نظر را انتخاب کنید — <strong id="svc-pick-count">۰</strong> انتخاب شده</span>
+                        <span class="svc-pick-actions">
+                            <button type="button" class="btn-secondary" onclick="svcPickCancel()">لغو</button>
+                            <button type="button" class="btn-primary" onclick="svcPickConfirm()"><i class="fas fa-check"></i> افزودن به بل</button>
+                        </span>
+                    </div>
+
+                    <div class="table-container persons-cards-container">
+                        <table class="persons-cards-table" id="services-table">
+                            <thead class="persons-cards-thead">
                                 <tr>
                                     <th>نام خدمت</th>
                                     <th>واحد شمارش</th>
-                                    <th>هزینه تمام شده</th>
+                                    <th>مبلغ تمام شده</th>
                                     <th>قیمت</th>
                                     <th>اطلاعات بیشتر</th>
                                     <th>عملیات</th>
@@ -1752,51 +1792,78 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- دکمهٔ شناور خدمت جدید -->
+                    <button type="button" class="person-fab-add" onclick="showServiceForm(null, (typeof _svcMode==='function' && _svcMode()) ? 'picker' : null)">
+                        <i class="fas fa-plus"></i> خدمت جدید
+                    </button>
                 </section>
 
-                <!-- فرم ثبت خدمت جدید -->
+                <!-- فرم خدمت جدید — هم‌استایلِ «ثبت شخص» (bill-form + product-grid) -->
                 <section id="service-form" class="section">
-                    <div class="section-header">
-                        <h2><button class="btn-back-header" onclick="showSection('services-list')" title="برگشت"><i class="fas fa-arrow-right"></i></button> ثبت خدمت جدید</h2>
-                    </div>
-
-                    <div class="form-container">
-                        <form id="serviceForm" onsubmit="event.preventDefault(); saveService();">
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="service-name">نام خدمت *</label>
-                                    <input type="text" id="service-name" required>
+                    <form id="serviceForm" class="bill-form" onsubmit="event.preventDefault(); saveService();">
+                        <div class="bill-layout" id="service-bill-layout">
+                            <div class="bill-header-bar">
+                                <button type="button" class="btn-back-header" onclick="_exitServiceForm(false)" title="برگشت"><i class="fas fa-arrow-right"></i></button>
+                                <h3 class="bill-header-title" id="service-form-title">خدمت جدید</h3>
+                            </div>
+                            <div class="bill-body">
+                                <div class="product-grid">
+                                    <!-- ستون راست — ۱ تا ۴ (در موبایل تک‌ستونه، همین ابتدا می‌آید) -->
+                                    <div class="product-col product-col-main">
+                                        <div class="bill-field bill-field-icononly">
+                                            <i class="fas fa-concierge-bell bill-field-icon"></i>
+                                            <input type="text" id="service-name" placeholder="عنوان خدمت" required>
+                                        </div>
+                                        <div class="bill-field bill-field-icononly">
+                                            <i class="fas fa-sort-numeric-up bill-field-icon"></i>
+                                            <input type="number" id="service-qty" step="any" min="0" placeholder="مقدار">
+                                        </div>
+                                        <div class="bill-field bill-field-icononly">
+                                            <i class="fas fa-tag bill-field-icon"></i>
+                                            <input type="number" id="service-price" step="0.01" min="0" placeholder="قیمت">
+                                        </div>
+                                        <div class="bill-field bill-field-icononly">
+                                            <i class="fas fa-calendar-alt bill-field-icon"></i>
+                                            <input type="text" id="service-date-from" class="jalali-date jalali-date-optional" placeholder="از تاریخ">
+                                            <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('service-date-from',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
+                                        </div>
+                                    </div>
+                                    <!-- ستون چپ — ۵ تا ۸ -->
+                                    <div class="product-col product-col-side">
+                                        <div class="bill-field bill-field-icononly">
+                                            <i class="fas fa-ruler bill-field-icon"></i>
+                                            <select id="service-unit" class="bill-inline-input">
+                                                <option value="">واحد شمارش</option>
+                                            </select>
+                                        </div>
+                                        <div class="bill-field bill-field-icononly">
+                                            <i class="fas fa-coins bill-field-icon"></i>
+                                            <input type="number" id="service-cost" step="0.01" min="0" placeholder="مبلغ تمام شده">
+                                        </div>
+                                        <div class="bill-field bill-field-icononly">
+                                            <i class="fas fa-dollar-sign bill-field-icon"></i>
+                                            <select id="service-currency" class="bill-inline-input"></select>
+                                        </div>
+                                        <div class="bill-field bill-field-icononly">
+                                            <i class="fas fa-calendar-check bill-field-icon"></i>
+                                            <input type="text" id="service-date-to" class="jalali-date jalali-date-optional" placeholder="تا تاریخ">
+                                            <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('service-date-to',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="form-group">
-                                    <label for="service-unit">واحد شمارش</label>
-                                    <input type="text" id="service-unit" value="عدد" placeholder="مثلاً: ساعت، عدد، روز">
+                                <!-- اطلاعات بیشتر — تمام‌عرض، مثل فرم شخص -->
+                                <div class="bill-field bill-field-textarea service-notes-field">
+                                    <textarea id="service-notes" rows="3" placeholder="اطلاعات بیشتر"></textarea>
+                                </div>
+                                <div class="bill-footer">
+                                    <span class="bill-footer-actions">
+                                        <button type="submit" class="bill-btn-save"><i class="fas fa-folder"></i> ثبت</button>
+                                    </span>
                                 </div>
                             </div>
-
-                            <div class="form-row">
-                                <div class="form-group">
-                                    <label for="service-cost">هزینه تمام شده</label>
-                                    <input type="number" id="service-cost" step="0.01" min="0">
-                                </div>
-                                <div class="form-group">
-                                    <label for="service-price">قیمت</label>
-                                    <input type="number" id="service-price" step="0.01" min="0">
-                                </div>
-                            </div>
-
-                            <div class="form-row">
-                                <div class="form-group full-width">
-                                    <label for="service-notes">اطلاعات بیشتر</label>
-                                    <textarea id="service-notes" rows="3"></textarea>
-                                </div>
-                            </div>
-
-                            <div class="form-actions">
-                                <button type="button" class="btn-secondary" onclick="showSection('services-list')">لغو</button>
-                                <button type="submit" class="btn-primary">ذخیره خدمت</button>
-                            </div>
-                        </form>
-                    </div>
+                        </div>
+                    </form>
                 </section>
 
                 <!-- فرم فروش جدید -->
@@ -4014,46 +4081,52 @@
 </section>
 
 <!-- بخش انتقال مبلغ بین حساب‌ها - فرم کامل -->
+<!-- فرم انتقال مبلغ — چیدمان و استایل دقیقاً مانند «برداشت از حساب» -->
 <section id="cashbox-transfer-form-section" class="section">
-    <div class="section-header">
-        <h2><button class="btn-back-header" onclick="showSection('financial'); setTimeout(function(){switchFinancialTab('cashbox')},100)" title="برگشت"><i class="fas fa-arrow-right"></i></button> انتقال مبلغ بین حساب‌ها</h2>
-    </div>
-    
-    <div class="form-container">
-        <form id="cashboxTransferForm" onsubmit="event.preventDefault(); executeCashboxTransferLegacy();">
-            <div class="form-row">
-                <div class="form-group full-width">
-                    <label><i class="fas fa-wallet" style="color:#3b82f6;"></i> از حساب:</label>
-                    <div id="transfer-from-name" style="padding:10px;background:var(--bg-color,#f8fafc);border-radius:8px;font-weight:bold;border:1px solid var(--border-color,#e2e8f0);"></div>
+    <form id="cashboxTransferForm" class="bill-form" onsubmit="event.preventDefault(); executeCashboxTransferLegacy();">
+        <div class="bill-layout">
+            <div class="bill-header-bar">
+                <button type="button" class="btn-back-header" onclick="showSection('financial'); setTimeout(function(){switchFinancialTab('cashbox')},100)" title="برگشت"><i class="fas fa-arrow-right"></i></button>
+                <h3 class="bill-header-title">انتقال مبلغ</h3>
+            </div>
+            <div class="bill-body">
+                <div class="bill-row-fields">
+                    <div class="bill-field">
+                        <i class="fas fa-university bill-field-icon"></i>
+                        <select id="transfer-from-cashbox" required><option value="">از حساب</option></select>
+                    </div>
+                    <div class="bill-field">
+                        <i class="fas fa-wallet bill-field-icon"></i>
+                        <input type="number" id="transfer-amount" step="0.01" min="0.01" placeholder="مقدار" required>
+                    </div>
+                    <div class="bill-field">
+                        <i class="fas fa-university bill-field-icon"></i>
+                        <select id="transfer-to-cashbox" required><option value="">به حساب</option></select>
+                    </div>
+                    <div class="bill-field">
+                        <i class="fas fa-dollar-sign bill-field-icon"></i>
+                        <select id="transfer-currency" required></select>
+                    </div>
+                    <div class="bill-field">
+                        <i class="fas fa-calendar-alt bill-field-icon"></i>
+                        <input type="text" id="transfer-datetime" class="jalali-datetime" placeholder="زمان">
+                        <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('transfer-datetime',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
+                    </div>
+                </div>
+                <button type="button" class="bill-more-toggle bill-more-toggle-full" onclick="billToggleMore('transfer')"><i class="fas fa-sliders-h"></i> اطلاعات بیشتر</button>
+                <div class="bill-more-panel" id="transfer-more-panel">
+                    <div class="bill-field bill-field-textarea">
+                        <textarea id="transfer-notes" rows="3" placeholder="اطلاعات بیشتر..."></textarea>
+                    </div>
+                </div>
+                <div class="bill-footer">
+                    <span class="bill-footer-actions">
+                        <button type="submit" class="bill-btn-save"><i class="fas fa-folder"></i> ثبت</button>
+                    </span>
                 </div>
             </div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label for="transfer-to-cashbox"><i class="fas fa-arrow-left" style="color:#10b981;"></i> به حساب: *</label>
-                    <select id="transfer-to-cashbox" class="form-control" required>
-                        <option value="">انتخاب حساب مقصد</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="transfer-amount"><i class="fas fa-coins" style="color:#f59e0b;"></i> مبلغ انتقال: *</label>
-                    <input type="number" id="transfer-amount" class="form-control" step="0.01" placeholder="مبلغ را وارد کنید" required>
-                </div>
-            </div>
-            
-            <div class="form-row">
-                <div class="form-group full-width">
-                    <label for="transfer-notes">توضیحات (اختیاری):</label>
-                    <textarea id="transfer-notes" class="form-control" rows="3" placeholder="توضیحات مربوط به انتقال..."></textarea>
-                </div>
-            </div>
-            
-            <div class="form-actions">
-                <button type="button" class="btn-secondary" onclick="showSection('financial'); setTimeout(function(){switchFinancialTab('cashbox')},100)">لغو</button>
-                <button type="submit" class="btn-primary"><i class="fas fa-exchange-alt"></i> انجام انتقال</button>
-            </div>
-        </form>
-    </div>
+        </div>
+    </form>
 </section>
 
 <!-- فرم افزودن به حساب (Deposit) -->

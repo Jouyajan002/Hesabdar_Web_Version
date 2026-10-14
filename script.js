@@ -2676,6 +2676,9 @@ if (headerFilter) {
         case 'expenses':
             titleText = 'مصارفات';
             break;
+        case 'services-list':
+            titleText = 'لیست خدمات';
+            break;
         case 'employee-management':
             titleText = 'کارمندان';
             break;
@@ -3622,6 +3625,12 @@ function saveSale() {
                 var _dsp = _prodsAtSale.find(function (p) { return p.id == parseInt(productId); });
                 if (_dsp && _dsp.description && String(_dsp.description).trim()) _saleItm.details = String(_dsp.description).trim();
             }
+            // ویرایشِ همین قلم در همین بل (فورمِ کوچک) — بر همه چیز اولویت دارد و فقط
+            // روی همین سند می‌نشیند؛ کارت/فورمِ اصلیِ جنس یا خدمت تغییر نمی‌کند.
+            if (row.dataset.lineDetails != null && String(row.dataset.lineDetails).trim() !== '') _saleItm.details = String(row.dataset.lineDetails).trim();
+            if (row.dataset.lineCost  != null && String(row.dataset.lineCost).trim()  !== '') _saleItm.lineCost = parseFloat(row.dataset.lineCost) || 0;
+            if (row.dataset.lineFrom  != null && String(row.dataset.lineFrom).trim()  !== '') _saleItm.dateFrom = String(row.dataset.lineFrom).trim();
+            if (row.dataset.lineTo    != null && String(row.dataset.lineTo).trim()    !== '') _saleItm.dateTo   = String(row.dataset.lineTo).trim();
             items.push(_saleItm);
         }
     });
@@ -3652,7 +3661,14 @@ function saveSale() {
     const remainingInput = document.getElementById('sales-remaining');
     const remaining = remainingInput ? (parseFormattedNumber(remainingInput.value)) : 0;
     const cashboxId = document.getElementById('sales-cashbox')?.value || '';
-    
+    // ── بلِ بدونِ دریافتیِ نقد هیچ ردیفی در حساب نمی‌سازد ────────────────────────
+    //  اگر مبلغِ دریافتیِ این بل صفر باشد (فروشِ کاملاً نسیه)، حساب به بل نمی‌چسبد؛ پس
+    //  نه موجودیِ حساب عوض می‌شود و نه ردیفی در «معاملات حساب» دیده می‌شود. با حتی یک
+    //  واحد دریافتی، حساب مثل قبل ثبت می‌گردد. موجودیِ حساب از قبل هم با «مبلغ > 0»
+    //  محافظت می‌شد؛ این تغییر فقط جلوی «ردیفِ بی‌اثر در حساب» را می‌گیرد.
+    var _saleCashNow = _isForeignSale ? cashForeign : cashAfn;
+    var _saleCashboxId = (cashboxId && _saleCashNow > 0) ? parseInt(cashboxId) : null;
+
     // محاسبه سود فروش = مجموع (قیمت فروش - قیمت خرید) × تعداد
     const _allProducts = (typeof db !== 'undefined' && db.getProducts) ? (db.getProducts() || []) : [];
     var profit = 0;
@@ -3685,7 +3701,7 @@ function saveSale() {
             rateUsed: _dayRateFor(currency),
             baseCurrency: (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : 'AFN',
             profit: profit,
-            cashboxId: cashboxId ? parseInt(cashboxId) : null,
+            cashboxId: _saleCashboxId,
             status: remaining > 0 ? 'باقی‌مانده' : 'تسویه‌شده'
         };
         
@@ -3712,7 +3728,7 @@ function saveSale() {
             rateUsed: _dayRateFor(currency),
             baseCurrency: (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : 'AFN',
             profit: profit,
-            cashboxId: cashboxId ? parseInt(cashboxId) : null,
+            cashboxId: _saleCashboxId,
             status: remaining > 0 ? 'باقی‌مانده' : 'تسویه‌شده',
             createdAt: new Date().toISOString()
         };
@@ -4704,6 +4720,9 @@ function savePurchase() {
             // جزئیاتِ بل برای این قلم = «جزئیات در بل»ِ خودِ جنس؛ در خودِ بل ماندگار می‌شود
             var _dp = _prodsAtPurchase.find(function (p) { return p.id == parseInt(productId); });
             if (_dp && _dp.description && String(_dp.description).trim()) _purItm.details = String(_dp.description).trim();
+            // ویرایشِ همین قلم در همین بل (فورمِ کوچک) — فقط روی همین سند
+            if (row.dataset.lineDetails != null && String(row.dataset.lineDetails).trim() !== '') _purItm.details = String(row.dataset.lineDetails).trim();
+            if (row.dataset.lineExpiry  != null && String(row.dataset.lineExpiry).trim()  !== '') _purItm.expiryDate = String(row.dataset.lineExpiry).trim();
             items.push(_purItm);
         } else if (productId === 'new') {
             showMessage('توجه', 'لطفاً جنس جدید را از مدیریت اجناس ثبت کنید.');
@@ -4730,7 +4749,12 @@ function savePurchase() {
     const remaining = remainingInput ? (parseFormattedNumber(remainingInput.value)) : 0;
     
     const cashboxId = document.getElementById('purchase-cashbox')?.value || '';
-    
+    // ── بلِ بدونِ پرداختیِ نقد هیچ ردیفی در حساب نمی‌سازد (قرینهٔ فرمِ فروش) ──────────
+    //  هزینه حمل و نقل از این قاعده مستثناست: آن یک خروجِ نقدیِ واقعی و جداگانه است و
+    //  همچنان با حسابِ انتخاب‌شده ثبت می‌شود، حتی اگر بهای خودِ اجناس نسیه باشد.
+    var _purCashNow = _isForeignPur ? paidForeign : paidAfn;
+    var _purCashboxId = (cashboxId && _purCashNow > 0) ? parseInt(cashboxId) : null;
+
     // ====== هشدار کمبود موجودی حساب (با اجازه ادامه و منفی شدن) ======
     if (cashboxId && !document.getElementById('purchaseForm')?.dataset?.editId) {
         var _purchaseCashbox = db.getCashboxes().find(c => c.id == cashboxId);
@@ -4779,7 +4803,11 @@ function savePurchase() {
         paidAmounts: _buildCashAmounts(currency, paidAfn, paidUsd, paidForeign),
         rateUsed: _dayRateFor(currency),
         baseCurrency: (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : 'AFN',
-        cashboxId: cashboxId ? parseInt(cashboxId) : null, notes,
+        cashboxId: _purCashboxId,
+        // حسابی که «هزینه حمل و نقل» از آن کسر می‌شود. خودِ بل ممکن است نسیه باشد و به
+        // حساب وصل نشود، ولی کرایه یک خروجِ نقدیِ واقعی است؛ پس حسابش جدا نگه داشته
+        // می‌شود تا در ویرایش گم نشود و کرایه دوباره یا نیم‌کاره ثبت نگردد.
+        shippingCashboxId: (shipping > 0 && cashboxId) ? parseInt(cashboxId) : null, notes,
         subTotal: subTotal,
         totalDiscount: totalDiscount,
         totalAmount: grandTotal,
@@ -4812,7 +4840,7 @@ function savePurchase() {
         if (result.success !== false) {
             _updateProductsExpiry();
             // هزینه حمل و نقل به‌عنوان مصرفِ جداگانه (خارج از مبلغِ خرید) — هم‌گام‌سازی روی ویرایش
-            _syncPurchaseShippingExpense(parseInt(editId), shipping, currency, transaction.cashboxId, date, billNumber);
+            _syncPurchaseShippingExpense(parseInt(editId), shipping, currency, (cashboxId ? parseInt(cashboxId) : null), date, billNumber);
             showMessage('موفقیت', 'فاکتور خرید با موفقیت ویرایش شد.'); addChangelog('ویرایش', 'خرید', transaction, 'ویرایش فاکتور خرید');
             delete document.getElementById('purchaseForm').dataset.editId;
             if (typeof resetPurchaseForm === 'function') resetPurchaseForm();
@@ -4828,7 +4856,7 @@ function savePurchase() {
         _updateProductsExpiry();
         // هزینه حمل و نقل به‌عنوان مصرفِ جداگانه (از حساب کسر می‌شود، خارج از مبلغِ خرید)
         if (_purRes && _purRes.success !== false && _purRes.data) {
-            _syncPurchaseShippingExpense(_purRes.data.id, shipping, currency, transaction.cashboxId, date, billNumber);
+            _syncPurchaseShippingExpense(_purRes.data.id, shipping, currency, (cashboxId ? parseInt(cashboxId) : null), date, billNumber);
         }
         // ثبت در لاگ معاملات حساب (بدون updateCashboxBalance مجدد — database.js این کار را کرده)
         if (typeof _logCashboxTransaction === 'function' && transaction.cashboxId) {
@@ -7995,7 +8023,8 @@ function initSalesForm() {
             if (cbSelect && defaultCashboxId) {
                 cbSelect.value = String(defaultCashboxId);
             } else if (cbSelect) {
-                cbSelect.value = '';
+                // همان اصلاحِ فرمِ خرید: انتخابِ معتبرِ موجود پاک نشود (ویرایشِ بل)
+                if (typeof _cbKeepOrClear === 'function') _cbKeepOrClear(cbSelect); else cbSelect.value = '';
             }
             // فعال/غیرفعال کردن فیلدهای دریافت بر اساس ارز
             updateSalesCurrencyFields();
@@ -10259,7 +10288,18 @@ function loadCashboxTransactionsList(cashboxId) {
     // ولی deposit_in/deposit_out/deposit_external مستقل هستند چون از ساختار transactions نیستند
     
     const allItems = [
-        ...transactions.map(t => {
+        // ── بلِ بدونِ نقد در «معاملات حساب» دیده نمی‌شود ───────────────────────────
+        //  بلِ کاملاً نسیه هیچ پولی وارد یا خارجِ حساب نکرده، پس نباید در ردیف‌های حساب
+        //  بیاید. این فیلتر داده‌های قدیمی را هم (که با حسابِ انتخاب‌شده ولی نقدِ صفر
+        //  ذخیره شده‌اند) پوشش می‌دهد. سایر انواع مثل قبل نمایش داده می‌شوند.
+        ...transactions.filter(t => {
+            if (!t) return false;
+            if (t.type !== 'فروش' && t.type !== 'خرید') return true;
+            var _c = (typeof _engCashPaidFor === 'function')
+                ? _engCashPaidFor(t, t.type === 'فروش' ? 'cash' : 'paid')
+                : parseFloat((t.type === 'فروش' ? t.cashAfn : (t.paidAfn || t.cashAfn)) || 0);
+            return (parseFloat(_c) || 0) > 0;
+        }).map(t => {
             // برای فروش و خرید: مبلغ واقعی دریافتی/پرداختی در حساب (نه مبلغ کل بل)
             // — تا با آمار حساب و موجودی حساب هماهنگ باشد —
             var _txCur = t.currency || _baseCur();
@@ -10269,10 +10309,10 @@ function loadCashboxTransactionsList(cashboxId) {
                     ? _engCashPaidFor(t, 'cash')
                     : parseFloat(t.cashAfn || 0);
             } else if (t.type === 'خرید') {
-                // مبلغِ نقدیِ پرداختی؛ اگر صفر/خالی بود، مبلغِ خریدِ بل تا رقم خالی/صفر نماند
-                _txAmount = ((typeof _engCashPaidFor === 'function')
+                // مبلغِ نقدیِ پرداختی (بدونِ جایگزینیِ مبلغِ کلِ بل — آن رقم وارد حساب نشده است)
+                _txAmount = (typeof _engCashPaidFor === 'function')
                     ? _engCashPaidFor(t, 'paid')
-                    : parseFloat(t.paidAfn || t.cashAfn || 0)) || parseFloat(t.totalAmount || t.amount || 0);
+                    : parseFloat(t.paidAfn || t.cashAfn || 0);
             }
             return {
                 date: t.date || '',
@@ -10731,45 +10771,85 @@ function showCashboxTransferForm(fromCashboxId) {
     if (!section) return;
     
     section.setAttribute('data-from-cashbox-id', fromCashboxId);
-    
+
     showSection('cashbox-transfer-form-section');
-    
-    // پر کردن اطلاعات حساب مبدأ
-    const fromNameEl = document.getElementById('transfer-from-name');
-    if (fromNameEl) fromNameEl.textContent = fromBox.name + ' (موجودی: ' + formatAmountWithCurrency(fromBox.balance, fromBox.currency) + ')';
-    
+
+    // ── چیدمانِ این فرم دقیقاً همان «برداشت از حساب» است؛ پس پرکردنِ فیلدها نیز
+    //    عیناً با همان روش انجام می‌شود (حسابِ مبدأ به‌صورتِ انتخابگر، ارز، تاریخ).
+    if (typeof _populateCurrencySelect === 'function') _populateCurrencySelect('transfer-currency');
+
+    var _optLabel = function (c) {
+        return c.name + ' (' + (typeof getCurrencyLabel === 'function' ? getCurrencyLabel(c.currency) : c.currency) + ') — موجودی: '
+             + (typeof formatAmountWithCurrency === 'function' ? formatAmountWithCurrency(_cbBalInCur(c, c.currency), c.currency) : c.balance);
+    };
+
+    // حسابِ مبدأ (انتخابگر — حسابِ کلیک‌شده از پیش انتخاب می‌شود)
+    const fromSelect = document.getElementById('transfer-from-cashbox');
+    if (fromSelect) {
+        fromSelect.innerHTML = '<option value="">از حساب</option>';
+        cashboxes.forEach(function (c) {
+            const opt = document.createElement('option');
+            opt.value = c.id; opt.textContent = _optLabel(c);
+            if (c.id == fromCashboxId) opt.selected = true;
+            fromSelect.appendChild(opt);
+        });
+    }
+
     // پر کردن لیست حساب‌های مقصد
     const toSelect = document.getElementById('transfer-to-cashbox');
     if (toSelect) {
-        toSelect.innerHTML = '<option value="">انتخاب حساب مقصد</option>';
+        toSelect.innerHTML = '<option value="">به حساب</option>';
         cashboxes.filter(c => c.id != fromCashboxId).forEach(c => {
             const opt = document.createElement('option');
             opt.value = c.id;
-            opt.textContent = c.name + ' (' + getCurrencyLabel(c.currency) + ') - موجودی: ' + formatAmountWithCurrency(_cbBalInCur(c, c.currency), c.currency);
+            opt.textContent = _optLabel(c);
             toSelect.appendChild(opt);
         });
     }
-    
+
+    // ارزِ پیش‌فرض = ارزِ حسابِ مبدأ
+    var curEl = document.getElementById('transfer-currency');
+    if (curEl && fromBox && fromBox.currency) {
+        try { curEl.value = fromBox.currency; } catch (e) {}
+    }
+
     // خالی کردن فیلدها
     const amountEl = document.getElementById('transfer-amount');
     if (amountEl) amountEl.value = '';
     const notesEl = document.getElementById('transfer-notes');
     if (notesEl) notesEl.value = '';
+
+    // تاریخ و ساعت — همان رفتارِ فرمِ برداشت از حساب
+    var dtEl = document.getElementById('transfer-datetime');
+    if (dtEl) {
+        try { dtEl.value = (typeof _nowJalaliDateTime === 'function') ? _nowJalaliDateTime() : ''; } catch (e) { dtEl.value = ''; }
+        if (!dtEl._dpAttached && typeof _attachDateTimePickerToInput === 'function') {
+            _attachDateTimePickerToInput(dtEl);
+            dtEl._dpAttached = true;
+        }
+    }
 }
 
 function executeCashboxTransferLegacy(fromId) {
-    // اگر fromId پاس نشده، از data-attribute بخوان
+    // حسابِ مبدأ حالا یک انتخابگر است (مثلِ فرمِ برداشت)؛ اگر خالی بود، به data-attribute برگرد
+    if (!fromId) {
+        var _fromSel = document.getElementById('transfer-from-cashbox');
+        if (_fromSel && _fromSel.value) fromId = parseInt(_fromSel.value);
+    }
     if (!fromId) {
         var section = document.getElementById('cashbox-transfer-form-section');
         fromId = section ? parseInt(section.getAttribute('data-from-cashbox-id')) : null;
     }
     if (!fromId) { showMessage('خطا', 'حساب مبدأ مشخص نیست'); return; }
-    
+
     const toId = document.getElementById('transfer-to-cashbox')?.value;
     const amount = parseFloat(document.getElementById('transfer-amount')?.value) || 0;
     const notes = document.getElementById('transfer-notes')?.value || '';
-    
+    // تاریخِ انتخابیِ کاربر (فیلدِ تازه) — اگر خالی بود، همان رفتارِ قبلی (بدون تاریخ)
+    const _trfDt = (document.getElementById('transfer-datetime')?.value) || '';
+
     if (!toId) { showMessage('خطا', 'حساب مقصد را انتخاب کنید'); return; }
+    if (String(toId) === String(fromId)) { showMessage('خطا', 'حساب مبدأ و مقصد نمی‌توانند یکی باشند'); return; }
     if (amount <= 0) { showMessage('خطا', 'مبلغ معتبر وارد کنید'); return; }
     
     const fromBox = db.getCashboxes().find(c => c.id == fromId);
@@ -10794,6 +10874,7 @@ function executeCashboxTransferLegacy(fromId) {
             relatedCashboxId: parseInt(toId),
             relatedCashboxName: toBox ? toBox.name : '',
             notes: notes,
+            datetime: _trfDt,
             description: 'انتقال به صندوق ' + (toBox ? toBox.name : '')
         });
         _logCashboxTransaction(parseInt(toId), {
@@ -10804,6 +10885,7 @@ function executeCashboxTransferLegacy(fromId) {
             relatedCashboxId: parseInt(fromId),
             relatedCashboxName: fromBox ? fromBox.name : '',
             notes: notes,
+            datetime: _trfDt,
             description: 'دریافت از صندوق ' + (fromBox ? fromBox.name : '')
         });
     }
@@ -13997,13 +14079,21 @@ function generateCashboxReport(cashboxId) {
     var relatedLogs = cashboxTxLogs.filter(function(log){ return log.cashboxId == cashboxId; });
 
     const allItems = [
-        ...transactions.map(t => {
+        // همان قاعدهٔ «معاملات حساب»: بلِ بدونِ نقد در گزارشِ حساب نمی‌آید
+        ...transactions.filter(t => {
+            if (!t) return false;
+            if (t.type !== 'فروش' && t.type !== 'خرید') return true;
+            var _c = (typeof _engCashPaidFor === 'function')
+                ? _engCashPaidFor(t, t.type === 'فروش' ? 'cash' : 'paid')
+                : parseFloat((t.type === 'فروش' ? t.cashAfn : (t.paidAfn || t.cashAfn)) || 0);
+            return (parseFloat(_c) || 0) > 0;
+        }).map(t => {
             var _txCur = t.currency || _baseCur();
             var _txAmount = parseFloat(t.totalAmount || t.amount || 0);
             if (t.type === 'فروش') {
                 _txAmount = (typeof _engCashPaidFor === 'function') ? _engCashPaidFor(t, 'cash') : parseFloat(t.cashAfn || 0);
             } else if (t.type === 'خرید') {
-                _txAmount = ((typeof _engCashPaidFor === 'function') ? _engCashPaidFor(t, 'paid') : parseFloat(t.paidAfn || t.cashAfn || 0)) || parseFloat(t.totalAmount || t.amount || 0);
+                _txAmount = (typeof _engCashPaidFor === 'function') ? _engCashPaidFor(t, 'paid') : parseFloat(t.paidAfn || t.cashAfn || 0);
             }
             return {
                 date: t.date || '',
@@ -15235,7 +15325,9 @@ function editTransaction(id) {
                 }
                 // پر کردن حساب (اصلاح شده)
                 const purchaseCashbox = document.getElementById('purchase-cashbox');
-                if (purchaseCashbox && tx.cashboxId) purchaseCashbox.value = String(tx.cashboxId);
+                // بلِ نسیه‌ای که فقط کرایه دارد، حسابش در shippingCashboxId نگه داشته شده است
+                var _cbForEdit = tx.cashboxId || tx.shippingCashboxId;
+                if (purchaseCashbox && _cbForEdit) purchaseCashbox.value = String(_cbForEdit);
                 // ═══ بازیابیِ کاملِ وضعیتِ پرداختیِ ذخیره‌شده (Hydration) ═══
                 //  همان اصلِ فروش: مقادیر از خودِ سند خوانده می‌شوند و ارزِ سند تعیین
                 //  می‌کند کدام فیلد پر شود — شاملِ ارزهای سوم به بعد.
@@ -32477,85 +32569,280 @@ function ssbSaveNumSys() {
  * @param {number} serviceId - برای ویرایش (اختیاری)
  * @param {string} returnTo  - 'picker' اگر از مودال picker آمده، تا بعد از ذخیره/برگشت، مودال دوباره باز شود
  */
-function showServiceForm(serviceId, returnTo) {
-    // ذخیره وضعیت قبلی برای بازگشت — اگر از picker آمده باشیم
-    window._serviceFormReturnTo = returnTo || null;
-    // ثبت بخش قبلی فعلی تا بتوانیم به آن برگردیم (مثلاً sales)
-    if (returnTo === 'picker') {
-        var activeSec = document.querySelector('.section.active');
-        window._serviceFormReturnSection = activeSec ? activeSec.id : null;
-        // علامت‌گذاری که در بازگشت بعدی به این بخش، فرم reset نشود
-        window._returningFromServicePicker = window._serviceFormReturnSection;
+// ═══════════════════════════════════════════════════════════════════════════
+//  خدمات — لیست و فرم، هم‌استایلِ «لیست اشخاص» و «ثبت شخص»
+//  ---------------------------------------------------------------------------
+//  رویکرد (مثلِ دکمهٔ «گدام»): دکمهٔ «خدمات» در بلِ فروش/خرید همین «لیست خدمات» را
+//  در حالتِ انتخاب باز می‌کند. کاربر چند خدمت را تیک می‌زند و با «افزودن به بل»
+//  همه‌شان با منطقِ موجودِ addServiceToSale/addServiceToPurchase به بل اضافه می‌شوند.
+//  اگر خدمتِ موردِ نظر نبود، با «خدمت جدید» ساخته می‌شود و پس از ثبت، لیست دوباره
+//  در همان حالتِ انتخاب باز می‌گردد، انتخاب‌های قبلی سرِ جایشان می‌مانند و خدمتِ
+//  تازه هم از پیش انتخاب شده است. (منطقِ ذخیره و افزودن به بل دست‌نخورده است.)
+// ═══════════════════════════════════════════════════════════════════════════
+
+//  نکتهٔ مهمِ پیاده‌سازی: اجرای سطح‌بالای این فایل پس از یک throw متوقف می‌شود، پس هر
+//  «var» بعد از آن هرگز مقدار نمی‌گیرد. بنابراین وضعیتِ این ماژول در یک آبجکتِ تنبل روی
+//  window نگهداری می‌شود و با تابع‌های hoisted خوانده/نوشته می‌شود (همان الگوی بخش‌های دیگر).
+function _svcState() {
+    if (typeof window === 'undefined') return { mode: null, sel: [], back: null, sort: 'name-asc' };
+    if (!window.__jouyaSvcState) window.__jouyaSvcState = { mode: null, sel: [], back: null, sort: 'name-asc' };
+    if (!Array.isArray(window.__jouyaSvcState.sel)) window.__jouyaSvcState.sel = [];
+    return window.__jouyaSvcState;
+}
+function _svcMode(v)  { var st = _svcState(); if (arguments.length) st.mode = v; return st.mode; }
+function _svcSel()    { return _svcState().sel; }
+function _svcBack(v)  { var st = _svcState(); if (arguments.length) st.back = v; return st.back; }
+function _svcSort(v)  { var st = _svcState(); if (arguments.length) st.sort = v; return st.sort || 'name-asc'; }
+
+function _svcRead() {
+    var s = [];
+    try { s = JSON.parse(localStorage.getItem('services') || '[]'); } catch (e) { s = []; }
+    return Array.isArray(s) ? s : [];
+}
+function _svcCurLabel(code) {
+    try {
+        if (typeof getCurrencyLabel === 'function' && code) return getCurrencyLabel(code);
+    } catch (e) {}
+    return code || '';
+}
+function _svcBaseCur() {
+    try { return (typeof _baseCur === 'function') ? _baseCur() : 'AFN'; } catch (e) { return 'AFN'; }
+}
+
+/** باز کردنِ لیست خدمات در حالتِ انتخاب — از بلِ فروش */
+function openServicePicker() { _svcOpenPicker('sales'); }
+/** باز کردنِ لیست خدمات در حالتِ انتخاب — از بلِ خرید */
+function openPurchaseServicePicker() { _svcOpenPicker('purchase'); }
+
+function _svcOpenPicker(mode) {
+    _svcMode(mode);
+    _svcSel();
+    var active = document.querySelector('.section.active');
+    _svcBack(active ? active.id : (mode === 'purchase' ? 'purchase-form' : 'sales-form'));
+    // بازگشت به بل نباید فرمِ بل را ریست کند (همان پرچمِ قبلی)
+    window._returningFromServicePicker = _svcBack();
+    showSection('services-list');
+    loadServicesList();
+}
+
+/** دکمهٔ برگشتِ هدرِ لیست */
+function servicesListGoBack() {
+    if (_svcMode() && _svcBack()) { svcPickCancel(); return; }
+    showSection('dashboard');
+}
+
+/** لغوِ حالتِ انتخاب و برگشت به بل بدونِ افزودن */
+function svcPickCancel() {
+    var back = _svcBack();
+    _svcMode(null); _svcSel().length = 0; _svcBack(null);
+    if (back) {
+        showSection(back);
+        setTimeout(function () { window._returningFromServicePicker = null; }, 200);
     } else {
-        window._serviceFormReturnSection = null;
+        showSection('dashboard');
+    }
+    loadServicesList();
+}
+
+/** افزودنِ همهٔ خدماتِ انتخاب‌شده به بل — با همان توابعِ موجود */
+function svcPickConfirm() {
+    var mode = _svcMode();
+    var ids = _svcSel().slice();
+    var back = _svcBack();
+    if (!ids.length) {
+        if (typeof showToast === 'function') showToast('هیچ خدمتی انتخاب نشده است', 'error');
+        else if (typeof showMessage === 'function') showMessage('توجه', 'هیچ خدمتی انتخاب نشده است');
+        return;
+    }
+    _svcMode(null); _svcSel().length = 0; _svcBack(null);
+    if (back) showSection(back);
+    setTimeout(function () {
+        ids.forEach(function (id) {
+            try {
+                if (mode === 'purchase' && typeof addServiceToPurchase === 'function') addServiceToPurchase(id);
+                else if (typeof addServiceToSale === 'function') addServiceToSale(id);
+            } catch (e) { console.warn('add service to bill:', e); }
+        });
         window._returningFromServicePicker = null;
+    }, 60);
+}
+
+/** تیک/حذفِ تیکِ یک خدمت در حالتِ انتخاب */
+function svcPickToggle(id) {
+    if (!_svcMode()) return;
+    var _sel = _svcSel();
+    var i = _sel.indexOf(id);
+    if (i >= 0) _sel.splice(i, 1); else _sel.push(id);
+    loadServicesList();
+}
+
+function sortServicesList(v) { _svcSort(v || 'name-asc'); loadServicesList(); }
+function resetServicesFilter() {
+    var u = document.getElementById('filter-service-unit'); if (u) u.value = 'all';
+    var p = document.getElementById('filter-service-price'); if (p) p.value = 'all';
+    var s = document.getElementById('search-services'); if (s) s.value = '';
+    loadServicesList();
+}
+function filterServicesList() { loadServicesList(); }
+
+/** نمایش لیست خدمات — کارت‌ها با همان ساختارِ لیست اشخاص */
+function loadServicesList() {
+    var services = _svcRead();
+    var tbody = document.querySelector('#services-table tbody');
+    if (!tbody) return;
+
+    // نوارِ حالتِ انتخاب
+    var bar = document.getElementById('svc-pick-bar');
+    if (bar) {
+        bar.style.display = _svcMode() ? '' : 'none';
+        var cnt = document.getElementById('svc-pick-count');
+        if (cnt) cnt.textContent = (typeof formatNumber === 'function')
+            ? formatNumber(_svcSel().length) : String(_svcSel().length);
     }
-    showSection('service-form');
-    var f = document.getElementById('serviceForm');
-    if (f) {
-        f.reset();
-        delete f.dataset.editId;
+
+    // گزینه‌های فیلترِ واحد (از خودِ داده)
+    var uSel = document.getElementById('filter-service-unit');
+    if (uSel) {
+        var cur = uSel.value || 'all';
+        var units = [];
+        services.forEach(function (s) { var u = (s.unit || '').trim(); if (u && units.indexOf(u) === -1) units.push(u); });
+        uSel.innerHTML = '<option value="all">همه</option>' + units.map(function (u) {
+            return '<option value="' + u.replace(/"/g, '&quot;') + '">' + u + '</option>';
+        }).join('');
+        uSel.value = cur;
     }
-    if (serviceId) {
-        loadServiceData(serviceId);
-    }
-    // به‌روزرسانی دکمه برگشت در هدر فرم
-    setTimeout(function() {
-        var backBtn = document.querySelector('#service-form .btn-back-header');
-        if (backBtn) {
-            backBtn.onclick = function() { _exitServiceForm(false); };
+
+    var searchVal = ((document.getElementById('search-services') || {}).value || '').trim().toLowerCase();
+    var fUnit = ((document.getElementById('filter-service-unit') || {}).value) || 'all';
+    var fPrice = ((document.getElementById('filter-service-price') || {}).value) || 'all';
+
+    var list = services.filter(function (s) {
+        if (searchVal) {
+            var hay = ((s.name || '') + ' ' + (s.notes || '') + ' ' + (s.unit || '')).toLowerCase();
+            if (hay.indexOf(searchVal) < 0) return false;
         }
-        // دکمه لغو
-        var cancelBtn = document.querySelector('#service-form .form-actions .btn-secondary');
-        if (cancelBtn) {
-            cancelBtn.onclick = function() { _exitServiceForm(false); };
+        if (fUnit !== 'all' && (s.unit || '') !== fUnit) return false;
+        var pr = parseFloat(s.price) || 0;
+        if (fPrice === 'has' && !(pr > 0)) return false;
+        if (fPrice === 'none' && pr > 0) return false;
+        return true;
+    });
+
+    list.sort(function (a, b) {
+        switch (_svcSort()) {
+            case 'new':        return (b.id || 0) - (a.id || 0);
+            case 'old':        return (a.id || 0) - (b.id || 0);
+            case 'price-desc': return (parseFloat(b.price) || 0) - (parseFloat(a.price) || 0);
+            case 'price-asc':  return (parseFloat(a.price) || 0) - (parseFloat(b.price) || 0);
+            default:           return String(a.name || '').localeCompare(String(b.name || ''), 'fa');
         }
-    }, 30);
+    });
+
+    tbody.innerHTML = '';
+    if (!list.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:30px;">'
+            + (services.length ? 'خدمتی با این مشخصات یافت نشد' : 'هنوز خدمتی ثبت نشده است')
+            + '</td></tr>';
+        return;
+    }
+
+    var esc = function (t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+    var money = function (v, code) {
+        var n = parseFloat(v) || 0;
+        var txt = (typeof formatNumber === 'function') ? formatNumber(n) : String(n);
+        return txt + '(' + _svcCurLabel(code || _svcBaseCur()) + ')';
+    };
+
+    list.forEach(function (s) {
+        var picked = _svcMode() && _svcSel().indexOf(s.id) >= 0;
+        var row = document.createElement('tr');
+        row.className = 'person-card-row svc-card-row' + (picked ? ' is-picked' : '');
+        row.dataset.svcId = s.id;
+        if (_svcMode()) {
+            row.style.cursor = 'pointer';
+            row.onclick = function (e) {
+                if (e && e.target && e.target.closest && e.target.closest('.person-card-kebab')) return;
+                svcPickToggle(s.id);
+            };
+        }
+        var kebab = _svcMode()
+            ? '<span class="svc-pick-check"><i class="fas ' + (picked ? 'fa-check-circle' : 'fa-circle') + '"></i></span>'
+            : '<button class="person-card-kebab action-trigger-btn" type="button" onmouseenter="showServiceActionBar(event,' + s.id + ')" onmouseleave="handleActionButtonMouseLeave(event)" title="عملیات"><i class="fas fa-ellipsis-v"></i></button>';
+        row.innerHTML =
+            '<td class="person-card-cell">'
+          +   '<div class="person-card">'
+          +     '<div class="person-card-main">'
+          +       '<span class="person-card-name">' + esc(s.name || '---') + '</span>'
+          +     '</div>'
+          +     '<div class="person-card-balance">قیمت: <span>' + money(s.price, s.currency) + '</span></div>'
+          +     kebab
+          +   '</div>'
+          + '</td>';
+        tbody.appendChild(row);
+    });
+}
+
+/** نوارِ عملیاتِ یک خدمت (ویرایش/حذف) — همان الگوی سایر لیست‌ها */
+function showServiceActionBar(event, serviceId) {
+    if (typeof _buildInoutFloatingBar === 'function') {
+        _buildInoutFloatingBar(event, [
+            { icon: 'fa-edit',  color: '#d97706', title: 'ویرایش خدمت', run: function () { showServiceForm(serviceId); } },
+            { icon: 'fa-trash', color: '#dc2626', title: 'حذف خدمت',   run: function () { deleteService(serviceId); } }
+        ]);
+    }
+}
+
+/** حذف خدمت */
+function deleteService(id) {
+    if (!confirm('آیا از حذف این خدمت مطمئن هستید؟')) return;
+    var services = _svcRead().filter(function (x) { return x.id != id; });
+    try { localStorage.setItem('services', JSON.stringify(services)); } catch (e) {}
+    var _s = _svcSel(); var i = _s.indexOf(id); if (i >= 0) _s.splice(i, 1);
+    loadServicesList();
+    if (typeof showToast === 'function') showToast('خدمت حذف شد', 'success');
 }
 
 /**
- * خروج از فرم خدمت — اگر از picker آمده باشیم، مودال را دوباره باز می‌کند.
- * @param {boolean} preselectId - اگر مقداری باشد، آن خدمت در picker انتخاب می‌شود.
+ * بازکردن فرم خدمت جدید / ویرایش
+ * @param {number} serviceId - برای ویرایش (اختیاری)
+ * @param {string} returnTo  - 'picker' اگر از حالتِ انتخاب آمده (تا نشستِ انتخاب حفظ شود)
  */
-function _exitServiceForm(preselectId) {
-    var ret = window._serviceFormReturnTo;
-    var prevSec = window._serviceFormReturnSection;
-    // پاکسازی state
-    window._serviceFormReturnTo = null;
-    window._serviceFormReturnSection = null;
-    if (ret === 'picker' && prevSec) {
-        // برگشت به همان بخش (sales) — بدون reset کردن فرم
-        showSection(prevSec);
-        // پاکسازی flag پس از یک تأخیر کوتاه (تا showSection اول جلوگیری از reset را انجام دهد)
-        setTimeout(function() { window._returningFromServicePicker = null; }, 200);
-        // دوباره مودال picker را باز کن — بر اساس بخش، picker مناسب
-        var _isPurchaseCtx = (prevSec === 'purchase-form');
-        setTimeout(function() {
-            if (_isPurchaseCtx && typeof openPurchaseServicePicker === 'function') {
-                openPurchaseServicePicker();
-            } else if (typeof openServicePicker === 'function') {
-                openServicePicker();
-            }
-            // اگر خدمت تازه‌ساخته شده، کمی بعد آن را highlight کن
-            if (preselectId) {
-                setTimeout(function() {
-                    var listBox = document.getElementById(_isPurchaseCtx ? 'pur-svc-picker-list' : 'svc-picker-list');
-                    if (!listBox) return;
-                    var rows = listBox.querySelectorAll('.svc-picker-row');
-                    rows.forEach(function(r) {
-                        if (r.dataset && r.dataset.svcId == preselectId) {
-                            r.style.background = '#dcfce7';
-                            r.style.borderColor = '#10b981';
-                            r.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        }
-                    });
-                }, 80);
-            }
-        }, 80);
-    } else {
-        // برگشت پیش‌فرض به لیست خدمات
-        showSection('services-list');
+function showServiceForm(serviceId, returnTo) {
+    window._serviceFormReturnTo = (returnTo === 'picker' || _svcMode()) ? 'picker' : null;
+    showSection('service-form');
+    var f = document.getElementById('serviceForm');
+    if (f) { f.reset(); delete f.dataset.editId; }
+
+    var t = document.getElementById('service-form-title');
+    if (t) t.textContent = serviceId ? 'ویرایش خدمت' : 'خدمت جدید';
+
+    // واحد شمارش — همان فهرستِ سفارشیِ کاربر که فرمِ ثبتِ جنس استفاده می‌کند
+    var uSel = document.getElementById('service-unit');
+    if (uSel) {
+        var units = [];
+        try { units = JSON.parse(localStorage.getItem('customProductUnits') || '[]'); } catch (e) { units = []; }
+        if (!Array.isArray(units)) units = [];
+        uSel.innerHTML = '<option value="">واحد شمارش</option>'
+            + units.map(function (u) { return '<option value="' + String(u).replace(/"/g, '&quot;') + '">' + u + '</option>'; }).join('');
+        if (typeof setupProductAddSelect === 'function') {
+            try { setupProductAddSelect(uSel, 'customProductUnits', 'واحد شمارش'); } catch (e) {}
+        }
     }
+    // واحد پول — همان ارزهای تعریف‌شدهٔ سیستم
+    if (typeof _populateCurrencySelect === 'function') {
+        try { _populateCurrencySelect('service-currency'); } catch (e) {}
+    }
+    var cSel = document.getElementById('service-currency');
+    if (cSel && !serviceId) { try { cSel.value = _svcBaseCur(); } catch (e) {} }
+
+    if (serviceId) loadServiceData(serviceId);
+}
+
+/** خروج از فرم خدمت — به لیست برمی‌گردد و نشستِ انتخاب را حفظ می‌کند */
+function _exitServiceForm() {
+    window._serviceFormReturnTo = null;
+    showSection('services-list');
+    loadServicesList();
 }
 
 /** ذخیره خدمت */
@@ -32563,23 +32850,26 @@ function saveService() {
     var f = document.getElementById('serviceForm');
     if (!f) return;
     var editId = f.dataset.editId;
+    var val = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
     var data = {
-        name:  document.getElementById('service-name').value.trim(),
-        unit:  document.getElementById('service-unit').value.trim() || 'عدد',
-        cost:  parseFloat(document.getElementById('service-cost').value) || 0,
-        price: parseFloat(document.getElementById('service-price').value) || 0,
-        notes: document.getElementById('service-notes').value || ''
+        name:     String(val('service-name') || '').trim(),
+        unit:     String(val('service-unit') || '').trim() || 'عدد',
+        qty:      parseFloat(val('service-qty')) || 0,
+        cost:     parseFloat(val('service-cost')) || 0,
+        price:    parseFloat(val('service-price')) || 0,
+        currency: val('service-currency') || _svcBaseCur(),
+        dateFrom: String(val('service-date-from') || '').trim(),
+        dateTo:   String(val('service-date-to') || '').trim(),
+        notes:    val('service-notes') || ''
     };
     if (!data.name) {
-        if (typeof showToast === 'function') showToast('نام خدمت الزامی است', 'error');
-        else alert('نام خدمت الزامی است');
+        if (typeof showToast === 'function') showToast('عنوان خدمت الزامی است', 'error');
+        else alert('عنوان خدمت الزامی است');
         return;
     }
-    var services = [];
-    try { services = JSON.parse(localStorage.getItem('services') || '[]'); } catch(e) { services = []; }
-    if (!Array.isArray(services)) services = [];
+    var services = _svcRead();
     if (editId) {
-        var idx = services.findIndex(function(s){ return s.id == editId; });
+        var idx = services.findIndex(function (s) { return s.id == editId; });
         if (idx >= 0) {
             data.id = services[idx].id;
             data.createdAt = services[idx].createdAt || new Date().toISOString();
@@ -32592,113 +32882,86 @@ function saveService() {
         data.updatedAt = data.createdAt;
         services.push(data);
     }
-    try { localStorage.setItem('services', JSON.stringify(services)); } catch(e) {}
+    try { localStorage.setItem('services', JSON.stringify(services)); } catch (e) {}
     delete f.dataset.editId;
     if (typeof showToast === 'function') showToast('خدمت با موفقیت ذخیره شد', 'success');
-    // اگر از مودال picker آمده‌ایم: به همان بخش بل (sales) برگرد و picker را با خدمت جدید highlight کرده باز کن
-    if (window._serviceFormReturnTo === 'picker') {
-        var prevSec = window._serviceFormReturnSection;
-        var newId = data.id;
-        window._serviceFormReturnTo = null;
-        window._serviceFormReturnSection = null;
-        if (prevSec) {
-            showSection(prevSec);
-        }
-        // پاکسازی flag پس از showSection
-        setTimeout(function() { window._returningFromServicePicker = null; }, 200);
-        // باز کردن مجدد picker و highlight کردن خدمت تازه‌ساخته
-        var _isPurchaseCtx2 = (prevSec === 'purchase-form');
-        setTimeout(function() {
-            if (_isPurchaseCtx2 && typeof openPurchaseServicePicker === 'function') {
-                openPurchaseServicePicker();
-            } else if (typeof openServicePicker === 'function') {
-                openServicePicker();
-            }
-            setTimeout(function() {
-                var listBox = document.getElementById(_isPurchaseCtx2 ? 'pur-svc-picker-list' : 'svc-picker-list');
-                if (!listBox) return;
-                var rows = listBox.querySelectorAll('.svc-picker-row');
-                rows.forEach(function(r) {
-                    if (r.dataset && r.dataset.svcId == newId) {
-                        r.style.background = '#dcfce7';
-                        r.style.borderColor = '#10b981';
-                        r.style.boxShadow = '0 0 0 2px #10b981';
-                        r.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                    }
-                });
-            }, 120);
-        }, 100);
-    } else {
-        showSection('services-list');
-        loadServicesList();
-    }
+
+    // در حالتِ انتخاب: خدمتِ تازه از پیش انتخاب می‌شود و نشست دست‌نخورده می‌ماند
+    if (_svcMode() && !editId && _svcSel().indexOf(data.id) < 0) _svcSel().push(data.id);
+
+    showSection('services-list');
+    loadServicesList();
 }
 
 /** بارگذاری خدمت برای ویرایش */
 function loadServiceData(serviceId) {
-    var services = [];
-    try { services = JSON.parse(localStorage.getItem('services') || '[]'); } catch(e) { services = []; }
-    var s = services.find(function(x){ return x.id == serviceId; });
+    var s = _svcRead().find(function (x) { return x.id == serviceId; });
     if (!s) return;
-    document.getElementById('service-name').value  = s.name || '';
-    document.getElementById('service-unit').value  = s.unit || 'عدد';
-    document.getElementById('service-cost').value  = s.cost || 0;
-    document.getElementById('service-price').value = s.price || 0;
-    document.getElementById('service-notes').value = s.notes || '';
-    document.getElementById('serviceForm').dataset.editId = s.id;
+    var set = function (id, v) { var e = document.getElementById(id); if (e) e.value = (v == null ? '' : v); };
+    set('service-name', s.name || '');
+    set('service-qty', s.qty || '');
+    set('service-price', s.price || '');
+    set('service-date-from', s.dateFrom || '');
+    set('service-cost', s.cost || '');
+    set('service-date-to', s.dateTo || '');
+    set('service-notes', s.notes || '');
+    var uSel = document.getElementById('service-unit');
+    if (uSel) {
+        var u = s.unit || 'عدد';
+        if (u && !Array.prototype.some.call(uSel.options, function (o) { return o.value === u; })) {
+            var op = document.createElement('option'); op.value = u; op.textContent = u; uSel.appendChild(op);
+        }
+        uSel.value = u;
+    }
+    var cSel = document.getElementById('service-currency');
+    if (cSel) { try { cSel.value = s.currency || _svcBaseCur(); } catch (e) {} }
+    var f = document.getElementById('serviceForm');
+    if (f) f.dataset.editId = s.id;
 }
+
+if (typeof window !== 'undefined') {
+    window.openServicePicker = openServicePicker;
+    window.openPurchaseServicePicker = openPurchaseServicePicker;
+    window.servicesListGoBack = servicesListGoBack;
+    window.svcPickCancel = svcPickCancel;
+    window.svcPickConfirm = svcPickConfirm;
+    window.svcPickToggle = svcPickToggle;
+    window.sortServicesList = sortServicesList;
+    window.resetServicesFilter = resetServicesFilter;
+    window.showServiceActionBar = showServiceActionBar;
+    window._svcMode = _svcMode;
+    window._svcSel = _svcSel;
+}
+
+/* showServiceForm — به ماژولِ تازهٔ خدمات منتقل شد */
+
+
+/**
+ * خروج از فرم خدمت — اگر از picker آمده باشیم، مودال را دوباره باز می‌کند.
+ * @param {boolean} preselectId - اگر مقداری باشد، آن خدمت در picker انتخاب می‌شود.
+ */
+/* _exitServiceForm — به ماژولِ تازهٔ خدمات منتقل شد */
+
+
+/** ذخیره خدمت */
+/* saveService — به ماژولِ تازهٔ خدمات منتقل شد */
+
+
+/** بارگذاری خدمت برای ویرایش */
+/* loadServiceData — به ماژولِ تازهٔ خدمات منتقل شد */
+
 
 /** نمایش لیست خدمات */
-function loadServicesList() {
-    var services = [];
-    try { services = JSON.parse(localStorage.getItem('services') || '[]'); } catch(e) { services = []; }
-    if (!Array.isArray(services)) services = [];
-    var tbody = document.querySelector('#services-table tbody');
-    if (!tbody) return;
-    tbody.innerHTML = '';
-    if (!services.length) {
-        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:30px;">هنوز خدمتی ثبت نشده است</td></tr>';
-        return;
-    }
-    var searchVal = (document.getElementById('search-services') ? document.getElementById('search-services').value : '').trim().toLowerCase();
-    var filtered = services;
-    if (searchVal) {
-        filtered = services.filter(function(s){
-            return (s.name || '').toLowerCase().indexOf(searchVal) >= 0
-                || (s.notes || '').toLowerCase().indexOf(searchVal) >= 0;
-        });
-    }
-    filtered.forEach(function(s) {
-        var row = document.createElement('tr');
-        row.innerHTML = ''
-            + '<td>' + (s.name || '---') + '</td>'
-            + '<td>' + (s.unit || 'عدد') + '</td>'
-            + '<td>' + (s.cost ? formatCurrency(s.cost) : '---') + '</td>'
-            + '<td>' + (s.price ? formatCurrency(s.price) : '---') + '</td>'
-            + '<td>' + (s.notes ? (s.notes.length > 40 ? s.notes.substr(0, 40) + '...' : s.notes) : '---') + '</td>'
-            + '<td>'
-            +     '<button class="btn-icon btn-secondary" onclick="showServiceForm(' + s.id + ')" title="ویرایش"><i class="fas fa-edit"></i></button> '
-            +     '<button class="btn-icon btn-danger" onclick="deleteService(' + s.id + ')" title="حذف"><i class="fas fa-trash"></i></button>'
-            + '</td>';
-        tbody.appendChild(row);
-    });
-}
+/* loadServicesList — به ماژولِ تازهٔ خدمات منتقل شد */
+
 
 /** حذف خدمت */
-function deleteService(id) {
-    if (!confirm('آیا از حذف این خدمت مطمئن هستید؟')) return;
-    var services = [];
-    try { services = JSON.parse(localStorage.getItem('services') || '[]'); } catch(e) { services = []; }
-    services = services.filter(function(x){ return x.id != id; });
-    try { localStorage.setItem('services', JSON.stringify(services)); } catch(e) {}
-    loadServicesList();
-    if (typeof showToast === 'function') showToast('خدمت حذف شد', 'success');
-}
+/* deleteService — به ماژولِ تازهٔ خدمات منتقل شد */
+
 
 /** فیلتر لیست خدمات */
-function filterServicesList() {
-    loadServicesList();
-}
+/* filterServicesList — به ماژولِ تازهٔ خدمات منتقل شد */
+
 
 /**
  * افزودن یک خدمت به‌عنوان سطر در لیست اجناس انتخاب شده فروش
@@ -32915,90 +33178,8 @@ function saveExpiryThresholdAndReload() {
 /**
  * نمایش مودال انتخاب خدمت برای افزودن به بل فروش
  */
-function openServicePicker() {
-    var services = [];
-    try { services = JSON.parse(localStorage.getItem('services') || '[]'); } catch(e) { services = []; }
-    if (!Array.isArray(services)) services = [];
+/* openServicePicker — به ماژولِ تازهٔ خدمات منتقل شد */
 
-    // حذف مودال قبلی اگر باز است
-    var existing = document.getElementById('service-picker-modal');
-    if (existing) existing.remove();
-
-    var overlay = document.createElement('div');
-    overlay.id = 'service-picker-modal';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px;direction:rtl;';
-    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
-
-    var box = document.createElement('div');
-    box.style.cssText = 'background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.25);overflow:hidden;';
-
-    // هدر
-    var header = document.createElement('div');
-    header.style.cssText = 'background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;';
-    header.innerHTML = '<h3 style="margin:0;font-size:1.05rem;"><i class="fas fa-concierge-bell"></i> انتخاب خدمت برای افزودن به بل</h3>'
-        + '<button type="button" onclick="document.getElementById(\'service-picker-modal\').remove()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:14px;"><i class="fas fa-times"></i></button>';
-    box.appendChild(header);
-
-    // جستجو
-    var searchBar = document.createElement('div');
-    searchBar.style.cssText = 'padding:10px 14px;border-bottom:1px solid #e2e8f0;';
-    searchBar.innerHTML = '<input type="text" id="svc-picker-search" placeholder="جستجوی خدمت..." style="width:100%;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;font-family:inherit;">';
-    box.appendChild(searchBar);
-
-    // لیست
-    var listBox = document.createElement('div');
-    listBox.id = 'svc-picker-list';
-    listBox.style.cssText = 'flex:1;overflow-y:auto;padding:10px 14px;';
-    box.appendChild(listBox);
-
-    // فوتر
-    var footer = document.createElement('div');
-    footer.style.cssText = 'padding:12px 14px;border-top:1px solid #e2e8f0;text-align:center;';
-    footer.innerHTML = '<button type="button" class="btn-primary" onclick="document.getElementById(\'service-picker-modal\').remove(); showServiceForm(null, \'picker\');" style="padding:8px 18px;"><i class="fas fa-plus"></i> ساخت خدمت جدید</button>';
-    box.appendChild(footer);
-
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
-
-    // تابع رندر کردن لیست
-    function renderList(searchVal) {
-        var sv = (searchVal || '').trim().toLowerCase();
-        var filtered = services;
-        if (sv) {
-            filtered = services.filter(function(s){
-                return (s.name || '').toLowerCase().indexOf(sv) >= 0;
-            });
-        }
-        if (!filtered.length) {
-            listBox.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:20px;">'
-                + (services.length === 0 ? 'هنوز خدمتی ثبت نشده — از دکمه پایین خدمت جدید بسازید' : 'خدمتی با این مشخصات یافت نشد')
-                + '</p>';
-            return;
-        }
-        var html = '';
-        filtered.forEach(function(s) {
-            html += '<div class="svc-picker-row" data-svc-id="' + s.id + '" onclick="addServiceToSale(' + s.id + ');document.getElementById(\'service-picker-modal\').remove();" '
-                + 'style="padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:all 0.15s;" '
-                + 'onmouseover="this.style.background=\'#f0fdf4\';this.style.borderColor=\'#10b981\';" '
-                + 'onmouseout="this.style.background=\'\';this.style.borderColor=\'#e2e8f0\';">'
-                +   '<div>'
-                +     '<div style="font-weight:700;color:#0f172a;font-size:0.95rem;">' + (s.name || '---') + '</div>'
-                +     '<div style="font-size:0.78rem;color:#64748b;margin-top:2px;">واحد: ' + (s.unit || 'عدد') + '</div>'
-                +   '</div>'
-                +   '<div style="text-align:left;">'
-                +     '<div style="font-weight:700;color:#10b981;font-size:0.95rem;">' + (s.price ? formatCurrency(s.price) : '---') + '</div>'
-                +   '</div>'
-                + '</div>';
-        });
-        listBox.innerHTML = html;
-    }
-    renderList('');
-    var searchInp = document.getElementById('svc-picker-search');
-    if (searchInp) {
-        searchInp.addEventListener('input', function() { renderList(this.value); });
-        setTimeout(function(){ searchInp.focus(); }, 50);
-    }
-}
 
 
 // =============================================================================
@@ -33092,7 +33273,8 @@ function updatePurchaseCurrencyFields() {
     if (!_isBase) {
         var _cbId = (typeof getDefaultCashboxIdForCurrency === 'function') ? getDefaultCashboxIdForCurrency(cur) : null;
         var _cbSel = document.getElementById('purchase-cashbox');
-        if (_cbSel && _cbId) _cbSel.value = String(_cbId); else if (_cbSel) _cbSel.value = '';
+        if (_cbSel && _cbId) _cbSel.value = String(_cbId);
+        else if (_cbSel) _cbKeepOrClear(_cbSel);
     }
 
     // ── تبدیلِ لحظه‌ایِ قیمتِ همهٔ اقلامِ خرید به ارزِ جدید — همیشه، حتی با پرداختِ کامل ──
@@ -33113,11 +33295,29 @@ function updatePurchaseCurrencyFields() {
     if (cbSelect && defaultCashboxId) {
         cbSelect.value = String(defaultCashboxId);
     } else if (cbSelect) {
-        cbSelect.value = '';
+        _cbKeepOrClear(cbSelect);
     }
     // به‌روزرسانی برچسب ارز
     var tc2 = document.getElementById('purchase-total-currency2');
     if (tc2) tc2.textContent = getCurrencyLabel(cur);
+}
+
+// ── نگه‌داشتنِ حسابِ انتخاب‌شده وقتی «حسابِ پیش‌فرضِ این ارز» تعریف نشده است ───────
+//  باگ: این تابع در پایانِ خود، هنگامِ نبودِ حسابِ پیش‌فرض، انتخابِ حساب را بی‌قید
+//  خالی می‌کرد. در «ویرایشِ بل»، editTransaction حسابِ ذخیره‌شدهٔ بل را برمی‌گرداند و
+//  بلافاصله بعد از آن همین تابع صدا زده می‌شود؛ پس انتخاب پاک می‌شد و ذخیرهٔ دوباره،
+//  اثرِ نقدی و هزینه حمل و نقلِ قبلی را از حساب برمی‌گرداند بدون آنکه دوباره اعمال کند.
+//  حالا فقط انتخابِ «نامعتبر» (گزینه‌ای که دیگر در فهرست نیست) پاک می‌شود.
+function _cbKeepOrClear(sel) {
+    try {
+        if (!sel) return;
+        var v = String(sel.value || '');
+        if (!v) return;                     // از قبل خالی است — کاری لازم نیست
+        for (var i = 0; i < sel.options.length; i++) {
+            if (String(sel.options[i].value) === v) return;   // هنوز معتبر است — نگه‌دار
+        }
+        sel.value = '';                     // گزینه دیگر وجود ندارد
+    } catch (e) {}
 }
 
 // ===== picker تاریخ دوگانه (شمسی + میلادی) — dropdown زیر فیلد =====
@@ -33720,90 +33920,8 @@ function addPurchaseProductFromPicker(productId) {
 }
 
 // ===== خدمت برای خرید فوری =====
-function openPurchaseServicePicker() {
-    var services = [];
-    try { services = JSON.parse(localStorage.getItem('services') || '[]'); } catch(e) { services = []; }
-    if (!Array.isArray(services)) services = [];
+/* openPurchaseServicePicker — به ماژولِ تازهٔ خدمات منتقل شد */
 
-    // حذف مودال قبلی اگر باز است
-    var existing = document.getElementById('purchase-service-picker-modal');
-    if (existing) existing.remove();
-
-    var overlay = document.createElement('div');
-    overlay.id = 'purchase-service-picker-modal';
-    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px;direction:rtl;';
-    overlay.onclick = function(e) { if (e.target === overlay) overlay.remove(); };
-
-    var box = document.createElement('div');
-    box.style.cssText = 'background:#fff;border-radius:14px;max-width:560px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 12px 40px rgba(0,0,0,0.25);overflow:hidden;';
-
-    // هدر
-    var header = document.createElement('div');
-    header.style.cssText = 'background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:14px 18px;display:flex;align-items:center;justify-content:space-between;';
-    header.innerHTML = '<h3 style="margin:0;font-size:1.05rem;"><i class="fas fa-concierge-bell"></i> انتخاب خدمت برای افزودن به بل</h3>'
-        + '<button type="button" onclick="document.getElementById(\'purchase-service-picker-modal\').remove()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:14px;"><i class="fas fa-times"></i></button>';
-    box.appendChild(header);
-
-    // جستجو
-    var searchBar = document.createElement('div');
-    searchBar.style.cssText = 'padding:10px 14px;border-bottom:1px solid #e2e8f0;';
-    searchBar.innerHTML = '<input type="text" id="pur-svc-picker-search" placeholder="جستجوی خدمت..." style="width:100%;padding:8px 12px;border:1px solid #cbd5e1;border-radius:6px;font-family:inherit;">';
-    box.appendChild(searchBar);
-
-    // لیست
-    var listBox = document.createElement('div');
-    listBox.id = 'pur-svc-picker-list';
-    listBox.style.cssText = 'flex:1;overflow-y:auto;padding:10px 14px;';
-    box.appendChild(listBox);
-
-    // فوتر — دکمه ساخت خدمت جدید دقیقاً مانند فورم فروش
-    var footer = document.createElement('div');
-    footer.style.cssText = 'padding:12px 14px;border-top:1px solid #e2e8f0;text-align:center;';
-    footer.innerHTML = '<button type="button" class="btn-primary" onclick="document.getElementById(\'purchase-service-picker-modal\').remove(); showServiceForm(null, \'picker\');" style="padding:8px 18px;"><i class="fas fa-plus"></i> ساخت خدمت جدید</button>';
-    box.appendChild(footer);
-
-    overlay.appendChild(box);
-    document.body.appendChild(overlay);
-
-    // تابع رندر کردن لیست
-    function renderList(searchVal) {
-        var sv = (searchVal || '').trim().toLowerCase();
-        var filtered = services;
-        if (sv) {
-            filtered = services.filter(function(s){
-                return (s.name || '').toLowerCase().indexOf(sv) >= 0;
-            });
-        }
-        if (!filtered.length) {
-            listBox.innerHTML = '<p style="color:#94a3b8;text-align:center;padding:20px;">'
-                + (services.length === 0 ? 'هنوز خدمتی ثبت نشده — از دکمه پایین خدمت جدید بسازید' : 'خدمتی با این مشخصات یافت نشد')
-                + '</p>';
-            return;
-        }
-        var html = '';
-        filtered.forEach(function(s) {
-            html += '<div class="svc-picker-row" data-svc-id="' + s.id + '" onclick="addServiceToPurchase(' + s.id + ');document.getElementById(\'purchase-service-picker-modal\').remove();" '
-                + 'style="padding:10px 12px;border:1px solid #e2e8f0;border-radius:8px;margin-bottom:6px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:all 0.15s;" '
-                + 'onmouseover="this.style.background=\'#f0fdf4\';this.style.borderColor=\'#10b981\';" '
-                + 'onmouseout="this.style.background=\'\';this.style.borderColor=\'#e2e8f0\';">'
-                +   '<div>'
-                +     '<div style="font-weight:700;color:#0f172a;font-size:0.95rem;">' + (s.name || '---') + '</div>'
-                +     '<div style="font-size:0.78rem;color:#64748b;margin-top:2px;">واحد: ' + (s.unit || 'عدد') + '</div>'
-                +   '</div>'
-                +   '<div style="text-align:left;">'
-                +     '<div style="font-weight:700;color:#10b981;font-size:0.95rem;">' + (s.price ? formatCurrency(s.price) : '---') + '</div>'
-                +   '</div>'
-                + '</div>';
-        });
-        listBox.innerHTML = html;
-    }
-    renderList('');
-    var searchInp = document.getElementById('pur-svc-picker-search');
-    if (searchInp) {
-        searchInp.addEventListener('input', function() { renderList(this.value); });
-        setTimeout(function(){ searchInp.focus(); }, 50);
-    }
-}
 
 function addServiceToPurchase(serviceId) {
     var services = [];
@@ -41176,3 +41294,250 @@ function __hbInstallKeyboardNav() {
     document.addEventListener('keyup', swallower, true);
 }
 if (typeof window !== 'undefined') window.__hbInstallKeyboardNav = __hbInstallKeyboardNav;
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  فورمِ کوچکِ «ویرایش قلمِ بل»  (فروش / خرید / خدمت)
+//  ---------------------------------------------------------------------------
+//  با بردنِ کرسر روی جنسِ انتخاب‌شدهٔ یک ردیف، کنارِ فیلد یک آیکنِ مداد ظاهر می‌شود؛
+//  با کلیک روی آن همین فورمِ کوچک باز می‌شود. تغییرات فقط روی «همین ردیفِ همین بل»
+//  اعمال می‌گردد و هیچ چیزی در فورمِ اصلیِ جنس/خدمت عوض نمی‌شود.
+//  طراحی عیناً از فورمِ «تراکنش میان گدام‌ها» گرفته شده (کلاس‌های wh-*) و اندازهٔ
+//  پنجره به‌اندازهٔ محتوای داخلش است. در موبایل تک‌ستونه و جمع‌وجور می‌شود.
+//  هیچ منطقِ محاسباتی تغییر نمی‌کند: مقدار/قیمت/تخفیف در همان input های موجودِ ردیف
+//  نوشته و با updateItemTotal همان مسیرِ همیشگی دوباره حساب می‌شود.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function _bleEsc(t) {
+    return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** ردیفِ بل → اطلاعاتِ زمینه */
+function _bleCtx(wrapper) {
+    var row = wrapper ? wrapper.closest('tr') : null;
+    if (!row) return null;
+    var isPurchase = !!row.closest('#purchase-items-body');
+    var isService = !!(row.dataset && row.dataset.serviceId);
+    var q = function (sel) { return row.querySelector(sel); };
+    return {
+        row: row,
+        isPurchase: isPurchase,
+        isService: isService,
+        nameInput: wrapper.querySelector('.product-search-input'),
+        qtyInput:  q(isPurchase ? '.purchase-item-quantity' : '.item-quantity'),
+        priceInput: q(isPurchase ? '.purchase-item-price' : '.item-price'),
+        discInput: q(isPurchase ? '.purchase-item-discount' : '.item-discount'),
+        unitEl:    q(isPurchase ? '.purchase-item-unit' : '.item-unit')
+    };
+}
+
+/** آیا این ردیف جنس/خدمتِ انتخاب‌شده دارد؟ */
+function _bleHasItem(wrapper) {
+    if (!wrapper) return false;
+    var hid = wrapper.querySelector('input[type="hidden"]');
+    if (hid && String(hid.value || '').trim()) return true;
+    var row = wrapper.closest('tr');
+    return !!(row && row.dataset && row.dataset.serviceId);
+}
+
+/** تزریقِ آیکنِ مداد روی wrapper (یک‌بار برای هر ردیف) */
+function _bleEnsureBtn(wrapper) {
+    if (!wrapper || !_bleHasItem(wrapper)) return;
+    if (wrapper.querySelector('.ble-edit-btn')) return;
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'ble-edit-btn';
+    btn.title = 'ویرایش این قلم در همین بل';
+    btn.innerHTML = '<i class="fas fa-pen"></i>';
+    btn.onclick = function (e) { e.preventDefault(); e.stopPropagation(); openBillLineEdit(wrapper); };
+    wrapper.appendChild(btn);
+    wrapper.classList.add('ble-has-item');
+}
+
+/** شنوندهٔ سراسری (delegation) — بدونِ تغییر در سازندهٔ ردیف‌ها */
+function _bleInstall() {
+    if (typeof document === 'undefined' || document.__bleInstalled) return;
+    document.__bleInstalled = true;
+    document.addEventListener('mouseover', function (e) {
+        var w = e.target && e.target.closest ? e.target.closest('.product-search-wrapper') : null;
+        if (w) _bleEnsureBtn(w);
+    }, true);
+    // روی لمس (موبایل) هم همان رفتار
+    document.addEventListener('touchstart', function (e) {
+        var w = e.target && e.target.closest ? e.target.closest('.product-search-wrapper') : null;
+        if (w) _bleEnsureBtn(w);
+    }, { capture: true, passive: true });
+}
+
+function _bleClose() {
+    var m = document.getElementById('ble-modal');
+    if (m) m.remove();
+}
+
+/** بازکردنِ فورمِ کوچک برای یک ردیف */
+function openBillLineEdit(wrapper) {
+    var c = _bleCtx(wrapper);
+    if (!c) return;
+    _bleClose();
+
+    var ds = c.row.dataset || {};
+    var name = c.nameInput ? c.nameInput.value : '';
+    var qty = c.qtyInput ? c.qtyInput.value : '';
+    var price = c.priceInput ? c.priceInput.value : '';
+    var disc = c.discInput ? c.discInput.value : '0';
+    var unit = c.unitEl ? (c.unitEl.value != null && c.unitEl.tagName === 'INPUT' ? c.unitEl.value : c.unitEl.textContent) : '';
+
+    var title, fields;
+    if (c.isService) {
+        title = 'ویرایش خدمت در بل';
+        fields =
+            '<div class="wh-field full"><label>نام خدمت</label>' +
+                '<input type="text" id="ble-name" value="' + _bleEsc(name) + '" readonly></div>' +
+            '<div class="wh-field"><label>تعداد (با ذکر واحد)</label>' +
+                '<input type="number" id="ble-qty" step="any" min="0" value="' + _bleEsc(qty) + '"></div>' +
+            '<div class="wh-field"><label>قیمت تمام شده</label>' +
+                '<input type="number" id="ble-cost" step="0.01" min="0" value="' + _bleEsc(ds.lineCost || '') + '"></div>' +
+            '<div class="wh-field full"><label>قیمت</label>' +
+                '<input type="number" id="ble-price" step="0.01" value="' + _bleEsc(price) + '"></div>' +
+            '<div class="wh-field"><label>از تاریخ</label>' +
+                '<input type="text" id="ble-from" class="jalali-date jalali-date-optional" value="' + _bleEsc(ds.lineFrom || '') + '" placeholder="از تاریخ"></div>' +
+            '<div class="wh-field"><label>تا تاریخ</label>' +
+                '<input type="text" id="ble-to" class="jalali-date jalali-date-optional" value="' + _bleEsc(ds.lineTo || '') + '" placeholder="تا تاریخ"></div>' +
+            '<div class="wh-field full"><label>شرح در بل</label>' +
+                '<textarea id="ble-details" rows="2" placeholder="شرح در بل">' + _bleEsc(ds.lineDetails || '') + '</textarea></div>';
+    } else if (c.isPurchase) {
+        title = 'ویرایش جنس در بل خرید';
+        fields =
+            '<div class="wh-field full"><label>نام جنس</label>' +
+                '<input type="text" id="ble-name" value="' + _bleEsc(name) + '" readonly></div>' +
+            '<div class="wh-field full"><label>تعداد' + (unit ? ' (' + _bleEsc(unit) + ')' : '') + '</label>' +
+                '<input type="number" id="ble-qty" step="any" min="0" value="' + _bleEsc(qty) + '"></div>' +
+            '<div class="wh-field"><label>قیمت خرید</label>' +
+                '<input type="number" id="ble-price" step="0.01" value="' + _bleEsc(price) + '"></div>' +
+            '<div class="wh-field"><label>تاریخ انقضا</label>' +
+                '<input type="text" id="ble-expiry" class="jalali-date jalali-date-optional" value="' + _bleEsc(ds.lineExpiry || '') + '" placeholder="تاریخ انقضا"></div>' +
+            '<div class="wh-field"><label>مقدار تخفیف</label>' +
+                '<input type="number" id="ble-disc" step="0.01" min="0" value="' + _bleEsc(disc) + '" oninput="_bleSyncPct()"></div>' +
+            '<div class="wh-field"><label>تخفیف درصدی</label>' +
+                '<input type="number" id="ble-pct" step="0.01" min="0" max="100" placeholder="٪" oninput="_bleSyncAmt()"></div>' +
+            '<div class="wh-field full"><label>شرح در بل</label>' +
+                '<textarea id="ble-details" rows="2" placeholder="شرح در بل">' + _bleEsc(ds.lineDetails || '') + '</textarea></div>';
+    } else {
+        title = 'ویرایش جنس در بل فروش';
+        fields =
+            '<div class="wh-field full"><label>نام جنس</label>' +
+                '<input type="text" id="ble-name" value="' + _bleEsc(name) + '" readonly></div>' +
+            '<div class="wh-field full"><label>تعداد' + (unit ? ' (' + _bleEsc(unit) + ')' : '') + '</label>' +
+                '<input type="number" id="ble-qty" step="any" min="0" value="' + _bleEsc(qty) + '"></div>' +
+            '<div class="wh-field full"><label>قیمت فروش</label>' +
+                '<input type="number" id="ble-price" step="0.01" value="' + _bleEsc(price) + '"></div>' +
+            '<div class="wh-field"><label>مقدار تخفیف</label>' +
+                '<input type="number" id="ble-disc" step="0.01" min="0" value="' + _bleEsc(disc) + '" oninput="_bleSyncPct()"></div>' +
+            '<div class="wh-field"><label>تخفیف درصدی</label>' +
+                '<input type="number" id="ble-pct" step="0.01" min="0" max="100" placeholder="٪" oninput="_bleSyncAmt()"></div>' +
+            '<div class="wh-field full"><label>شرح در بل</label>' +
+                '<textarea id="ble-details" rows="2" placeholder="شرح در بل">' + _bleEsc(ds.lineDetails || '') + '</textarea></div>';
+    }
+
+    var overlay = document.createElement('div');
+    overlay.className = 'modal ble-modal';
+    overlay.id = 'ble-modal';
+    overlay.style.display = 'block';
+    overlay.innerHTML =
+        '<div class="modal-content wh-modal-content ble-modal-content">' +
+            '<div class="modal-header"><h3>' + title + '</h3>' +
+                '<span class="close-modal" onclick="_bleClose()">&times;</span></div>' +
+            '<div class="modal-body"><div class="wh-form-grid ble-grid">' + fields + '</div></div>' +
+            '<div class="modal-footer">' +
+                '<button type="button" class="btn-secondary" onclick="_bleClose()">لغو</button>' +
+                '<button type="button" class="btn-primary" onclick="_bleSave()"><i class="fas fa-folder"></i> ثبت</button>' +
+            '</div>' +
+        '</div>';
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) _bleClose(); });
+    document.body.appendChild(overlay);
+    overlay._bleWrapper = wrapper;
+
+    // تقویمِ شمسی روی فیلدهای تاریخ — همان ابزارِ موجود
+    ['ble-expiry', 'ble-from', 'ble-to'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el && typeof _attachDateTimePickerToInput === 'function') {
+            try { _attachDateTimePickerToInput(el); } catch (e) {}
+        }
+    });
+    _bleSyncPct();
+    var first = document.getElementById('ble-qty');
+    if (first) { try { first.focus(); first.select(); } catch (e) {} }
+    if (typeof applyNumberSystemToDocument === 'function') { try { applyNumberSystemToDocument(); } catch (e) {} }
+}
+
+/** مبلغِ تخفیف → درصد (فقط نمایشی، برای راحتیِ کاربر) */
+function _bleSyncPct() {
+    var q = parseFloat((document.getElementById('ble-qty') || {}).value) || 0;
+    var p = parseFloat((document.getElementById('ble-price') || {}).value) || 0;
+    var d = parseFloat((document.getElementById('ble-disc') || {}).value) || 0;
+    var pctEl = document.getElementById('ble-pct');
+    if (!pctEl) return;
+    var base = q * p;
+    pctEl.value = (base > 0 && d > 0) ? String(Math.round((d / base) * 10000) / 100) : '';
+}
+/** درصد → مبلغِ تخفیف */
+function _bleSyncAmt() {
+    var q = parseFloat((document.getElementById('ble-qty') || {}).value) || 0;
+    var p = parseFloat((document.getElementById('ble-price') || {}).value) || 0;
+    var pct = parseFloat((document.getElementById('ble-pct') || {}).value) || 0;
+    var dEl = document.getElementById('ble-disc');
+    if (!dEl) return;
+    var base = q * p;
+    dEl.value = (base > 0 && pct > 0) ? String(Math.round(base * pct) / 100) : '0';
+}
+
+/** اعمالِ تغییرات روی همین ردیفِ همین بل */
+function _bleSave() {
+    var overlay = document.getElementById('ble-modal');
+    var wrapper = overlay ? overlay._bleWrapper : null;
+    var c = _bleCtx(wrapper);
+    if (!c) { _bleClose(); return; }
+    var v = function (id) { var e = document.getElementById(id); return e ? e.value : ''; };
+
+    if (c.qtyInput)   c.qtyInput.value   = v('ble-qty');
+    if (c.priceInput) c.priceInput.value = v('ble-price');
+    if (c.discInput && document.getElementById('ble-disc')) c.discInput.value = v('ble-disc') || '0';
+
+    // مقادیری که ستونِ اختصاصی ندارند، روی خودِ ردیف نگه داشته می‌شوند و هنگامِ ثبتِ بل
+    // به همان قلم اضافه می‌گردند (فقط در همین بل — فورمِ اصلیِ جنس/خدمت دست‌نخورده).
+    var ds = c.row.dataset;
+    var det = v('ble-details');
+    if (det != null) ds.lineDetails = det;
+    if (c.isPurchase) { var ex = v('ble-expiry'); if (ex != null) ds.lineExpiry = ex; }
+    if (c.isService) {
+        var cost = v('ble-cost'); if (cost != null) ds.lineCost = cost;
+        var f = v('ble-from'); if (f != null) ds.lineFrom = f;
+        var t = v('ble-to');   if (t != null) ds.lineTo = t;
+    }
+
+    // بازمحاسبه از همان مسیرِ همیشگی
+    try {
+        if (c.isPurchase && typeof updatePurchaseItemTotal === 'function') updatePurchaseItemTotal(c.qtyInput || c.priceInput);
+        else if (typeof updateItemTotal === 'function') updateItemTotal(c.qtyInput || c.priceInput);
+    } catch (e) {}
+    try {
+        if (c.isPurchase && typeof calculatePurchaseTotal === 'function') calculatePurchaseTotal();
+        else if (typeof calculateSalesTotal === 'function') calculateSalesTotal();
+    } catch (e) {}
+
+    _bleClose();
+    if (typeof showToast === 'function') showToast('تغییراتِ این قلم در همین بل اعمال شد', 'success');
+}
+
+if (typeof window !== 'undefined') {
+    window.openBillLineEdit = openBillLineEdit;
+    window._bleClose = _bleClose;
+    window._bleSave = _bleSave;
+    window._bleSyncPct = _bleSyncPct;
+    window._bleSyncAmt = _bleSyncAmt;
+    window._bleInstall = _bleInstall;
+    try { _bleInstall(); } catch (e) {}
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () { try { _bleInstall(); } catch (e) {} });
+    }
+}

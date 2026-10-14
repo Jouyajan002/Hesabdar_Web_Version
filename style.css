@@ -10148,3 +10148,93 @@ body.dark-mode .search-results .search-item {
 }
 body.dark-mode .search-results-list .search-item *,
 body.dark-mode .search-results .search-item * { color: #cbd5e1 !important; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   خدمات — نوارِ حالتِ انتخاب و نشانهٔ تیکِ کارت‌ها
+   (کارت‌ها خودشان از همان کلاس‌های لیستِ اشخاص استفاده می‌کنند؛ اینجا فقط
+    چیزهایی که مخصوصِ حالتِ انتخاب‌اند تعریف می‌شود.)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.svc-pick-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px;
+    margin: 10px 2px 0;
+    padding: 10px 14px;
+    background: var(--bill-navy, #1e3a5f);
+    color: #fff;
+    border-radius: 12px;
+    font-weight: 600;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, .18);
+}
+.svc-pick-bar .svc-pick-info { display: inline-flex; align-items: center; gap: 8px; font-size: .92rem; }
+.svc-pick-bar .svc-pick-info strong { font-size: 1.02rem; }
+.svc-pick-bar .svc-pick-actions { display: inline-flex; align-items: center; gap: 8px; }
+.svc-pick-bar .btn-primary,
+.svc-pick-bar .btn-secondary { padding: 7px 14px; border-radius: 9px; font-size: .88rem; }
+.svc-card-row .svc-pick-check {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; flex: 0 0 auto;
+    color: #cbd5e1; font-size: 1.12rem; transition: color .15s ease, transform .15s ease;
+}
+.svc-card-row.is-picked .svc-pick-check { color: #10b981; transform: scale(1.08); }
+.svc-card-row.is-picked .person-card {
+    border-color: #10b981 !important;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, .25) !important;
+}
+@media (max-width: 600px) {
+    .svc-pick-bar { flex-direction: column; align-items: stretch; text-align: center; }
+    .svc-pick-bar .svc-pick-actions { justify-content: center; }
+    .svc-pick-bar .svc-pick-actions .btn-primary,
+    .svc-pick-bar .svc-pick-actions .btn-secondary { flex: 1 1 auto; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   فورمِ کوچکِ «ویرایش قلمِ بل» — فروش / خرید / خدمت
+   طراحی و کلاس‌ها عیناً از فورمِ «تراکنش میان گدام‌ها» (wh-*) گرفته شده‌اند تا
+   هر سه حالت یکدست باشند. عرضِ پنجره به اندازهٔ محتوای داخلش است.
+   ═══════════════════════════════════════════════════════════════════════════ */
+.ble-edit-btn {
+    position: absolute;
+    inset-inline-start: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 26px; height: 26px;
+    display: none;
+    align-items: center; justify-content: center;
+    border: none; border-radius: 7px;
+    background: var(--primary, #6366f1); color: #fff;
+    cursor: pointer; font-size: 11px; line-height: 1;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, .2);
+    z-index: 3;
+}
+.product-search-wrapper.ble-has-item:hover .ble-edit-btn,
+.product-search-wrapper.ble-has-item:focus-within .ble-edit-btn { display: inline-flex; }
+.ble-edit-btn:hover { filter: brightness(1.08); }
+
+.ble-modal .modal-content.ble-modal-content {
+    width: auto;
+    max-width: min(560px, calc(100vw - 32px));
+    min-width: 320px;
+    margin: 6vh auto;
+    border-radius: 14px;
+}
+.ble-modal .ble-grid { margin-bottom: 4px; }
+.ble-modal .ble-grid .wh-field input[readonly] {
+    background: var(--bg-color, #f1f5f9);
+    font-weight: 700;
+}
+.ble-modal .modal-footer { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* موبایل: پنجره جمع‌وجور و تک‌ستونه، فیلدها به ترتیب از بالا به پایین */
+@media (max-width: 600px) {
+    .ble-modal .modal-content.ble-modal-content {
+        max-width: calc(100vw - 20px);
+        min-width: 0;
+        margin: 4vh auto;
+    }
+    .ble-modal .ble-grid { grid-template-columns: 1fr !important; gap: 10px !important; }
+    .ble-modal .ble-grid .wh-field.full { grid-column: auto !important; }
+    .ble-modal .ble-grid .wh-field input,
+    .ble-modal .ble-grid .wh-field select,
+    .ble-modal .ble-grid .wh-field textarea { min-height: var(--m-touch, 44px); }
+    .ble-edit-btn { display: inline-flex; width: 30px; height: 30px; font-size: 12px; }
+}
