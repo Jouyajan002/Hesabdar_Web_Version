@@ -406,8 +406,13 @@ function switchFinancialTab(tabName) {
             btnHTML = '<button type="button" class="person-fab-add" onclick="showEmployeeForm()"><i class="fas fa-plus"></i> کارمند جدید</button>';
         }
 
-        // اگر دکمه‌ای ساخته شد، آن را در صفحه قرار می‌دهیم
-        if (btnHTML) {
+        // اگر دکمه‌ای ساخته شد، آن را در صفحه قرار می‌دهیم — ولی فقط وقتی خودِ بخشِ
+        // «امور مالی» هنوز بخشِ فعال است. (این تابع گاهی با setTimeout صدا زده می‌شود و
+        // ممکن است کاربر تا آن لحظه به داشبورد رفته باشد؛ بدونِ این شرط، دکمه روی
+        // داشبورد باقی می‌ماند و نظمِ صفحه را به‌هم می‌زند.)
+        var _finActive = false;
+        try { var _fs = document.getElementById('financial'); _finActive = !!(_fs && _fs.classList.contains('active')); } catch (e) {}
+        if (btnHTML && _finActive) {
             floatingBtn.innerHTML = btnHTML;
             floatingBtn.style.display = 'block';
         } else {
@@ -2589,8 +2594,6 @@ if (sectionId === 'transactions-list') {
             let btnHTML = '';
             if (sectionId === 'financial') {
                 btnHTML = '<button type="button" class="person-fab-add" onclick="showExpenseForm()"><i class="fas fa-plus"></i> هزینه جدید</button>';
-            } else if (sectionId === 'services-list') {
-                btnHTML = '<button type="button" class="btn-primary" onclick="showServiceForm()"><i class="fas fa-plus"></i> خدمت جدید</button>';
             } else if (sectionId === 'expenses') {
                 btnHTML = '<button type="button" class="person-fab-add" onclick="showExpenseForm()"><i class="fas fa-plus"></i> ثبت جدید</button>';
             } else if (sectionId === 'employee-management') {
@@ -2803,8 +2806,10 @@ if (fab) {
           fab.onclick = () => showEmployeeForm(); // کارمند جدید
           fab.innerHTML = '<i class="fas fa-plus"></i> کارمند جدید';
         }
-        fab.classList.add('active');
-        fab.style.display = 'block';
+        var _finAct = false;
+        try { var _fsec = document.getElementById('financial'); _finAct = !!(_fsec && _fsec.classList.contains('active')); } catch (e) {}
+        if (_finAct) { fab.classList.add('active'); fab.style.display = 'block'; }
+        else { fab.classList.remove('active'); fab.style.display = 'none'; }
       }
     };
 
@@ -7973,6 +7978,9 @@ function updateSubCategories() {
 // توابع مدیریت فرم فروش
 // توابع مدیریت فرم فروش
 function initSalesForm() {
+    // کلیک‌پذیریِ جنس/خدمتِ انتخاب‌شده در بل — نصبِ یک‌بارهٔ شنونده از همین‌جا
+    // تا این قابلیت به فراخوانیِ بیرونی در index.html وابسته نباشد.
+    try { if (typeof _bleInstall === 'function') _bleInstall(); } catch (e) {}
     const tbody = document.getElementById('sales-items-body');
     if (tbody) {
         tbody.innerHTML = ''; // پاکسازی سطرهای قبلی
@@ -8772,6 +8780,9 @@ function resetSalesForm() {
 
 // توابع مدیریت خرید
 function initPurchaseForm() {
+    // کلیک‌پذیریِ جنس/خدمتِ انتخاب‌شده در بل — نصبِ یک‌بارهٔ شنونده از همین‌جا
+    // تا این قابلیت به فراخوانیِ بیرونی در index.html وابسته نباشد.
+    try { if (typeof _bleInstall === 'function') _bleInstall(); } catch (e) {}
     const tbody = document.getElementById('purchase-items-body');
     if (tbody) {
         tbody.innerHTML = ''; // پاکسازی سطرهای قبلی
@@ -32690,6 +32701,20 @@ function loadServicesList() {
     var services = _svcRead();
     var tbody = document.querySelector('#services-table tbody');
     if (!tbody) return;
+
+    // هم‌سان‌سازیِ نشانه‌گذاریِ جدول با «لیست اجناس» — اگر نسخهٔ index.html قدیمی باشد
+    // (یا کلاس‌ها دستی عوض شده باشند) همین‌جا اصلاح می‌شود تا ظاهر هرگز نشکند.
+    try {
+        var _tbl = document.getElementById('services-table');
+        if (_tbl) {
+            _tbl.classList.add('products-cards-table');
+            _tbl.classList.remove('data-table', 'persons-cards-table');
+            var _th = _tbl.querySelector('thead');
+            if (_th) { _th.classList.add('products-cards-thead'); _th.classList.remove('persons-cards-thead'); }
+            var _cont = _tbl.closest('.table-container');
+            if (_cont) { _cont.classList.add('products-cards-container'); _cont.classList.remove('persons-cards-container'); }
+        }
+    } catch (e) {}
 
     // نوارِ حالتِ انتخاب
     var bar = document.getElementById('svc-pick-bar');
