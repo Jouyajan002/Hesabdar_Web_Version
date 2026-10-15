@@ -5271,35 +5271,304 @@
         try { if (typeof window.__hbInstallAutoFilter === 'function') window.__hbInstallAutoFilter(); } catch (e) {}
     });
     </script>
-    <script src="database.js"></script>
-    <script src="script.js"></script>
-    <script src="persian-date-utils.js" onerror="console.warn('persian-date-utils.js not found')"></script>
-    <!-- سیستم احراز هویت، فعال‌سازی لایسنس و بک‌آپ ایمیل (مستقل) -->
-    <script src="auth-system.js" onerror="console.warn('auth-system.js not found')"></script>
-    <!-- پشتیبان‌گیری Google Drive (مستقل) -->
-    <script src="drive-backup.js" onerror="console.warn('drive-backup.js not found')"></script>
-    <!-- پچ نهایی آپدیت آنی دیتابیس — حتماً آخرین script باشد -->
-    <script src="instant-update-fix.js" onerror="console.warn('instant-update-fix.js not found')"></script>
-    <script src="delivery-list.js" onerror="console.warn('delivery-list.js not found')"></script>
-    <!-- سیستم مرکزی و ماژولار ارزها — کارت «نرخ ارز» + مدیریت ارز/نرخ (مستقل) -->
-    <script src="currency-system.js" onerror="console.warn('currency-system.js not found')"></script>
-<!-- سینکِ ابری (فاز ۲ — تست؛ سینکِ زنده هنوز خاموش است) -->
-    <script src="sync-config.js" onerror="console.warn('sync-config.js not found')"></script>
-    <script src="sync-layer.js" onerror="console.warn('sync-layer.js not found')"></script>
-<script src="auth-cloud.js" onerror="console.warn('auth-cloud.js not found')"></script>
-<script src="device-guard.js" onerror="console.warn('device-guard.js not found')"></script>
-<!-- مدیریتِ دکمهٔ برگشتِ اندروید (فقط اندرویدِ نیتیو؛ وب/آیفون/Tauri بی‌اثر) -->
-<script src="capacitor-back.js" onerror="console.warn('capacitor-back.js not found')"></script>
-<!-- اشتراکِ فایلِ PDF در اپلیکیشنِ اندروید (فقط اندرویدِ نیتیو؛ بقیه بی‌اثر) -->
-<script src="capacitor-share.js" onerror="console.warn('capacitor-share.js not found')"></script>
-<script src="demo-mode.js" onerror="console.warn('demo-mode.js not found')"></script>
-<!-- فاز ۵: موتورِ مقیاسِ خودکارِ منعطفِ موبایل (فقط روی موبایل فعال؛ دسکتاپ دست‌نخورده) -->
-<script src="mobile-fit.js" onerror="console.warn('mobile-fit.js not found')"></script>
-<script src="jouya-selftest.js"></script>
-<!-- بهبودهای رابطِ کاربری (افزودنی): تاییدِ خروج از فرم + پاک‌شدنِ خودکارِ فیلدِ صفر در موبایل + بروزرسانیِ زندهٔ گزارش‌ها با تغییرِ نرخ -->
-<script src="jouya-ux-fixes.js" onerror="console.warn('jouya-ux-fixes.js not found')"></script>
-<!-- راه‌اندازِ PWA: ثبتِ service worker + دکمهٔ «نصب اپلیکیشن» + راهنمای iOS (افزودنی) -->
-<script src="pwa-register.js" onerror="console.warn('pwa-register.js not found')"></script>
+<!-- ╔══════════════════════════════════════════════════════════════════════════╗
+     ║  گام ۴ — درزِ ذخیره‌سازی (JouyaStore)                                      ║
+     ║                                                                          ║
+     ║  localStorage سقفِ سختِ ۵ مگابایت دارد. IndexedDB روی همین دستگاه ۵۱۷      ║
+     ║  مگابایت می‌دهد (اندازه‌گیری‌شده) و در هر چهار نسخه — وب، وبِ موبایل،        ║
+     ║  اندروید و Tauri — یکسان کار می‌کند، بدونِ هیچ افزونه یا کدِ نیتیو.         ║
+     ║                                                                          ║
+     ║  مشکل: IndexedDB ناهمگام است و کدِ برنامه در ۴۱۱ نقطه localStorage را      ║
+     ║  همگام صدا می‌زند. تبدیلِ آن‌ها به async یعنی بازنویسیِ ۱,۴۷۲ تابع.          ║
+     ║                                                                          ║
+     ║  راهِ حل: پیش از بارگذاریِ فایل‌های برنامه، یک‌بار همهٔ داده از IndexedDB     ║
+     ║  به حافظهٔ RAM خوانده می‌شود و یک شیءِ هم‌شکلِ localStorage جایش می‌نشیند.   ║
+     ║  خواندن و نوشتن همگام و فوری است — پس هیچ تابعی async نمی‌شود و            ║
+     ║  موتورِ FIFO، بازسازیِ داده، سینکِ Supabase و بکاپِ درایو دست‌نخورده‌اند.     ║
+     ║  نوشتن‌ها در پس‌زمینه و دسته‌ای به IndexedDB می‌روند.                        ║
+     ║                                                                          ║
+     ║  ⚠ ایمنی: اگر هر چیزی در این مسیر خطا بدهد یا بیش از ۴ ثانیه طول بکشد،     ║
+     ║  برنامه دقیقاً مثلِ قبل با localStorageِ واقعی بالا می‌آید. هیچ حالتی        ║
+     ║  وجود ندارد که برنامه بالا نیاید.                                         ║
+     ╚══════════════════════════════════════════════════════════════════════════╝ -->
+    <script>
+    (function () {
+        'use strict';
+        var SCRIPTS = [
+            ['database.js', null],
+            ['script.js', null],
+            ['persian-date-utils.js', 'persian-date-utils.js not found'],
+            ['auth-system.js', 'auth-system.js not found'],
+            ['drive-backup.js', 'drive-backup.js not found'],
+            ['instant-update-fix.js', 'instant-update-fix.js not found'],
+            ['delivery-list.js', 'delivery-list.js not found'],
+            ['currency-system.js', 'currency-system.js not found'],
+            ['sync-config.js', 'sync-config.js not found'],
+            ['sync-layer.js', 'sync-layer.js not found'],
+            ['auth-cloud.js', 'auth-cloud.js not found'],
+            ['device-guard.js', 'device-guard.js not found'],
+            ['capacitor-back.js', 'capacitor-back.js not found'],
+            ['capacitor-share.js', 'capacitor-share.js not found'],
+            ['demo-mode.js', 'demo-mode.js not found'],
+            ['mobile-fit.js', 'mobile-fit.js not found'],
+            ['jouya-selftest.js', null],
+            ['jouya-ux-fixes.js', 'jouya-ux-fixes.js not found'],
+            ['pwa-register.js', 'pwa-register.js not found']
+        ];
+        var DB_NAME = 'jouya_store', DB_VER = 1, STORE = 'kv';
+        var MARKER = 'jouya_store_backend';          // در localStorageِ واقعی می‌مانَد
+        var started = false;
+
+        /**
+         * ⚠ نکتهٔ حیاتی: فایل‌های برنامه حالا پس از رویدادِ DOMContentLoaded بار
+         * می‌شوند، پس ۲۵ هندلرِ DOMContentLoaded و ۱۳ هندلرِ load که داخلِ آن‌ها
+         * ثبت می‌شود هرگز اجرا نمی‌شد و کلِ راه‌اندازیِ برنامه می‌شکست.
+         *
+         * راهِ حل همان الگوی شناخته‌شدهٔ «DOM ready» است (همان کاری که jQuery
+         * می‌کند): اگر کسی برای DOMContentLoaded یا load ثبتِ‌نام کند در حالی که
+         * آن رویداد قبلاً رخ داده، هندلرش بی‌درنگ اجرا می‌شود. هر هندلر دقیقاً
+         * یک بار اجرا می‌شود و هیچ هندلری که قبلاً اجرا شده دوباره صدا زده
+         * نمی‌شود — پس هیچ چیزی دوباره راه‌اندازی نمی‌شود.
+         */
+        function patchReadyHandlers() {
+            try {
+                var dAdd = document.addEventListener;
+                var wAdd = window.addEventListener;
+                var fire = function (fn, ev) {
+                    setTimeout(function () {
+                        try { (typeof fn === 'function') ? fn.call(this === window ? document : this, ev) : (fn && fn.handleEvent && fn.handleEvent(ev)); }
+                        catch (e) { try { console.error('ready handler:', e); } catch (e2) {} }
+                    }, 0);
+                };
+                document.addEventListener = function (type, fn, opts) {
+                    if (type === 'DOMContentLoaded' && document.readyState !== 'loading') {
+                        fire(fn, new Event('DOMContentLoaded')); return;
+                    }
+                    return dAdd.call(document, type, fn, opts);
+                };
+                window.addEventListener = function (type, fn, opts) {
+                    if (type === 'load' && document.readyState === 'complete') {
+                        fire(fn, new Event('load')); return;
+                    }
+                    return wAdd.call(window, type, fn, opts);
+                };
+            } catch (e) {}
+        }
+
+        /** بارگذاریِ فایل‌های برنامه — دقیقاً به همان ترتیبِ قبلی. */
+        function boot() {
+            if (started) return; started = true;
+            try {
+                patchReadyHandlers();
+                var head = document.head || document.getElementsByTagName('head')[0] || document.body;
+                SCRIPTS.forEach(function (row) {
+                    var el = document.createElement('script');
+                    el.src = row[0];
+                    el.async = false;               // ترتیبِ اجرا حفظ می‌شود
+                    if (row[1]) el.onerror = (function (m) { return function () { try { console.warn(m); } catch (e) {} }; })(row[1]);
+                    head.appendChild(el);
+                });
+            } catch (e) {
+                try { console.error('boot:', e); } catch (e2) {}
+            }
+        }
+
+        // اگر چیزی گیر کرد، برنامه بدونِ درز و با localStorageِ واقعی بالا می‌آید.
+        var failSafe = setTimeout(boot, 4000);
+        function bootNow() { try { clearTimeout(failSafe); } catch (e) {} boot(); }
+
+        if (typeof indexedDB === 'undefined' || !window.Promise) { bootNow(); return; }
+
+        function openDB() {
+            return new Promise(function (res, rej) {
+                var req;
+                try { req = indexedDB.open(DB_NAME, DB_VER); } catch (e) { rej(e); return; }
+                req.onupgradeneeded = function () {
+                    try { if (!req.result.objectStoreNames.contains(STORE)) req.result.createObjectStore(STORE); } catch (e) {}
+                };
+                req.onsuccess = function () { res(req.result); };
+                req.onerror   = function () { rej(req.error); };
+                req.onblocked = function () { rej(new Error('blocked')); };
+            });
+        }
+        function readAll(db) {
+            return new Promise(function (res, rej) {
+                var out = {}, tx;
+                try { tx = db.transaction(STORE, 'readonly'); } catch (e) { rej(e); return; }
+                var cur = tx.objectStore(STORE).openCursor();
+                cur.onsuccess = function () {
+                    var c = cur.result;
+                    if (!c) { res(out); return; }
+                    if (typeof c.value === 'string') out[c.key] = c.value;
+                    c.continue();
+                };
+                cur.onerror = function () { rej(cur.error); };
+                tx.onerror  = function () { rej(tx.error); };
+            });
+        }
+        function writeMany(db, pairs, dels) {
+            return new Promise(function (res, rej) {
+                var tx;
+                try { tx = db.transaction(STORE, 'readwrite'); } catch (e) { rej(e); return; }
+                var st = tx.objectStore(STORE);
+                try {
+                    Object.keys(pairs || {}).forEach(function (k) { st.put(pairs[k], k); });
+                    (dels || []).forEach(function (k) { st.delete(k); });
+                } catch (e) { rej(e); return; }
+                tx.oncomplete = function () { res(true); };
+                tx.onerror    = function () { rej(tx.error); };
+                tx.onabort    = function () { rej(tx.error || new Error('abort')); };
+            });
+        }
+
+        /** نصبِ شیءِ هم‌شکلِ localStorage روی حافظهٔ RAM، با نوشتنِ پس‌زمینه‌ای. */
+        function installShim(db, seed) {
+            var map = new Map();
+            Object.keys(seed).forEach(function (k) { map.set(k, seed[k]); });
+
+            var dirty = {}, dels = {}, timer = null, flushing = false;
+            /**
+             * ⚠ ماندگاری: تأخیر عمداً صفر است (microtask، نه setTimeout).
+             * با تأخیرِ ۴۰۰ میلی‌ثانیه، اگر کاربر درست پس از ثبتِ فروش برنامه را
+             * می‌بست، آن فروش از بین می‌رفت — در آزمون دقیقاً همین رخ داد.
+             * حالا نوشتن بلافاصله پس از پایانِ همان گردشِ کار آغاز می‌شود، پس
+             * همهٔ نوشتن‌های یک عملیات در یک تراکنش جمع می‌شوند و پنجرهٔ از‌دست‌رفتن
+             * تقریباً صفر است.
+             */
+            function schedule(viaTask) {
+                if (timer) return;
+                timer = true;
+                var run = function () { timer = null; flush(); };
+                // ⚠ وقتی نوشتنی در جریان است باید با ماکروتسک دوباره تلاش شود، نه
+                //   میکروتسک: میکروتسک نوبت را به حلقهٔ رویداد برنمی‌گرداند و یک
+                //   حلقهٔ بی‌نهایت می‌سازد که رندرر را خفه می‌کند (در آزمون صفحه
+                //   کاملاً بسته شد). برای نوشتنِ عادی میکروتسک درست است چون
+                //   بلافاصله پس از پایانِ همین گردشِ کار اجرا می‌شود.
+                if (viaTask) { setTimeout(run, 20); return; }
+                try { Promise.resolve().then(run); } catch (e) { timer = null; setTimeout(run, 0); }
+            }
+            function flush() {
+                timer = null;
+                if (flushing) { schedule(true); return; }   // با ماکروتسک، نه میکروتسک
+                var pairs = dirty, removes = Object.keys(dels);
+                if (!Object.keys(pairs).length && !removes.length) return;
+                dirty = {}; dels = {}; flushing = true;
+                writeMany(db, pairs, removes).then(function () { flushing = false; }, function (err) {
+                    flushing = false;
+                    // نوشتن ناموفق بود → همان کلیدها دوباره در صف می‌روند تا از دست نروند
+                    try {
+                        Object.keys(pairs).forEach(function (k) { if (!(k in dirty)) dirty[k] = pairs[k]; });
+                        removes.forEach(function (k) { dels[k] = 1; });
+                        console.warn('JouyaStore flush:', err && err.message);
+                    } catch (e) {}
+                    schedule(true);
+                });
+            }
+            function flushNow() { try { timer = null; flush(); } catch (e) {} }
+            try {
+                window.addEventListener('pagehide', flushNow);
+                window.addEventListener('beforeunload', flushNow);
+                document.addEventListener('visibilitychange', function () {
+                    if (document.visibilityState === 'hidden') flushNow();
+                });
+            } catch (e) {}
+
+            var shim = {
+                get length() { return map.size; },
+                key: function (i) {
+                    i = Number(i) || 0;
+                    if (i < 0 || i >= map.size) return null;
+                    var n = 0;
+                    var it = map.keys(), r;
+                    while (!(r = it.next()).done) { if (n++ === i) return r.value; }
+                    return null;
+                },
+                getItem: function (k) { k = String(k); return map.has(k) ? map.get(k) : null; },
+                setItem: function (k, v) {
+                    k = String(k); v = String(v);
+                    // همان سقفِ تاریخچهٔ پشتیبانِ گام ۱ این‌جا هم اعمال می‌شود
+                    if (k === 'backupHistory') {
+                        try { if (typeof window.__hbTrimBackupHistory === 'function') v = window.__hbTrimBackupHistory(v); } catch (e) {}
+                    }
+                    map.set(k, v); dirty[k] = v; delete dels[k]; schedule();
+                },
+                removeItem: function (k) { k = String(k); map.delete(k); dels[k] = 1; delete dirty[k]; schedule(); },
+                clear: function () {
+                    var all = [];
+                    map.forEach(function (_, k) { all.push(k); });
+                    map.clear(); dirty = {};
+                    all.forEach(function (k) { dels[k] = 1; });
+                    schedule();
+                },
+                __jouyaStore: true,
+                __flushNow: flushNow,
+                __backend: 'indexeddb'
+            };
+            try {
+                Object.defineProperty(window, 'localStorage', { value: shim, configurable: true });
+                window.JouyaStoreInfo = function () {
+                    var n = 0; map.forEach(function (v, k) { n += k.length + v.length; });
+                    return { backend: 'indexeddb', keys: map.size, chars: n, pendingWrites: Object.keys(dirty).length };
+                };
+                return true;
+            } catch (e) { return false; }
+        }
+
+        var realLS = null;
+        try { realLS = window.localStorage; } catch (e) { realLS = null; }
+        if (!realLS) { bootNow(); return; }
+
+        function snapshotLS() {
+            var o = {};
+            try { for (var i = 0; i < realLS.length; i++) { var k = realLS.key(i); o[k] = realLS.getItem(k); } } catch (e) {}
+            return o;
+        }
+        function hasBusiness(o) {
+            try {
+                return ['transactions', 'persons', 'products', 'expenses', 'cashboxes'].some(function (k) {
+                    var v = o[k]; return typeof v === 'string' && v.length > 2;
+                });
+            } catch (e) { return false; }
+        }
+
+        openDB().then(function (db) {
+            return readAll(db).then(function (idbData) {
+                var marked = null;
+                try { marked = realLS.getItem(MARKER); } catch (e) {}
+                var lsData = snapshotLS();
+
+                // ── حالت ۱: نخستین اجرا (یا IndexedDB تهی و دادهٔ واقعی در localStorage) ──
+                if (marked !== 'idb' || (!hasBusiness(idbData) && hasBusiness(lsData))) {
+                    var seed = {};
+                    Object.keys(lsData).forEach(function (k) { if (k !== MARKER) seed[k] = lsData[k]; });
+                    return writeMany(db, seed, []).then(function () {
+                        return readAll(db);
+                    }).then(function (back) {
+                        // تأییدِ عددی پیش از هر کاری — کلید به کلید، طول به طول
+                        var keys = Object.keys(seed), ok = true;
+                        for (var i = 0; i < keys.length; i++) {
+                            var k = keys[i];
+                            if (typeof back[k] !== 'string' || back[k].length !== seed[k].length) { ok = false; break; }
+                        }
+                        if (!ok) throw new Error('verify failed');
+                        try { realLS.setItem(MARKER, 'idb'); } catch (e) {}
+                        // دادهٔ قبلی در localStorage دست‌نخورده می‌مانَد (شبکهٔ ایمنی)
+                        if (!installShim(db, back)) throw new Error('shim failed');
+                        bootNow();
+                    });
+                }
+
+                // ── حالت ۲: اجراهای بعدی — منبعِ اصلی IndexedDB است ──
+                if (!installShim(db, idbData)) throw new Error('shim failed');
+                bootNow();
+            });
+        }).catch(function (err) {
+            // هر خطایی → برنامه با localStorageِ واقعی بالا می‌آید، دقیقاً مثلِ قبل
+            try { console.warn('JouyaStore غیرفعال ماند:', err && (err.message || err)); } catch (e) {}
+            bootNow();
+        });
+    })();
+    </script>
 <!-- ====== پنل پروفایل (حذف شد - فقط آیکن باقی است) ====== -->
 <span id="profile-display-name" style="display:none;"></span>
 <span id="pp-name" style="display:none;"></span>

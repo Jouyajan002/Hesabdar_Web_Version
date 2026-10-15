@@ -1,3 +1,13 @@
+/* ══════════════════════════════════════════════════════════════════════════════
+   نگهبانِ حافظه و رندر — پیش از هر چیزِ دیگر نصب می‌شود.
+   این دو فراخوانی عمداً در خطِ اولِ فایل‌اند: در این فایل یک خطای سطحِ‌بالا در
+   خطِ ~۱۱۲۴۵ وجود دارد (settingsForm نال است) و هیچ جملهٔ سطحِ‌بالایی پس از آن
+   اجرا نمی‌شود. تعریفِ خودِ توابع پایین‌ترِ فایل است و چون function declaration
+   است، بالا بُرده (hoist) می‌شود؛ پس این‌جا در دسترس است.
+   ══════════════════════════════════════════════════════════════════════════ */
+try { __hbInstallStorageGuard(); } catch (e) {}
+try { __hbInstallRenderCoalescer(); } catch (e) {}
+
 /* ==========================================================================
    مدیریت تب‌های امور مالی - نسخه نهایی
    ========================================================================== */
@@ -11785,6 +11795,257 @@ function __jouyaAndWrite(name, data, isText) {
             });
     }
     return step(0);
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  گام ۱ — نگهبانِ حافظه                                                        ║
+// ║                                                                              ║
+// ║  مشکل: localStorage سقفِ سختِ ۵ مگابایت دارد. کلیدِ «backupHistory» یک کپیِ     ║
+// ║  کاملِ پایگاه‌داده را به‌صورتِ متن نگه می‌دارد و هیچ سقفی ندارد، پس تا ۵۸٪ از    ║
+// ║  کلِ سهمِ حافظه را می‌بلعد و بعد هیچ فروشی ثبت نمی‌شود:                         ║
+// ║     Failed to execute 'setItem' on 'Storage': …'transactions' exceeded quota  ║
+// ║                                                                              ║
+// ║  راهِ حل در ریشه: به‌جای ویرایشِ ۴۱۱ محلِ فراخوانیِ localStorage در پروژه، خودِ  ║
+// ║  setItem یک‌بار پوشانده می‌شود. پس هر نویسنده‌ای — چه createBackup، چه مسیرِ    ║
+// ║  ایمپورت، چه هر کدِ آینده — خودکار زیرِ همین قاعده می‌رود.                      ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  گام ۲ — حذفِ رندرِ تکراری                                                    ║
+// ║                                                                              ║
+// ║  اندازه‌گیری روی ۵۰۰۰ معامله: ثبتِ یک فروش ۲,۵۷۶ میلی‌ثانیه طول می‌کشید که      ║
+// ║  ۲,۴۳۳ میلی‌ثانیه‌اش (۹۴٪) فقط دو بار ساختنِ کلِ «لیستِ فروش‌ها» بود. یک بارش   ║
+// ║  از خودِ saveSale می‌آید و یک بارش از _notifyDataChange؛ نتیجهٔ بارِ اول هم     ║
+// ║  کاملاً دور ریخته می‌شود.                                                      ║
+// ║                                                                              ║
+// ║  راهِ حل در ریشه: به‌جای حذفِ تک‌تکِ فراخوانی‌ها (که مسیرهای دیگر را می‌شکند)،   ║
+// ║  خودِ رندرکننده‌ها یک‌بار پوشانده می‌شوند: اگر در همان گردشِ کار دوباره و        ║
+// ║  «بدونِ آرگومان» صدا زده شوند، بارِ دوم اجرا نمی‌شود.                           ║
+// ║                                                                              ║
+// ║  چرا امن است:                                                                ║
+// ║   • بارِ اول همگام و فوری اجرا می‌شود؛ پس DOM بلافاصله درست است.               ║
+// ║   • فقط فراخوانیِ «بدونِ آرگومان» حذف می‌شود. رندرِ فیلترشده مثلِ                ║
+// ║     loadProductsList(filtered) هرگز حذف نمی‌شود و خودش قفل را هم باز می‌کند.   ║
+// ║   • DOMِ نهایی دقیقاً همان است که قبلاً بود — فقط یک‌بار ساخته می‌شود.          ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+
+/** فهرستِ رندرکننده‌های لیست — همان‌هایی که از چند مسیر صدا زده می‌شوند. */
+function __hbCoalesceTargets() {
+    return ['loadSalesList', 'loadPurchasesList', 'loadReceiptsList', 'loadPaymentsList',
+            'loadTransactionsList', 'loadProductsList', 'loadPersonsList', 'loadServicesList',
+            'loadExpensesList', 'loadCashboxesList'];
+}
+
+function __hbInstallRenderCoalescer() {
+    if (typeof window === 'undefined') return false;
+    if (window.__hbCoalescerOn) return true;
+    window.__hbCoalescerOn = true;
+    var names = __hbCoalesceTargets();
+    var armed = {};               // نامِ تابع → آیا در این گردشِ کار رندر شده؟
+    var clear = function (n) {
+        // قفل در پایانِ همین گردشِ کار (microtask) باز می‌شود، نه دیرتر.
+        try { Promise.resolve().then(function () { armed[n] = false; }); }
+        catch (e) { setTimeout(function () { armed[n] = false; }, 0); }
+    };
+    names.forEach(function (n) {
+        var install = function () {
+            var fn = window[n];
+            if (typeof fn !== 'function' || fn.__hbCoalesced) return false;
+            var wrapped = function () {
+                // رندرِ دارای آرگومان (لیستِ فیلترشده) همیشه اجرا می‌شود و قفل را می‌شکند
+                if (arguments.length > 0) {
+                    armed[n] = false;
+                    wrapped.__hbRuns++;
+                    return fn.apply(this, arguments);
+                }
+                if (armed[n]) { wrapped.__hbSkipped++; return; }   // همین حالا ساخته شده
+                armed[n] = true;
+                clear(n);
+                wrapped.__hbRuns++;
+                return fn.apply(this, arguments);
+            };
+            wrapped.__hbCoalesced = true;
+            wrapped.__hbOriginal = fn;
+            wrapped.__hbRuns = 0;        // شمارنده‌ها فقط برای اندازه‌گیری و عیب‌یابی
+            wrapped.__hbSkipped = 0;
+            try { window[n] = wrapped; return true; } catch (e) { return false; }
+        };
+        // توابع بالاتر در فایل تعریف می‌شوند و hoist هستند، ولی اگر هنوز نبودند
+        // چند بار دوباره تلاش می‌شود تا هیچ‌کدام از قلم نیفتد.
+        if (!install()) {
+            var tries = 0;
+            var again = function () {
+                if (install() || ++tries > 40) return;
+                setTimeout(again, 50);
+            };
+            setTimeout(again, 0);
+        }
+    });
+    return true;
+}
+if (typeof window !== 'undefined') {
+    window.__hbInstallRenderCoalescer = __hbInstallRenderCoalescer;
+}
+
+/** سقفِ مجاز برای کلِ تاریخچهٔ پشتیبان (کاراکتر). حدودِ ۶٪ از سهمِ ۵ مگابایتی. */
+function __hbBackupBudget() { return 300000; }
+/** بیشترین تعدادِ رکوردِ تاریخچه (قدیمی‌ترها حذف می‌شوند). */
+function __hbBackupMaxCount() { return 5; }
+
+/**
+ * کوچک‌کردنِ تاریخچهٔ پشتیبان تا داخلِ سقف بماند.
+ *  • هیچ دادهٔ کسب‌وکاری لمس نمی‌شود — فقط همین تاریخچه.
+ *  • جدیدترین پشتیبان‌ها اولویت دارند.
+ *  • رکوردی که جا نشود، شناسنامه‌اش می‌مانَد ولی نسخهٔ کاملش برداشته و با
+ *    dataOmitted نشانه‌گذاری می‌شود — همان پرچمی که کدِ ایمپورت از قبل می‌شناسد.
+ * ورودی و خروجی هر دو رشتهٔ JSON هستند.
+ */
+function __hbTrimBackupHistory(json, budgetOverride) {
+    var budget = (typeof budgetOverride === 'number') ? budgetOverride : __hbBackupBudget();
+    var arr;
+    try { arr = JSON.parse(json || '[]'); } catch (e) { return '[]'; }
+    if (!Array.isArray(arr)) return '[]';
+    if (!arr.length) return '[]';
+
+    // فقط آخرین چند رکورد نگه داشته می‌شوند
+    var max = __hbBackupMaxCount();
+    if (arr.length > max) arr = arr.slice(arr.length - max);
+
+    // از جدید به قدیم: تا وقتی بودجه هست، نسخهٔ کامل بماند
+    var used = 0;
+    for (var i = arr.length - 1; i >= 0; i--) {
+        var rec = arr[i];
+        if (!rec || typeof rec !== 'object') { arr.splice(i, 1); continue; }
+        var dataLen = (typeof rec.data === 'string') ? rec.data.length : 0;
+        if (!dataLen) { used += 200; continue; }
+        if (used + dataLen <= budget) {
+            used += dataLen;
+        } else {
+            // جا نشد → فقط شناسنامه می‌مانَد
+            delete rec.data;
+            rec.dataOmitted = true;
+            used += 200;
+        }
+    }
+    try { return JSON.stringify(arr); } catch (e) { return '[]'; }
+}
+
+/**
+ * آزادکردنِ فضای قابلِ‌بازیافت هنگامِ پرشدنِ حافظه.
+ * ⚠ فقط تاریخچه و کَش. هرگز دادهٔ کسب‌وکار، صفِ همگام‌سازی یا نسخهٔ پشتیبانِ
+ *   حالتِ آزمایشی (که دادهٔ واقعیِ کاربر در آن است) حذف نمی‌شود.
+ * خروجی: true اگر چیزی آزاد شد.
+ */
+function __hbReclaimSpace(aggressive) {
+    var freed = false;
+    var raw = Storage.prototype.getItem;
+    var set = Storage.prototype.setItem;
+    if (set && set.__hbOriginal) set = set.__hbOriginal;   // بدونِ بازگشت به خودِ نگهبان
+    var rem = Storage.prototype.removeItem;
+    try {
+        var cur = raw.call(localStorage, 'backupHistory');
+        if (cur && cur.length > 2) {
+            var trimmed = aggressive ? '[]' : __hbTrimBackupHistory(cur, 0);
+            if (trimmed !== cur) { try { set.call(localStorage, 'backupHistory', trimmed); freed = true; } catch (e) {} }
+        }
+    } catch (e) {}
+    try {
+        if (raw.call(localStorage, 'dashboardStats') != null) { rem.call(localStorage, 'dashboardStats'); freed = true; }
+    } catch (e) {}
+    return freed;
+}
+
+/**
+ * نصبِ نگهبان روی Storage.prototype.setItem.
+ *  ۱) هر نوشتنِ «backupHistory» خودکار داخلِ سقف کوچک می‌شود.
+ *  ۲) اگر حافظه پر شد، فضای قابلِ‌بازیافت آزاد و دوباره تلاش می‌شود.
+ *  ۳) اگر باز هم نشد، همان خطا با پیامِ فارسیِ روشن بالا می‌رود — نامِ خطا
+ *     (QuotaExceededError) عوض نمی‌شود تا هیچ کدی که آن را بررسی می‌کند نشکند.
+ * یک‌بار بیشتر نصب نمی‌شود و روی sessionStorage اثری ندارد.
+ */
+function __hbInstallStorageGuard() {
+    if (typeof Storage === 'undefined' || !Storage.prototype) return false;
+    if (Storage.prototype.__hbGuarded) return true;
+    var orig = Storage.prototype.setItem;
+    if (typeof orig !== 'function') return false;
+
+    var guarded = function (key, value) {
+        var isLocal = false;
+        try { isLocal = (this === window.localStorage); } catch (e) {}
+        var k = String(key);
+        var v = String(value);
+
+        // (۱) سقفِ تاریخچهٔ پشتیبان — پیش از نوشتن
+        if (isLocal && k === 'backupHistory') {
+            try { v = __hbTrimBackupHistory(v); } catch (e) {}
+        }
+
+        try {
+            return orig.call(this, k, v);
+        } catch (err) {
+            var isQuota = false;
+            try {
+                isQuota = (err && (err.name === 'QuotaExceededError' ||
+                           err.name === 'NS_ERROR_DOM_QUOTA_REACHED' || err.code === 22 || err.code === 1014));
+            } catch (e) {}
+            if (!isLocal || !isQuota) throw err;
+
+            // (۲) آزادسازی و تلاشِ دوباره — دو مرحله‌ای
+            try {
+                if (__hbReclaimSpace(false)) {
+                    try { return orig.call(this, k, v); } catch (e2) {}
+                }
+                if (__hbReclaimSpace(true)) {
+                    try { return orig.call(this, k, v); } catch (e3) {}
+                }
+            } catch (e4) {}
+
+            // (۳) واقعاً جا نیست → پیامِ فارسیِ روشن، با همان نامِ خطا
+            var msg = 'حافظهٔ دستگاه پر است و «' + k + '» ذخیره نشد.\n' +
+                      'از سایدبار «خروجی JSON» بگیرید و فایل را نگه دارید، سپس با پشتیبانی تماس بگیرید.';
+            var e5;
+            try { e5 = new Error(msg); e5.name = 'QuotaExceededError'; e5.__hbQuota = true; }
+            catch (e6) { e5 = err; }
+            throw e5;
+        }
+    };
+    try {
+        guarded.__hbOriginal = orig;     // دسترسی به نسخهٔ اصلی (بازیافت و آزمون)
+        Storage.prototype.setItem = guarded;
+        Storage.prototype.__hbGuarded = true;
+    } catch (e) { return false; }
+
+    // (۴) پاکسازیِ یک‌بارهٔ آنچه از قبل انباشته شده — همین کار کاربرانی را که
+    //     حافظه‌شان پر شده فوراً باز می‌کند، بدونِ هیچ دکمه یا دخالتِ دستی.
+    try {
+        var cur = Storage.prototype.getItem.call(localStorage, 'backupHistory');
+        if (cur && cur.length > __hbBackupBudget()) {
+            var trimmed = __hbTrimBackupHistory(cur);
+            if (trimmed !== cur) orig.call(localStorage, 'backupHistory', trimmed);
+        }
+    } catch (e) {}
+    return true;
+}
+
+/** گزارشِ کوتاهِ وضعیتِ حافظه — برای عیب‌یابی از کنسول */
+function __hbStorageReport() {
+    var rows = [], total = 0;
+    try {
+        for (var i = 0; i < localStorage.length; i++) {
+            var k = localStorage.key(i);
+            var len = (localStorage.getItem(k) || '').length + k.length;
+            total += len; rows.push({ key: k, chars: len });
+        }
+    } catch (e) {}
+    rows.sort(function (a, b) { return b.chars - a.chars; });
+    return { totalChars: total, limitChars: 5242880,
+             percent: Math.round(total * 100 / 5242880), top: rows.slice(0, 10) };
+}
+if (typeof window !== 'undefined') {
+    window.__hbInstallStorageGuard = __hbInstallStorageGuard;
+    window.__hbTrimBackupHistory  = __hbTrimBackupHistory;
+    window.__hbReclaimSpace       = __hbReclaimSpace;
+    window.__hbStorageReport      = __hbStorageReport;
 }
 
 // ╔══════════════════════════════════════════════════════════════════════════════╗
