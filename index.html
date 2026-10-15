@@ -5361,13 +5361,36 @@
             try {
                 patchReadyHandlers();
                 var head = document.head || document.getElementsByTagName('head')[0] || document.body;
+                var last = null;
                 SCRIPTS.forEach(function (row) {
                     var el = document.createElement('script');
                     el.src = row[0];
                     el.async = false;               // ترتیبِ اجرا حفظ می‌شود
-                    if (row[1]) el.onerror = (function (m) { return function () { try { console.warn(m); } catch (e) {} }; })(row[1]);
+                    if (row[1]) el.addEventListener('error', (function (m) { return function () { try { console.warn(m); } catch (e) {} }; })(row[1]));
                     head.appendChild(el);
+                    last = el;
                 });
+                /**
+                 * راه‌اندازیِ پس از بارگذاری.
+                 * این چهار تابع پیش‌تر از شنوندهٔ DOMContentLoaded صدا زده می‌شدند،
+                 * ولی حالا که فایل‌ها پس از آن رویداد بار می‌شوند، آن شنونده وقتی
+                 * اجرا می‌شود که هنوز هیچ‌کدام تعریف نشده‌اند و بی‌صدا رد می‌شود.
+                 * در آزمون دقیقاً همین رخ داد: نوارِ «حالت آزمایشی»، پیمایشِ
+                 * صفحه‌کلید، فرمِ کوچکِ قلم و فیلترِ خودکار هیچ‌کدام نصب نمی‌شدند.
+                 * چون ترتیبِ اجرا حفظ است، رویدادِ loadِ آخرین اسکریپت یعنی همهٔ
+                 * فایل‌ها اجرا شده‌اند. هر چهار تابع خودشان دوبار-نصب را رد می‌کنند.
+                 */
+                var postInit = function () {
+                    ['__hbTrialBanner', '__hbInstallKeyboardNav', '_bleInstall', '__hbInstallAutoFilter']
+                        .forEach(function (n) {
+                            try { if (typeof window[n] === 'function') window[n](); }
+                            catch (e) { try { console.warn('postInit ' + n + ':', e); } catch (e2) {} }
+                        });
+                };
+                if (last) {
+                    last.addEventListener('load', postInit);
+                    last.addEventListener('error', postInit);   // حتی اگر آخرین فایل نبود
+                } else { setTimeout(postInit, 0); }
             } catch (e) {
                 try { console.error('boot:', e); } catch (e2) {}
             }
@@ -5378,6 +5401,25 @@
         function bootNow() { try { clearTimeout(failSafe); } catch (e) {} boot(); }
 
         if (typeof indexedDB === 'undefined' || !window.Promise) { bootNow(); return; }
+
+        /**
+         * درخواستِ «حافظهٔ ماندگار» از مرورگر.
+         * بدونِ این، مرورگر مجاز است وقتی فضای دستگاه کم شود IndexedDB را
+         * خودش پاک کند — یعنی دادهٔ کسب‌وکار بی‌هشدار از بین برود. با این
+         * پرچم، داده فقط با پاک‌کردنِ دستیِ کاربر حذف می‌شود.
+         * درخواست ناهمگام است و بوت منتظرش نمی‌مانَد؛ اگر مرورگر رد کند هم
+         * هیچ چیزی خراب نمی‌شود.
+         */
+        try {
+            if (navigator.storage && typeof navigator.storage.persist === 'function') {
+                navigator.storage.persisted().then(function (already) {
+                    if (already) { window.__jouyaPersisted = true; return; }
+                    return navigator.storage.persist().then(function (granted) {
+                        window.__jouyaPersisted = !!granted;
+                    });
+                }).catch(function () {});
+            }
+        } catch (e) {}
 
         function openDB() {
             return new Promise(function (res, rej) {
@@ -5412,8 +5454,12 @@
                 try { tx = db.transaction(STORE, 'readwrite'); } catch (e) { rej(e); return; }
                 var st = tx.objectStore(STORE);
                 try {
-                    Object.keys(pairs || {}).forEach(function (k) { st.put(pairs[k], k); });
-                    (dels || []).forEach(function (k) { st.delete(k); });
+                    var P = pairs || {};
+                    // ⚠ ترتیب مهم است: اول حذف، بعد نوشتن. و هر کلیدی که نوشتنِ
+                    //   تازه دارد اصلاً حذف نمی‌شود. اگر برعکس بود، در مسیرِ تلاشِ
+                    //   دوبارهٔ پس از خطا یک حذفِ قدیمی می‌توانست دادهٔ تازه را پاک کند.
+                    (dels || []).forEach(function (k) { if (!(k in P)) st.delete(k); });
+                    Object.keys(P).forEach(function (k) { st.put(P[k], k); });
                 } catch (e) { rej(e); return; }
                 tx.oncomplete = function () { res(true); };
                 tx.onerror    = function () { rej(tx.error); };
@@ -5426,7 +5472,7 @@
             var map = new Map();
             Object.keys(seed).forEach(function (k) { map.set(k, seed[k]); });
 
-            var dirty = {}, dels = {}, timer = null, flushing = false;
+            var dirty = {}, dels = {}, timer = null, flushing = false, pendingChars = 0;
             /**
              * ⚠ ماندگاری: تأخیر عمداً صفر است (microtask، نه setTimeout).
              * با تأخیرِ ۴۰۰ میلی‌ثانیه، اگر کاربر درست پس از ثبتِ فروش برنامه را
@@ -5447,12 +5493,21 @@
                 if (viaTask) { setTimeout(run, 20); return; }
                 try { Promise.resolve().then(run); } catch (e) { timer = null; setTimeout(run, 0); }
             }
+            /**
+             * ⚠ اینجا عمداً هیچ قفلِ «یکی‌یکی» وجود ندارد.
+             * نسخهٔ قبلی تا پایانِ نوشتنِ قبلی منتظر می‌مانْد؛ نتیجه این بود که در
+             * یک ایمپورتِ حجیم، درست پس از پایانِ کار هنوز ۱۸ کلید ننوشته می‌مانْد و
+             * اگر همان لحظه برنامه بسته می‌شد همه از بین می‌رفت (در آزمون دقیقاً
+             * همین رخ داد). IndexedDB خودش تراکنش‌های readwrite روی یک انبار را به
+             * ترتیبِ ساخته‌شدن اجرا می‌کند، پس موازی‌فرستادن هم امن است و هم
+             * نوشتن را بی‌درنگ آغاز می‌کند.
+             */
             function flush() {
                 timer = null;
-                if (flushing) { schedule(true); return; }   // با ماکروتسک، نه میکروتسک
                 var pairs = dirty, removes = Object.keys(dels);
                 if (!Object.keys(pairs).length && !removes.length) return;
-                dirty = {}; dels = {}; flushing = true;
+                dirty = {}; dels = {}; pendingChars = 0;
+                flushing = true;
                 writeMany(db, pairs, removes).then(function () { flushing = false; }, function (err) {
                     flushing = false;
                     // نوشتن ناموفق بود → همان کلیدها دوباره در صف می‌روند تا از دست نروند
@@ -5490,7 +5545,12 @@
                     if (k === 'backupHistory') {
                         try { if (typeof window.__hbTrimBackupHistory === 'function') v = window.__hbTrimBackupHistory(v); } catch (e) {}
                     }
-                    map.set(k, v); dirty[k] = v; delete dels[k]; schedule();
+                    map.set(k, v); dirty[k] = v; delete dels[k];
+                    pendingChars += v.length;
+                    // نوشتنِ حجیم → تراکنش همین حالا و همگام ساخته شود تا بیشترین
+                    // فرصت برای تثبیت داشته باشد؛ نوشتنِ کوچک در میکروتسک جمع شود.
+                    if (pendingChars > 150000) flush();
+                    else schedule();
                 },
                 removeItem: function (k) { k = String(k); map.delete(k); dels[k] = 1; delete dirty[k]; schedule(); },
                 clear: function () {
