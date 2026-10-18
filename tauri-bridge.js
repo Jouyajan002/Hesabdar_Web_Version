@@ -247,6 +247,16 @@
         revealInDir: function (p) { return call('hb_reveal_in_dir', { path: resolveDownload(p) }); },
         openExternal: function (u) { return call('hb_open_uri', { uri: String(u || '') }); },
         getAppVersion: function () { return call('hb_app_version'); },
+        // ── ورودِ گوگل (Drive) ─────────────────────────────────────────────────
+        //  دستورهای نیتیوِ hb_google_signin و hb_google_refresh_token از قبل در
+        //  Rust وجود داشتند، ولی این‌جا به electronAPI وصل نشده بودند. نتیجه این
+        //  بود که drive-backup.js فکر می‌کرد راهِ نیتیو ندارد، به مسیرِ وب می‌افتاد
+        //  و چون «شناسهٔ کلاینتِ وب» تنظیم نیست، این خطا را می‌داد:
+        //    «شناسهٔ کلاینتِ وب گوگل تنظیم نشده است…»
+        //  خروجیِ Rust دقیقاً همان شکلی است که drive-backup.js انتظار دارد:
+        //    { success, token, userInfo } / { success, error }
+        googleSignIn: function () { return call('hb_google_signin'); },
+        googleRefreshToken: function (rt) { return call('hb_google_refresh_token', { refreshToken: String(rt || '') }); },
         sharePdfViaWindowsPanel: sharePdfToWhatsApp,
         __runtime: 'tauri'
     };

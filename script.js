@@ -10837,7 +10837,10 @@ function _openCashboxLogEditModal(log, cashboxId) {
                 var dir = null;
                 if (current.type === 'deposit_in' || current.type === 'deposit_external' || current.type === 'transfer_in') dir = 'in';
                 else if (current.type === 'deposit_out' || current.type === 'withdraw_external' || current.type === 'transfer_out' || current.type === 'shipping_charge') dir = 'out';
-                if (dir) db.updateCashboxBalance(current.cashboxId, Math.abs(diff), diff > 0 ? dir : (dir === 'in' ? 'out' : 'in'));
+                // ارزِ همان سطر پاس داده می‌شود؛ وگرنه ویرایشِ یک واریزِ دالری در
+                // حسابِ افغانی، اختلاف را از موجودیِ افغانی کم می‌کرد.
+                // (رکوردهای قدیمیِ بدونِ currency → undefined → همان رفتارِ قبلی)
+                if (dir) db.updateCashboxBalance(current.cashboxId, Math.abs(diff), diff > 0 ? dir : (dir === 'in' ? 'out' : 'in'), current.currency || undefined);
             }
 
             current.amount = newAmt;
@@ -10910,10 +10913,12 @@ function deleteCashboxLogEntry(logId, cashboxId) {
                 // deposit/withdraw — یک طرفه
                 var amt = parseFloat(log.amount || 0);
                 if (log.cashboxId && amt > 0) {
+                    // برگشتِ اثر باید در همان ارزی باشد که سطر با آن ثبت شده بود.
+                    // (رکوردهای قدیمیِ بدونِ currency → undefined → همان رفتارِ قبلی)
                     if (log.type === 'deposit_in' || log.type === 'deposit_external' || log.type === 'transfer_in') {
-                        db.updateCashboxBalance(log.cashboxId, amt, 'out');
+                        db.updateCashboxBalance(log.cashboxId, amt, 'out', log.currency || undefined);
                     } else if (log.type === 'deposit_out' || log.type === 'withdraw_external' || log.type === 'transfer_out' || log.type === 'shipping_charge') {
-                        db.updateCashboxBalance(log.cashboxId, amt, 'in');
+                        db.updateCashboxBalance(log.cashboxId, amt, 'in', log.currency || undefined);
                     }
                 }
                 var remaining2 = logs.filter(function(l){ return l.id != logId; });
@@ -11025,15 +11030,50 @@ function executeCashboxTransferLegacy(fromId) {
     if (amount <= 0) { showMessage('خطا', 'مبلغ معتبر وارد کنید'); return; }
     
     const fromBox = db.getCashboxes().find(c => c.id == fromId);
-    if (fromBox && fromBox.balance < amount) { showMessage('خطا', 'موجودی حساب کافی نیست'); return; }
-    
     const toBox = db.getCashboxes().find(c => c.id == toId);
-    
-    // کسر از حساب مبدأ
-    db.updateCashboxBalance(fromId, amount, 'out');
-    // افزایش حساب مقصد
-    db.updateCashboxBalance(parseInt(toId), amount, 'in');
-    
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  ارزِ انتقال = همان ارزی که کاربر در فرم انتخاب کرده است.
+    //  ──────────────────────────────────────────────────────────────────────
+    //  پیش از این، این تابع فیلدِ «transfer-currency» را اصلاً نمی‌خواند و
+    //  انتقال را روی balanceِ تک‌ارزیِ حساب انجام می‌داد، و بدتر: سطرِ خروج را با
+    //  ارزِ حسابِ مبدأ و سطرِ ورود را با ارزِ حسابِ مقصد ثبت می‌کرد — یعنی انتقالِ
+    //  ۵۰۰ از یک حسابِ افغانی به یک حسابِ دالری، ۵۰۰ افغانی کم و ۵۰۰ دالر زیاد
+    //  می‌کرد. حالا هر دو سطر با همان یک ارز ثبت می‌شوند.
+    //
+    //  ارزی که هنگامِ ساختِ حساب انتخاب می‌شود فقط ارزِ «موجودی اولیه» است و هیچ
+    //  محدودیتی بر معامله‌های بعدی نمی‌گذارد؛ موتورِ موجودی از قبل چند-ارزی است
+    //  (balances به تفکیکِ ارز) و این اصلاح فقط همان را درست صدا می‌زند.
+    //  سازگاری با دادهٔ قبلی: اگر فیلدِ ارز خالی باشد، دقیقاً مثلِ قبل ارزِ حسابِ
+    //  مبدأ به کار می‌رود، پس رفتارِ حساب‌های تک‌ارزیِ موجود عوض نمی‌شود.
+    // ══════════════════════════════════════════════════════════════════════════
+    var _trfCurEl = document.getElementById('transfer-currency');
+    var trfCur = (_trfCurEl && _trfCurEl.value) || (fromBox && fromBox.currency) || _baseCur();
+
+    // db.getCashboxBalance دقیقاً همان منطقی را دارد که این‌جا لازم است: برای ارزی که
+    // حساب ندارد صفر می‌دهد و فقط برای ارزِ بومیِ حساب‌های قدیمی به balance برمی‌گردد.
+    // (_cbBalInCur برای برچسبِ نمایش ساخته شده و برای ارزِ ناموجود، balance را برمی‌گرداند.)
+    var _fromBal = (typeof db.getCashboxBalance === 'function')
+        ? (parseFloat(db.getCashboxBalance(fromBox, trfCur)) || 0)
+        : (parseFloat(fromBox && fromBox.balance) || 0);
+    if (_fromBal < amount) {
+        showMessage('خطا', 'موجودی حساب مبدأ در این ارز کافی نیست. موجودی: ' +
+            (typeof formatNumber === 'function' ? formatNumber(_fromBal) : _fromBal) + ' ' +
+            (typeof getCurrencyLabel === 'function' ? getCurrencyLabel(trfCur) : trfCur));
+        return;
+    }
+
+    // کسر از حساب مبدأ — در همان ارزِ انتخاب‌شده
+    var _r1 = db.updateCashboxBalance(parseInt(fromId), amount, 'out', trfCur);
+    if (!_r1 || _r1.success === false) { showMessage('خطا', (_r1 && _r1.error) || 'خطا در به‌روزرسانی حساب مبدأ'); return; }
+    // افزایش حساب مقصد — همان ارز، همان مبلغ
+    var _r2 = db.updateCashboxBalance(parseInt(toId), amount, 'in', trfCur);
+    if (!_r2 || _r2.success === false) {
+        db.updateCashboxBalance(parseInt(fromId), amount, 'in', trfCur);   // برگرداندنِ کسر
+        showMessage('خطا', (_r2 && _r2.error) || 'خطا در به‌روزرسانی حساب مقصد');
+        return;
+    }
+
     // ثبت در معاملات حساب برای هر دو حساب
     if (typeof _logCashboxTransaction === 'function') {
         // کلید مشترک تا حذف یک طرف، طرف دیگر را نیز برگشت دهد
@@ -11042,7 +11082,7 @@ function executeCashboxTransferLegacy(fromId) {
             type: 'transfer_out',
             pairKey: _transferPairKey,
             amount: amount,
-            currency: fromBox ? fromBox.currency : 'AFN',
+            currency: trfCur,
             relatedCashboxId: parseInt(toId),
             relatedCashboxName: toBox ? toBox.name : '',
             notes: notes,
@@ -11053,7 +11093,7 @@ function executeCashboxTransferLegacy(fromId) {
             type: 'transfer_in',
             pairKey: _transferPairKey,
             amount: amount,
-            currency: toBox ? toBox.currency : 'AFN',
+            currency: trfCur,
             relatedCashboxId: parseInt(fromId),
             relatedCashboxName: fromBox ? fromBox.name : '',
             notes: notes,
@@ -41496,18 +41536,22 @@ function __hbInstEnv() {
  * جلو نیامده و نصب شروع نشده است — همان مشکلی که کاربر گزارش کرده.
  */
 function __hbWatchInstaller(ms) {
-    return new Promise(function (resolve) {
+    var _cancel = null;
+    var pr = new Promise(function (resolve) {
         var done = false, handle = null;
-        var finish = function (why) {
+        var finish = function (why, quiet) {
             if (done) return; done = true;
             try { clearTimeout(timer); } catch (e) {}
             try { document.removeEventListener('visibilitychange', onVis); } catch (e) {}
             try { window.removeEventListener('pagehide', onHide); } catch (e) {}
             try { window.removeEventListener('blur', onHide); } catch (e) {}
             try { if (handle && typeof handle.remove === 'function') handle.remove(); } catch (e) {}
-            __hbIlog('watch', why ? 'پس‌زمینه' : 'هیچ‌رویدادی', why || ('مهلت ' + ms + 'ms تمام شد'));
+            // quiet = این تلاش خودش با خطا برگشته و دیگر منتظرِ چیزی نیستیم؛
+            // نوشتنِ سطرِ «هیچ‌رویدادی» فقط گزارش را شلوغ و گمراه‌کننده می‌کرد.
+            if (!quiet) __hbIlog('watch', why ? 'پس‌زمینه' : 'هیچ‌رویدادی', why || ('مهلت ' + ms + 'ms تمام شد'));
             resolve(!!why);
         };
+        _cancel = function () { finish(null, true); };
         var onVis = function () { if (document.visibilityState === 'hidden') finish('visibilitychange:hidden'); };
         var onHide = function (e) { finish((e && e.type) || 'pagehide'); };
         try { document.addEventListener('visibilitychange', onVis); } catch (e) {}
@@ -41525,6 +41569,8 @@ function __hbWatchInstaller(ms) {
         } catch (e) {}
         var timer = setTimeout(function () { finish(null); }, Math.max(1200, parseInt(ms, 10) || 3500));
     });
+    pr.cancel = function () { try { if (_cancel) _cancel(); } catch (e) {} };
+    return pr;
 }
 
 /** متنِ گزارش — همین را کاربر عکس می‌گیرد یا کپی می‌کند */
@@ -41613,6 +41659,19 @@ function __hbShowInstDiag() {
             try { ov.remove(); } catch (e) {}
             try { __hbRetryOpenApk(); } catch (e) {}
         }));
+        // راهِ همیشه‌کار: سپردنِ نشانی به مرورگرِ سیستم. این دکمه به هیچ افزونه،
+        // FileProvider یا مجوزِ حافظه وابسته نیست — پس حتی وقتی همهٔ راه‌های
+        // درون‌برنامه‌ای شکست می‌خورند، کاربر از این‌جا می‌تواند نصب را تمام کند.
+        var _pub = '';
+        try { _pub = String(window.__hbPendingApkUrl || ''); } catch (e) { _pub = ''; }
+        if (_pub && /^https?:/i.test(_pub)) {
+            var bb = mk('دانلود با مرورگر (همیشه کار می‌کند)', function () {
+                try { ov.remove(); } catch (e) {}
+                try { __hbOpenApkViaBrowser(); } catch (e) {}
+            });
+            bb.style.background = '#15803d';
+            ft.appendChild(bb);
+        }
         box.appendChild(hdr); box.appendChild(pre); box.appendChild(ft);
         ov.appendChild(box);
         document.body.appendChild(ov);
@@ -41683,7 +41742,10 @@ function __hbAndroidOpenApk(uri, src) {
     var APK = 'application/vnd.android.package-archive';
     // مسیرِ خامِ بدونِ پیشوند — شکلِ مستندِ افزونهٔ FileOpener همین است
     var plain = String(uri).replace(/^file:\/\//, '');
-    var PER_TRY = 1800;        // مهلتِ تأییدِ هر تلاش (میلی‌ثانیه)
+    var PER_TRY = 2500;        // مهلتِ تأییدِ هر تلاش (میلی‌ثانیه)
+    // نشانیِ عمومیِ دانلود (https) — برای آخرین حلقهٔ زنجیره که از مرورگر می‌گذرد
+    var pubUrl = '';
+    try { pubUrl = String(window.__hbPendingApkUrl || ''); } catch (e) { pubUrl = ''; }
 
     // ╔══════════════════════════════════════════════════════════════════════════╗
     // ║  ⚠ درسِ گرفته‌شده از گزارشِ دستگاهِ واقعی (نسخهٔ ۱.۳.۲ → ۱.۳.۶):            ║
@@ -41720,7 +41782,33 @@ function __hbAndroidOpenApk(uri, src) {
     add('FileOpener(file://)', function () {
         return __jouyaAndCall('FileOpener', 'open', { filePath: uri, contentType: APK });
     });
-    // ۵) کپی به پوشهٔ عمومیِ Downloads و بازکردن از آن‌جا.
+    // ۵) کپی به «حافظهٔ خارجیِ مخصوصِ برنامه» و بازکردن از آن‌جا.
+    //    چرا این پیش از کپی به Downloads می‌آید: گزارشِ دستگاهِ واقعی نشان داد فایل در
+    //    /data/user/0/<پکیج>/cache می‌نشیند — حافظهٔ داخلی. نصب‌کنندهٔ اندروید پروسهٔ
+    //    جداست و برای خواندنِ آن‌جا به FileProvider نیاز دارد؛ اگر مسیرِ cache در
+    //    file_paths.xml پوشش داده نشده باشد، افزونه بدونِ خطا برمی‌گردد و هیچ نمی‌کند
+    //    (دقیقاً همان «موفقِ دروغین»). مسیرِ external-files در پیکربندیِ پیش‌فرضِ
+    //    Capacitor تقریباً همیشه پوشش داده شده است و — برخلافِ Downloads — روی
+    //    اندروید ۱۱ به بعد هیچ مجوزی هم نمی‌خواهد.
+    add('کپی به حافظهٔ خارجیِ برنامه سپس بازکردن', function () {
+        var name = '';
+        try { name = decodeURIComponent(plain.split('/').pop() || 'update.apk'); } catch (e) { name = 'update.apk'; }
+        var fromDir = (src && src.dir) || null;
+        var fromPath = (src && src.path) || plain;
+        var copyOpts = { to: name, toDirectory: 'EXTERNAL' };
+        if (fromDir) { copyOpts.from = fromPath; copyOpts.directory = fromDir; }
+        else { copyOpts.from = plain; }
+        return __jouyaAndCall('Filesystem', 'copy', copyOpts).then(function () {
+            return __jouyaAndCall('Filesystem', 'getUri', { path: name, directory: 'EXTERNAL' });
+        }).then(function (r) {
+            var u2 = (r && (r.uri || r.path)) || '';
+            var p2 = String(u2).replace(/^file:\/\//, '');
+            try { window.__hbPendingApkUri = u2 || window.__hbPendingApkUri; } catch (e) {}
+            try { __hbIlog('کپی', 'حافظهٔ خارجیِ برنامه', p2); } catch (e) {}
+            return __jouyaAndCall('FileOpener', 'open', { filePath: p2, contentType: APK });
+        });
+    });
+    // ۶) کپی به پوشهٔ عمومیِ Downloads و بازکردن از آن‌جا.
     //    چرا: فایل در حافظهٔ داخلیِ برنامه (/data/user/0/<پکیج>/cache) است و
     //    نصب‌کنندهٔ اندروید پروسهٔ جداست؛ برای خواندنِ آن‌جا به FileProvider نیاز
     //    دارد که اگر مسیرِ cache در file_paths.xml پوشش داده نشده باشد کار نمی‌کند.
@@ -41744,13 +41832,38 @@ function __hbAndroidOpenApk(uri, src) {
             return __jouyaAndCall('FileOpener', 'open', { filePath: p2, contentType: APK });
         });
     });
-    // ۶) واگذاری به خودِ سیستم — آخرین راه
+    // ۷) واگذاری به خودِ سیستم
     add('AppLauncher.openUrl', function () {
         return __jouyaAndCall('AppLauncher', 'openUrl', { url: uri });
     });
     add('Share.share', function () {
         return __jouyaAndCall('Share', 'share', { title: 'نصبِ بروزرسانی', files: [uri] });
     });
+    // ══════════════════════════════════════════════════════════════════════════
+    //  ۸) آخرین حلقه — سپردنِ نشانیِ اینترنتی به مرورگرِ سیستم.
+    //  ──────────────────────────────────────────────────────────────────────
+    //  همهٔ تلاش‌های بالا یک نقطهٔ ضعفِ مشترک دارند: همگی باید بتوانند یک نشانیِ
+    //  خواندنی به نصب‌کننده بدهند، و این به FileProvider و پیکربندیِ APK وابسته است.
+    //  اگر آن پیکربندی ناقص باشد، هیچ‌کدام هرگز کار نمی‌کنند — هرچقدر هم تلاش کنیم.
+    //
+    //  این راه آن وابستگی را کاملاً دور می‌زند: نشانیِ https را به مرورگر می‌دهیم،
+    //  Download Managerِ خودِ اندروید فایل را می‌گیرد و در اعلان «باز کردن» می‌گذارد؛
+    //  با زدنِ آن، سیستم خودش نصب‌کننده را با یک content:// معتبر باز می‌کند.
+    //  نه FileProvider می‌خواهد، نه مجوزِ حافظه، نه افزونه. هزینه‌اش فقط یک‌بار
+    //  دانلودِ دوباره است — که در برابرِ «اصلاً نصب نشدن» هزینه‌ای نیست.
+    // ══════════════════════════════════════════════════════════════════════════
+    if (pubUrl && /^https?:/i.test(pubUrl)) {
+        add('مرورگرِ سیستم (دانلودِ مستقیم)', function () {
+            // AppLauncher نخست است: مرورگرِ بیرونی را باز می‌کند و Download Manager
+            // کار را می‌گیرد. Browser (تبِ درون‌برنامه‌ای) گاهی دانلودِ APK را رد می‌کند.
+            return __jouyaAndCall('AppLauncher', 'openUrl', { url: pubUrl }).catch(function () {
+                return __jouyaAndCall('Browser', 'open', { url: pubUrl });
+            }).catch(function () {
+                try { window.open(pubUrl, '_system'); } catch (e) { location.href = pubUrl; }
+                return true;
+            });
+        });
+    }
 
     var step = function (i, lastErr) {
         if (i >= tries.length) {
@@ -41772,6 +41885,9 @@ function __hbAndroidOpenApk(uri, src) {
                 return step(i + 1, new Error(names[i] + ': بدونِ خطا ولی بی‌اثر'));
             });
         }, function (e) {
+            // این تلاش خطا داد → شنونده را بی‌صدا خاموش کن تا سطرِ بی‌ربطِ
+            // «watch → هیچ‌رویدادی» چند ثانیه بعد وسطِ گزارش ظاهر نشود.
+            try { watch.cancel(); } catch (e3) {}
             try { __hbIlog(names[i], 'خطا', e); } catch (e2) {}
             return step(i + 1, e);
         });
@@ -41798,6 +41914,9 @@ function __hbAndroidExitAfterInstaller(delayMs) {
 // ── دانلود + نصبِ کاملاً درون‌برنامه‌ای در اندروید ────────────────────────────────
 function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
     try { __hbInstReset(); __hbIlog('بروزرسانی', 'آغاز', String(fileName || '')); } catch (e) {}
+    // نشانیِ عمومی را نگه می‌داریم: آخرین حلقهٔ زنجیرهٔ نصب و دکمهٔ «دانلود با مرورگر»
+    // از همین استفاده می‌کنند، و پس از بسته‌شدنِ پنجرهٔ بروزرسانی هم در دسترس می‌ماند.
+    try { window.__hbPendingApkUrl = String(url || ''); } catch (e) {}
     var FS = __hbAndPlugin('Filesystem');
     if (!FS || typeof FS.downloadFile !== 'function') {
         onFail(new Error('Filesystem.downloadFile در دسترس نیست'));
@@ -41872,13 +41991,37 @@ function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
                 '<br><small>در تنظیماتِ گوشی، «نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید، ' +
                 'سپس دکمهٔ زیر را بزنید.</small>' +
                 '<br><button type="button" class="btn-primary" style="margin-top:8px" ' +
-                'onclick="__hbRetryOpenApk()">باز کردن نصب‌کننده</button>', 'warn');
+                'onclick="__hbRetryOpenApk()">باز کردن نصب‌کننده</button>' +
+                '<br><button type="button" class="btn-primary" style="margin-top:8px;background:#15803d" ' +
+                'onclick="__hbOpenApkViaBrowser()">دانلود با مرورگر (همیشه کار می‌کند)</button>', 'warn');
         });
     }).catch(function (err) {
         cleanup();
         onFail(err);
     });
 }
+// ── راهِ پشتیبانِ همیشه‌کار: دانلودِ APK با مرورگرِ خودِ سیستم ────────────────────
+//  نه به افزونه وابسته است، نه به FileProvider، نه به مجوزِ حافظه. اندروید فایل را
+//  در اعلان می‌گذارد و با زدنِ آن، نصب‌کنندهٔ سیستم با نشانیِ معتبر باز می‌شود.
+function __hbOpenApkViaBrowser() {
+    var u = '';
+    try { u = String(window.__hbPendingApkUrl || ''); } catch (e) { u = ''; }
+    if (!u || !/^https?:/i.test(u)) {
+        try { ndUpdSetStatus('نشانیِ دانلود در دسترس نیست — یک‌بار «بررسی بروزرسانی» را بزنید.', 'warn'); } catch (e) {}
+        return;
+    }
+    try { __hbIlog('مرورگر', 'سپرده شد', u); } catch (e) {}
+    try {
+        ndUpdSetStatus('نشانی به مرورگر سپرده شد. پس از پایانِ دانلود، اعلانِ گوشی را باز کنید ' +
+            'و روی فایل بزنید تا نصب شروع شود.' +
+            '<br><small>اگر اندروید اجازه خواست، «نصب برنامه‌های ناشناس» را برای مرورگر روشن کنید.</small>', 'ok');
+    } catch (e) {}
+    Promise.resolve()
+        .then(function () { return __jouyaAndCall('AppLauncher', 'openUrl', { url: u }); })
+        .catch(function () { return __jouyaAndCall('Browser', 'open', { url: u }); })
+        .catch(function () { try { window.open(u, '_system'); } catch (e) { location.href = u; } });
+}
+
 // تلاشِ دوبارهٔ بازکردنِ نصب‌کننده برای فایلی که قبلاً دانلود شده (بدونِ دانلودِ مجدد)
 function __hbRetryOpenApk() {
     var uri = '';
@@ -41891,7 +42034,9 @@ function __hbRetryOpenApk() {
     })()).then(function (opened) {
         if (opened) ndUpdSetStatus('نصب‌کننده باز شد — روی «نصب» بزنید.', 'ok');
         else ndUpdSetStatus('نصب‌کننده باز نشد — گزارشِ تشخیصی روی صفحه آمد؛ لطفاً همان را بفرستید.' +
-            '<br><small>«نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید و دوباره تلاش کنید.</small>', 'warn');
+            '<br><small>«نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید و دوباره تلاش کنید.</small>' +
+            '<br><button type="button" class="btn-primary" style="margin-top:8px;background:#15803d" ' +
+            'onclick="__hbOpenApkViaBrowser()">دانلود با مرورگر (همیشه کار می‌کند)</button>', 'warn');
     }).catch(function (e) {
         try { __hbIlog('تلاشِ دوباره', 'خطا', e); __hbShowInstDiag(); } catch (e2) {}
         ndUpdSetStatus('نصب‌کننده باز نشد: ' + ((e && e.message) || '') +
@@ -41900,6 +42045,7 @@ function __hbRetryOpenApk() {
 }
 if (typeof window !== 'undefined') {
     window.__hbRetryOpenApk = __hbRetryOpenApk;
+    window.__hbOpenApkViaBrowser = __hbOpenApkViaBrowser;
     window.__hbAndroidOpenApk = __hbAndroidOpenApk;
     window.__hbAndroidExitAfterInstaller = __hbAndroidExitAfterInstaller;
 }
