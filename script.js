@@ -1423,6 +1423,66 @@ function _computeFifoProfitMaps() {
                 if (e.estAcc || _rev.est) estimatedSales[e.saleId] = true;
             });
         });
+
+        // ════════════════════════════════════════════════════════════════════
+        //  ۵) انتقالِ جنس میان گدام‌ها — جابه‌جاییِ داخلی، نه خرید و نه فروش
+        //  ──────────────────────────────────────────────────────────────────
+        //  چرا لازم شد: ارزشِ موجودی (سرمایه) از لایه‌های FIFO گرفته می‌شود، ولی این
+        //  موتور انتقال‌ها را اصلاً نمی‌دید. نتیجه: جنسی که به گدامِ مقصد می‌رفت لایه‌ای
+        //  نداشت، پس در موتورِ سرمایه به مسیرِ جای‌گزین («قیمتِ خرید × موجودی») می‌افتاد
+        //  و ارزشش از نو ساخته می‌شد — در حالی که ارزشِ مبدأ هم سرِ جایش می‌ماند.
+        //  پس سرمایه دقیقاً به اندازهٔ «تعداد × قیمتِ خرید» بالا می‌رفت. همان باگی که
+        //  گزارش شد.
+        //
+        //  اصلاح: برای هر قلمِ انتقال، همان ارزشِ تمام‌شده از مبدأ کم و عیناً به مقصد
+        //  افزوده می‌شود. مجموعِ سرمایه بدونِ تغییر می‌ماند و هیچ خرید، فروش یا سودی
+        //  ساخته نمی‌شود. دو طرفِ انتقال با شناسهٔ همان رکوردِ انتقال به هم مرتبط‌اند.
+        //
+        //  منبعِ بها، به ترتیب:
+        //    ۱) unitCostBase ذخیره‌شده روی خودِ قلمِ انتقال (snapshotِ لحظهٔ ثبت —
+        //       همان الگوی _saleCostSnapshot که فروش به کار می‌برد)
+        //    ۲) برای انتقال‌های قدیمیِ کاربران که snapshot ندارند: میانگینِ ارزشِ
+        //       فعلیِ همان جنس در مبدأ، و اگر آن هم نبود قیمتِ خریدِ ثبت‌شده.
+        //  هر دو مسیر برای دو طرف یکی است، پس انتقال همیشه خنثی می‌مانَد.
+        // ════════════════════════════════════════════════════════════════════
+        try {
+            var _trs = (typeof db !== 'undefined' && db.getTransfers) ? (db.getTransfers() || []) : [];
+            _trs.forEach(function (tr) {
+                if (!tr || !Array.isArray(tr.items)) return;
+                tr.items.forEach(function (it) {
+                    if (!it) return;
+                    var q = parseFloat(it.quantity) || 0;
+                    if (!(q > 0)) return;
+                    var sid = it.srcProductId, did = it.destProductId;
+                    if (sid == null && did == null) return;
+
+                    // بهای یک واحد به ارزِ مرجع
+                    var unit = parseFloat(it.unitCostBase);
+                    if (!(unit >= 0) || isNaN(unit)) {
+                        unit = NaN;
+                        if (sid != null) {
+                            var _sv = invBaseByProd[sid];
+                            var _sp = prodById[sid];
+                            var _sq = _sp ? (parseFloat(_sp.stock) || 0) : 0;
+                            // موجودیِ فعلی اثرِ انتقال را از قبل دارد، پس برای میانگینِ
+                            // پیش از انتقال، همان مقدارِ منتقل‌شده را به آن برمی‌گردانیم.
+                            var _sq0 = _sq + q;
+                            if (_sv != null && _sq0 > 1e-9) unit = (parseFloat(_sv) || 0) / _sq0;
+                            if ((!(unit >= 0) || isNaN(unit)) && _sp && typeof db !== 'undefined' && db.getPurchasePrice) {
+                                unit = parseFloat(db.getPurchasePrice(_sp, _base)) || 0;
+                            }
+                        }
+                        if (!(unit >= 0) || isNaN(unit)) unit = 0;
+                    }
+                    var val = unit * q;
+                    if (!(val > 0)) return;
+
+                    if (sid != null) invBaseByProd[sid] = _round((parseFloat(invBaseByProd[sid]) || 0) - val);
+                    if (did != null) invBaseByProd[did] = _round((parseFloat(invBaseByProd[did]) || 0) + val);
+                    // جمعِ کل دست‌نخورده می‌مانَد: یک کم و یک زیادِ برابر.
+                });
+            });
+        } catch (e) { /* انتقال‌ها خوانده نشد — بقیهٔ گزارش دست‌نخورده کار می‌کند */ }
     } catch (err) { console.error('fifo profit maps:', err); }
     return {
         saleMap: saleMap, itemMap: itemMap,
@@ -1461,7 +1521,20 @@ function _fifoSignature() {
                 });
             }
         } catch (e) {}
-        return txs.length + ':' + prods.length + ':' + acc + ':' + pacc + ':' + racc + ':' + mx;
+        // انتقال‌های میان گدام هم روی ارزشِ موجودی اثر دارند، پس باید در امضاء باشند؛
+        // وگرنه پس از ثبت/ویرایش/حذفِ یک انتقال، کش همان عددِ قدیمی را برمی‌گرداند.
+        var tacc = 0, tn = 0;
+        try {
+            ((typeof db !== 'undefined' && db.getTransfers) ? (db.getTransfers() || []) : []).forEach(function (tr) {
+                tn++;
+                tacc += (parseFloat(tr.id) || 0);
+                (tr.items || []).forEach(function (it) {
+                    tacc += (parseFloat(it.quantity) || 0) + (parseFloat(it.unitCostBase) || 0)
+                          + (parseFloat(it.srcProductId) || 0) + (parseFloat(it.destProductId) || 0);
+                });
+            });
+        } catch (e) {}
+        return txs.length + ':' + prods.length + ':' + acc + ':' + pacc + ':' + racc + ':' + tn + ':' + tacc + ':' + mx;
     } catch (e) { return 'x' + Math.random(); }
 }
 
@@ -11056,11 +11129,14 @@ function executeCashboxTransferLegacy(fromId) {
     var _fromBal = (typeof db.getCashboxBalance === 'function')
         ? (parseFloat(db.getCashboxBalance(fromBox, trfCur)) || 0)
         : (parseFloat(fromBox && fromBox.balance) || 0);
+    // کمبودِ موجودی دیگر جلوی کار را نمی‌گیرد: همان تأییدیه‌ای که فرمِ «پرداختی»
+    // می‌گیرد این‌جا هم گرفته می‌شود و در صورتِ تأیید، حساب کسری (منفی) می‌شود.
     if (_fromBal < amount) {
-        showMessage('خطا', 'موجودی حساب مبدأ در این ارز کافی نیست. موجودی: ' +
-            (typeof formatNumber === 'function' ? formatNumber(_fromBal) : _fromBal) + ' ' +
-            (typeof getCurrencyLabel === 'function' ? getCurrencyLabel(trfCur) : trfCur));
-        return;
+        if (!_confirmNegBalance('موجودی حساب «' + ((fromBox && fromBox.name) || '') + '» در ارز ' +
+                (typeof getCurrencyLabel === 'function' ? getCurrencyLabel(trfCur) : trfCur) + ' کافی نیست.\nموجودی فعلی: ' +
+                formatNumber(_fromBal) + '\nمبلغ انتقال: ' + formatNumber(amount) +
+                '\n\nآیا می‌خواهید با وجود کمبود موجودی، انتقال را ثبت کنید؟ (موجودی حساب منفی خواهد شد)',
+                function () { executeCashboxTransferLegacy(fromId); })) return;
     }
 
     // کسر از حساب مبدأ — در همان ارزِ انتخاب‌شده
@@ -14300,7 +14376,7 @@ function generatePersonReport(personId) {
     <link rel="stylesheet" href="assets/fonts/vazirmatn.css">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        @page { size: A4 landscape; margin: 8mm; }
+        @page { size: A4 portrait; margin: 8mm; }
         @media print {
             body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .no-print { display: none !important; }
@@ -14843,7 +14919,7 @@ function generateCashboxReport(cashboxId) {
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        @page { size: A4 landscape; margin: 8mm; }
+        @page { size: A4 portrait; margin: 8mm; }
         @media print {
             body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .no-print { display: none !important; }
@@ -19038,6 +19114,40 @@ function _rpProfitAggregate(fromDate, toDate) {
                 var b = toBase(prof, cur); grossBase += b;
             });
         });
+        // ── تعدیلِ مفادِ فروشِ کسری — دقیقاً همان کاری که نمای زندهٔ برنامه می‌کند ──
+        //  چرا لازم بود: شاخهٔ «فیلترشده» (وقتی جنس/خدمت/شخصی انتخاب شده) مفاد را
+        //  مستقیم از نقشهٔ FIFO می‌خواند و این تعدیل را اعمال نمی‌کرد، در حالی که
+        //  مسیرِ بدونِ فیلتر (_computeProfitSummary) آن را اعمال می‌کند. نتیجه: جنسی
+        //  که موجودی نداشت، روی صفحه مفادِ ۱۰۰۰ و در PDF/اکسل مفادِ ۲۰۰ نشان می‌داد.
+        //
+        //  منطقِ خودِ تعدیل از قبل در برنامه هست و تغییر نکرده است: تا وقتی موجودیِ
+        //  جنس منفی است، یعنی برای آن واحدها هنوز خریدی انجام نشده، پس بهایشان از
+        //  مفاد کسر نمی‌شود؛ به‌محضِ خریدِ دوباره موجودی منفی نیست و تعدیل خودبه‌خود
+        //  صفر می‌شود و مفاد به عددِ واقعی (۲۰۰) برمی‌گردد — در همان لحظه، چون امضای
+        //  کشِ FIFO شاملِ موجودی و تراکنش‌هاست.
+        //
+        //  دامنه: تعدیل فقط روی همان اجناسی حساب می‌شود که در گزارش انتخاب شده‌اند،
+        //  تا فیلترِ کاربر دست‌نخورده بماند. برای نمای «فقط خدمات» اصلاً اجرا نمی‌شود
+        //  (خدمات قیمتِ تمام‌شده و کسری ندارند).
+        if (!svcOnly && typeof computeDeficitProfitAdjustment === 'function') {
+            try {
+                var _dProds = hasProdSel ? prods.filter(function (p) { return p && selProdIds[String(p.id)]; }) : prods;
+                var _dSales = hasPersonSel
+                    ? salesInRange.filter(function (t) {
+                        var _cid = String(t.customerId != null ? t.customerId : (t.personId != null ? t.personId : ''));
+                        return !!selPersonIds[_cid];
+                      })
+                    : salesInRange;
+                var _dAdj = computeDeficitProfitAdjustment(_dSales, _dProds);
+                var _dBy = (_dAdj && _dAdj.byCur) ? _dAdj.byCur : {};
+                Object.keys(_dBy).forEach(function (c) {
+                    var v = parseFloat(_dBy[c]) || 0;
+                    if (!v) return;
+                    _add(grossByCur, c, v);
+                    grossBase += toBase(v, c);
+                });
+            } catch (e) { /* تعدیل انجام نشد — بقیهٔ گزارش دست‌نخورده می‌ماند */ }
+        }
         Object.keys(grossByCur).forEach(function (c) { netByCur[c] = grossByCur[c]; });
         ps = { grossByCur: grossByCur, discByCur: discByCur, expByCur: expByCur, netByCur: netByCur, grossBase: grossBase, expBase: 0, netBase: grossBase, base: base, estimated: false };
     } else {
@@ -32191,9 +32301,12 @@ function executeCashboxTransfer() {
 
     // موجودیِ همان ارز در حساب مبدأ
     var _fromBal = (typeof db.getCashboxBalance === 'function') ? (parseFloat(db.getCashboxBalance(fromBox, fromCur)) || 0) : (parseFloat(fromBox.balance) || 0);
+    // کمبودِ موجودی → تأییدیه (همان الگوی فرمِ پرداختی)، سپس کسری‌شدنِ حساب
     if (_fromBal < amount) {
-        showMessage('خطا', 'موجودی حساب مبدأ در این ارز کافی نیست. موجودی: ' + formatNumber(_fromBal) + ' ' + getCurrencyLabel(fromCur));
-        return;
+        if (!_confirmNegBalance('موجودی حساب «' + (fromBox.name || '') + '» در ارز ' + getCurrencyLabel(fromCur) +
+                ' کافی نیست.\nموجودی فعلی: ' + formatNumber(_fromBal) + '\nمبلغ انتقال: ' + formatNumber(amount) +
+                '\n\nآیا می‌خواهید با وجود کمبود موجودی، انتقال را ثبت کنید؟ (موجودی حساب منفی خواهد شد)',
+                executeCashboxTransfer)) return;
     }
 
     // محاسبه مبلغ نهایی برای حساب مقصد (طبقِ نرخِ واردشدهٔ کاربر — همان Snapshot این انتقال)
@@ -32336,9 +32449,12 @@ function executeFinCashboxTransfer() {
     if (!finFromCur) { showMessage('خطا', 'ارز مبدأ را انتخاب کنید (ابتدا ارز تعریف کنید).'); return; }
 
     var _finFromBal = (typeof db.getCashboxBalance === 'function') ? (parseFloat(db.getCashboxBalance(fromBox, finFromCur)) || 0) : (parseFloat(fromBox.balance) || 0);
+    // کمبودِ موجودی → تأییدیه (همان الگوی فرمِ پرداختی)، سپس کسری‌شدنِ حساب
     if (_finFromBal < amount) {
-        showMessage('خطا', 'موجودی حساب مبدأ در این ارز کافی نیست. موجودی: ' + formatNumber(_finFromBal) + ' ' + getCurrencyLabel(finFromCur));
-        return;
+        if (!_confirmNegBalance('موجودی حساب «' + (fromBox.name || '') + '» در ارز ' + getCurrencyLabel(finFromCur) +
+                ' کافی نیست.\nموجودی فعلی: ' + formatNumber(_finFromBal) + '\nمبلغ انتقال: ' + formatNumber(amount) +
+                '\n\nآیا می‌خواهید با وجود کمبود موجودی، انتقال را ثبت کنید؟ (موجودی حساب منفی خواهد شد)',
+                executeFinCashboxTransfer)) return;
     }
 
     var finalAmount = (rate > 0) ? (op === 'divide' ? (amount / rate) : (amount * rate)) : amount;
@@ -34132,7 +34248,10 @@ function openDualCalendarPicker(targetInputId, triggerEl) {
     var box = document.createElement('div');
     box.style.cssText = 'position:fixed;top:' + topPos + 'px;left:' + leftPos + 'px;'
         + 'background:#fff;border-radius:12px;width:' + boxW + 'px;'
-        + 'box-shadow:0 8px 28px rgba(0,0,0,0.22);overflow:hidden;z-index:99999;direction:rtl;'
+        // سقفِ ارتفاع به اندازهٔ صفحه: روی نمایشگرِ کوتاه (یا وقتی کیبورد بالا
+        // است) تقویم به‌جای بیرون‌زدن از صفحه، خودش درونی اسکرول می‌شود.
+        + 'max-height:calc(100vh - ' + (topPos + 8) + 'px);overflow:auto;'
+        + 'box-shadow:0 8px 28px rgba(0,0,0,0.22);z-index:99999;direction:rtl;'
         + 'border:1px solid #e2e8f0;';
     box.onclick = function(e) { e.stopPropagation(); };
 
@@ -34388,7 +34507,10 @@ function openDateOnlyCalendarPicker(targetInputId, triggerEl) {
     var box = document.createElement('div');
     box.style.cssText = 'position:fixed;top:' + topPos + 'px;left:' + leftPos + 'px;'
         + 'background:#fff;border-radius:12px;width:' + boxW + 'px;'
-        + 'box-shadow:0 8px 28px rgba(0,0,0,0.22);overflow:hidden;z-index:99999;direction:rtl;'
+        // سقفِ ارتفاع به اندازهٔ صفحه: روی نمایشگرِ کوتاه (یا وقتی کیبورد بالا
+        // است) تقویم به‌جای بیرون‌زدن از صفحه، خودش درونی اسکرول می‌شود.
+        + 'max-height:calc(100vh - ' + (topPos + 8) + 'px);overflow:auto;'
+        + 'box-shadow:0 8px 28px rgba(0,0,0,0.22);z-index:99999;direction:rtl;'
         + 'border:2px solid #f59e0b;';
     box.onclick = function(e) { e.stopPropagation(); };
 
@@ -34929,9 +35051,13 @@ function executeCashboxDeposit() {
         const fromBox = cashboxes.find(function(c){ return c.id == fromId; });
         if (!fromBox) { showMessage('خطا', 'حساب برداشت یافت نشد'); return; }
         var _fromBal = (typeof db.getCashboxBalance === 'function') ? (parseFloat(db.getCashboxBalance(fromBox, depCurrency)) || 0) : (parseFloat(fromBox.balance) || 0);
+        // کمبودِ موجودی → تأییدیه (همان الگوی فرمِ پرداختی)، سپس کسری‌شدنِ حساب
         if (_fromBal < amount) {
-            showMessage('خطا', 'موجودی حساب برداشت در این ارز کافی نیست. موجودی: ' + formatNumber(_fromBal) + ' ' + (typeof getCurrencyLabel === 'function' ? getCurrencyLabel(depCurrency) : depCurrency));
-            return;
+            if (!_confirmNegBalance('موجودی حساب «' + (fromBox.name || '') + '» در ارز ' +
+                    (typeof getCurrencyLabel === 'function' ? getCurrencyLabel(depCurrency) : depCurrency) + ' کافی نیست.\nموجودی فعلی: ' +
+                    formatNumber(_fromBal) + '\nمبلغ برداشت: ' + formatNumber(amount) +
+                    '\n\nآیا می‌خواهید با وجود کمبود موجودی، افزودن به حساب را ثبت کنید؟ (موجودی حساب منفی خواهد شد)',
+                    executeCashboxDeposit)) return;
         }
         // انتقالِ همان ارز از حساب برداشت به حساب هدف (حساب‌ها چند-ارزی‌اند)
         db.updateCashboxBalance(parseInt(fromId), amount, 'out', depCurrency);
@@ -35059,6 +35185,19 @@ function executeCashboxWithdraw() {
     const cashboxes = db.getCashboxes() || [];
     const sourceBox = cashboxes.find(function(c){ return c.id == sourceId; });
     if (!sourceBox) { showMessage('خطا', 'حساب منبع یافت نشد'); return; }
+
+    // کمبودِ موجودی → همان تأییدیهٔ فرمِ پرداختی؛ با تأیید، حساب کسری (منفی) می‌شود.
+    // پیش از این، برداشت بدونِ هیچ پرسشی حساب را منفی می‌کرد.
+    var _wBal = (typeof db.getCashboxBalance === 'function')
+        ? (parseFloat(db.getCashboxBalance(sourceBox, wCurrency)) || 0)
+        : (parseFloat(sourceBox.balance) || 0);
+    if (_wBal < amount) {
+        if (!_confirmNegBalance('موجودی حساب «' + (sourceBox.name || '') + '» در ارز ' +
+                (typeof getCurrencyLabel === 'function' ? getCurrencyLabel(wCurrency) : wCurrency) + ' کافی نیست.\nموجودی فعلی: ' +
+                formatNumber(_wBal) + '\nمبلغ برداشت: ' + formatNumber(amount) +
+                '\n\nآیا می‌خواهید با وجود کمبود موجودی، برداشت را ثبت کنید؟ (موجودی حساب منفی خواهد شد)',
+                executeCashboxWithdraw)) return;
+    }
 
     // اگر «به حساب» انتخاب شده باشد، برداشت به انتقالِ همان ارز بین دو حساب تبدیل می‌شود
     const _toEl = document.getElementById('withdraw-to-cashbox');
@@ -39230,6 +39369,12 @@ function billEnableEdit(which) {
 
         var allProducts = (typeof db.getAllProducts === 'function') ? db.getAllProducts() : [];
         var recItems = [];
+        // موجودیِ هر جنسِ مبدأ «پیش از» کسرِ انتقال — برای محاسبهٔ بهای واحد.
+        var _srcStockBefore = {};
+        try { allProducts.forEach(function (p) { if (p && p.id != null) _srcStockBefore[p.id] = parseFloat(p.stock) || 0; }); } catch (e) {}
+        // نقشهٔ ارزشِ FIFO پیش از هر تغییر — بهای انتقال از همین گرفته می‌شود.
+        var _fifoBefore = null;
+        try { _fifoBefore = (typeof _getFifoMaps === 'function') ? _getFifoMaps() : null; } catch (e) { _fifoBefore = null; }
 
         requested.forEach(function (r) {
             var src = r.srcProduct;
@@ -39286,12 +39431,30 @@ function billEnableEdit(which) {
                 if (res && res.data) allProducts.push(res.data);
             }
 
+            // ── قفل‌کردنِ «ارزشِ تمام‌شده» روی خودِ قلمِ انتقال ──────────────────────
+            //  همان الگوی _saleCostSnapshot در فروش: بهای واحد در لحظهٔ انتقال ذخیره
+            //  می‌شود تا هر دو طرفِ انتقال (خروجِ مبدأ و ورودِ مقصد) برای همیشه دقیقاً
+            //  یک ارزش داشته باشند و انتقال هیچ‌وقت سرمایه نسازد یا از بین نبرد —
+            //  حتی اگر بعداً قیمتِ خریدِ جنس عوض شود.
+            var _unitCostBase = 0;
+            try {
+                var _ivT = (_fifoBefore && _fifoBefore.invBaseByProd) ? _fifoBefore.invBaseByProd[src.id] : null;
+                var _stT = parseFloat(_srcStockBefore[src.id]);
+                if (isNaN(_stT)) _stT = parseFloat(src.stock) || 0;
+                if (_ivT != null && _stT > 1e-9) _unitCostBase = (parseFloat(_ivT) || 0) / _stT;
+                if (!(_unitCostBase > 0) && typeof db.getPurchasePrice === 'function') {
+                    _unitCostBase = parseFloat(db.getPurchasePrice(src, (typeof _baseCur === 'function' ? _baseCur() : 'AFN'))) || 0;
+                }
+            } catch (e) { _unitCostBase = 0; }
+
             recItems.push({
                 srcProductId: src.id,
                 destProductId: destId,
                 name: src.name || '',
                 unit: src.unit || '',
-                quantity: qty
+                quantity: qty,
+                unitCostBase: _unitCostBase,
+                costBase: _unitCostBase * qty
             });
         });
 
@@ -41836,9 +41999,11 @@ function __hbAndroidOpenApk(uri, src) {
     add('AppLauncher.openUrl', function () {
         return __jouyaAndCall('AppLauncher', 'openUrl', { url: uri });
     });
-    add('Share.share', function () {
-        return __jouyaAndCall('Share', 'share', { title: 'نصبِ بروزرسانی', files: [uri] });
-    });
+    // ⚠ «Share.share» عمداً از زنجیره برداشته شد.
+    //    گزارشِ دستگاهِ ۱.۳.۷ نشان داد این تلاش برگهٔ «اشتراک‌گذاری» (واتساپ، تلگرام، …)
+    //    را باز می‌کند — نه نصب‌کننده را. کاربر جز بستنِ آن کاری نمی‌تواند بکند و
+    //    نتیجه‌اش «Share canceled» است. اشتراک‌گذاریِ فایل هیچ‌وقت APK نصب نمی‌کند،
+    //    پس بودنش در زنجیره فقط یک قدمِ گیج‌کننده بود.
     // ══════════════════════════════════════════════════════════════════════════
     //  ۸) آخرین حلقه — سپردنِ نشانیِ اینترنتی به مرورگرِ سیستم.
     //  ──────────────────────────────────────────────────────────────────────
@@ -41943,7 +42108,13 @@ function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
     // ترتیب مهم است: فایل باید در پوشه‌ای بنشیند که FileProvider اجازهٔ ساختِ
     // content:// از آن را دارد، وگرنه نصب‌کننده فایل را نمی‌خواند. CACHE (حافظهٔ
     // داخلی) امن‌ترین و همیشه‌در‌دسترس‌ترین است و در file_paths پوشش داده شده.
-    var DIRS = ['CACHE', 'EXTERNAL_CACHE', 'EXTERNAL', 'DOCUMENTS', 'DATA'];
+    //  ⚠ ترتیب بر پایهٔ گزارشِ دستگاهِ واقعی عوض شد: پیش از این CACHE اول بود، یعنی فایل
+    //    در /data/user/0/<پکیج>/cache می‌نشست — حافظهٔ داخلی که نصب‌کنندهٔ اندروید بدونِ
+    //    FileProvider نمی‌تواند بخواند، و افزونه «بدونِ خطا» برمی‌گشت و هیچ نمی‌کرد.
+    //    EXTERNAL (حافظهٔ خارجیِ مخصوصِ برنامه) روی هیچ نسخه‌ای مجوز نمی‌خواهد و در
+    //    پیکربندیِ پیش‌فرضِ Capacitor پوشش داده شده است. اگر نشد، دقیقاً مثلِ قبل به
+    //    CACHE برمی‌گردیم، پس هیچ دستگاهی از کار نمی‌افتد.
+    var DIRS = ['EXTERNAL', 'EXTERNAL_CACHE', 'CACHE', 'DOCUMENTS', 'DATA'];
     var tryDir = function (i) {
         if (i >= DIRS.length) return Promise.reject(new Error('ذخیرهٔ فایلِ بروزرسانی ممکن نشد'));
         return Promise.resolve(FS.downloadFile({

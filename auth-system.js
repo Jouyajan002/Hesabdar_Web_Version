@@ -1076,7 +1076,7 @@
                 return;
             }
 
-            AuthUI.showLoading('در حال جستجوی اکانت در سرور ابری...');
+            AuthUI.showLoading('در حال ورود به حساب...');
             const cloudFind = await window.JouyaAuth.login(email, password);
             AuthUI.hideLoading();
 

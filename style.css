@@ -10359,3 +10359,48 @@ body.dark-mode .product-search-wrapper .ble-pen { color: #7c8899; }
         contain-intrinsic-size: auto !important;
     }
 }
+
+/* ── جلوگیری از بازگرداندنِ خودکارِ جای اسکرول توسط مرورگر ──────────────────────
+   مشکل: کاربر فرمی را اسکرول می‌کرد، می‌بست، و دفعهٔ بعد همان فرم از وسط باز
+   می‌شد. علت «scroll anchoring» است: وقتی بخش دوباره نمایان می‌شود، مرورگر
+   جای قبلی را نسبت به یک عنصرِ لنگر برمی‌گردانَد. این خاصیت فقط همان بازگردانی
+   را خاموش می‌کند و هیچ تأثیرِ دیگری بر چیدمان یا اسکرولِ عادی ندارد. */
+html, body { overflow-anchor: none; }
+.section, .bill-layout, .bill-body, .form-container { overflow-anchor: none; }
+
+/* ╔══════════════════════════════════════════════════════════════════════════════╗
+   ║  امور مالی → تبِ «حساب‌ها»: برداشتنِ کانتینرِ اسکرولِ داخلی                     ║
+   ║  ────────────────────────────────────────────────────────────────────────── ║
+   ║  پیش از این، .financial-content-wrapper خودش یک جعبهٔ اسکرول‌دار بود           ║
+   ║  (overflow-y:auto + max-height:calc(100vh-220px) + یک ::after هشتاد پیکسلی).  ║
+   ║  نتیجه: محتوا داخلِ یک قابِ کوتاه اسکرول می‌شد و زیرِ آن قابْ یک نوارِ سفیدِ    ║
+   ║  بی‌استفاده می‌ماند، و صفحه دو اسکرولِ تودرتو داشت.                            ║
+   ║                                                                              ║
+   ║  حالا: قاب برداشته شد، اسکرول به خودِ بخش منتقل شد (یک اسکرول، نه دو تا)، و   ║
+   ║  تنها چیزی که ثابت می‌ماند «نوارِ موجودی تمامی حساب‌ها» است؛ کارت‌های حساب     ║
+   ║  درست زیرِ همان نوار اسکرول می‌شوند. هیچ تب، دکمه یا چیدمانِ دیگری تغییر       ║
+   ║  نمی‌کند و هیچ منطقِ جاوااسکریپتی لمس نشده است.                                ║
+   ╚══════════════════════════════════════════════════════════════════════════════╝ */
+#financial.active .financial-content-wrapper {
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    overflow-y: visible !important;
+    overflow-x: visible !important;
+}
+#financial.active .financial-content-wrapper::after { content: none !important; display: none !important; }
+
+#financial.active {
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+}
+
+/* نوارِ موجودی: ثابت، درست زیرِ نوارِ تب‌ها */
+#financial.active .fin-balance-bar {
+    position: sticky !important;
+    top: 56px;                 /* ارتفاعِ نوارِ تب‌ها در دسکتاپ */
+    z-index: 6;
+    /* ⚠ عمداً background نمی‌گذاریم: نوار پس‌زمینهٔ سرمه‌ایِ خودش را دارد و هر
+       مقداردهیِ تازه ظاهرش را خراب می‌کند. */
+}

@@ -1672,9 +1672,8 @@
                                         </div>
 
                                         <div class="bill-field bill-field-icononly">
-                                            <i class="fas fa-calendar-check bill-field-icon" style="color:#d97706;"></i>
+                                            <i class="fas fa-calendar-check bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ انقضا" style="color:#d97706;" onclick="openDateOnlyCalendarPicker('product-min-expiry-days',this)"></i>
                                             <input type="text" id="product-min-expiry-days" placeholder="تاریخ انقضا" readonly onclick="openDateOnlyCalendarPicker('product-min-expiry-days',this)" style="cursor:pointer;">
-                                            <button type="button" class="bill-inline-btn" onclick="openDateOnlyCalendarPicker('product-min-expiry-days',this)" title="انتخاب تاریخ انقضا" style="color:#d97706;"><i class="fas fa-calendar-check"></i></button>
                                             <button type="button" class="bill-inline-btn" onclick="document.getElementById('product-min-expiry-days').value='';" title="پاک کردن تاریخ" style="color:#64748b;"><i class="fas fa-times"></i></button>
                                         </div>
 
@@ -2548,9 +2547,8 @@
                                             <input type="number" id="purchase-shipping" step="0.01" value="0" placeholder="حمل و نقل" onchange="calculatePurchaseTotal()" oninput="calculatePurchaseTotal()">
                                         </div>
                                         <div class="bill-field bill-field-icononly">
-                                            <i class="fas fa-calendar-check bill-field-icon" style="color:#d97706;"></i>
+                                            <i class="fas fa-calendar-check bill-field-icon bill-field-icon-btn" id="purchase-expiry-calendar-btn" role="button" tabindex="0" title="انتخاب تاریخ انقضا" style="color:#d97706;" onclick="openDateOnlyCalendarPicker('purchase-expiry-date',this)"></i>
                                             <input type="text" id="purchase-expiry-date" class="jalali-date" placeholder="تاریخ انقضا (اختیاری)">
-                                            <button type="button" class="bill-inline-btn" id="purchase-expiry-calendar-btn" onclick="openDateOnlyCalendarPicker('purchase-expiry-date',this)" title="انتخاب تاریخ انقضا" style="color:#d97706;"><i class="fas fa-calendar-check"></i></button>
                                         </div>
                                     </div>
                                     <div class="bill-field bill-field-textarea" style="margin-top:12px;">
