@@ -1,3 +1,4 @@
+
 /**
  * jouya-google-config.js — شناسهٔ کلاینتِ وبِ گوگل
  * ============================================================================
@@ -25,7 +26,7 @@
  */
 (function () {
     'use strict';
-    var WEB_CLIENT_ID = '';   // ← شناسه را این‌جا بگذارید
+    var WEB_CLIENT_ID = '67794969596-73upe74lq9dehlb8bc109ec0o220idbu.apps.googleusercontent.com';   // ← شناسه را این‌جا بگذارید
 
     try {
         if (WEB_CLIENT_ID) {
