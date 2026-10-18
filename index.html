@@ -1820,9 +1820,8 @@
                                             <input type="number" id="service-price" step="0.01" min="0" placeholder="قیمت">
                                         </div>
                                         <div class="bill-field bill-field-icononly">
-                                            <i class="fas fa-calendar-alt bill-field-icon"></i>
+                                            <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('service-date-from',this)"></i>
                                             <input type="text" id="service-date-from" class="jalali-date jalali-date-optional" placeholder="از تاریخ">
-                                            <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('service-date-from',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
                                         </div>
                                     </div>
                                     <!-- ستون چپ — ۵ تا ۸ -->
@@ -1842,9 +1841,8 @@
                                             <select id="service-currency" class="bill-inline-input"></select>
                                         </div>
                                         <div class="bill-field bill-field-icononly">
-                                            <i class="fas fa-calendar-check bill-field-icon"></i>
+                                            <i class="fas fa-calendar-check bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('service-date-to',this)"></i>
                                             <input type="text" id="service-date-to" class="jalali-date jalali-date-optional" placeholder="تا تاریخ">
-                                            <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('service-date-to',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
                                         </div>
                                     </div>
                                 </div>
@@ -1894,9 +1892,8 @@
                                         </select>
                                     </div>
                                     <div class="bill-field bill-field-icononly">
-                                        <i class="fas fa-calendar-alt bill-field-icon"></i>
+                                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('sales-date',this)"></i>
                                         <input type="text" id="sales-date" class="jalali-date" placeholder="تاریخ">
-                                        <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('sales-date',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
                                     </div>
                                     <div class="bill-field bill-field-icononly">
                                         <i class="fas fa-file-signature bill-field-icon"></i>
@@ -2110,9 +2107,8 @@
                                         <select id="sr-currency" onchange="onSaleReturnCurrencyChange()"></select>
                                     </div>
                                     <div class="bill-field bill-field-icononly">
-                                        <i class="fas fa-calendar-alt bill-field-icon"></i>
+                                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('sr-date',this)"></i>
                                         <input type="text" id="sr-date" class="jalali-date" placeholder="تاریخ">
-                                        <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('sr-date',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
                                     </div>
                                     <div class="bill-field bill-field-icononly">
                                         <i class="fas fa-file-signature bill-field-icon"></i>
@@ -2251,9 +2247,8 @@
                                         <select id="pr-currency" onchange="onPurchaseReturnCurrencyChange()"></select>
                                     </div>
                                     <div class="bill-field bill-field-icononly">
-                                        <i class="fas fa-calendar-alt bill-field-icon"></i>
+                                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('pr-date',this)"></i>
                                         <input type="text" id="pr-date" class="jalali-date" placeholder="تاریخ">
-                                        <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('pr-date',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
                                     </div>
                                     <div class="bill-field bill-field-icononly">
                                         <i class="fas fa-file-signature bill-field-icon"></i>
@@ -2377,9 +2372,8 @@
                                         </select>
                                     </div>
                                     <div class="bill-field bill-field-icononly">
-                                        <i class="fas fa-calendar-alt bill-field-icon"></i>
+                                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('purchase-date',this)"></i>
                                         <input type="text" id="purchase-date" class="jalali-date" placeholder="تاریخ">
-                                        <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('purchase-date',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
                                     </div>
                                     <div class="bill-field bill-field-icononly">
                                         <i class="fas fa-file-signature bill-field-icon"></i>
@@ -2617,9 +2611,8 @@
                                         </select>
                                     </div>
                                     <div class="bill-field bill-field-icononly">
-                                        <i class="fas fa-calendar-alt bill-field-icon"></i>
+                                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('receipt-date',this)"></i>
                                         <input type="text" id="receipt-date" class="jalali-date" placeholder="تاریخ">
-                                        <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('receipt-date',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
                                     </div>
                                     <div class="bill-field bill-field-icononly">
                                         <i class="fas fa-file-signature bill-field-icon"></i>
@@ -2762,9 +2755,8 @@
                                         </select>
                                     </div>
                                     <div class="bill-field bill-field-icononly">
-                                        <i class="fas fa-calendar-alt bill-field-icon"></i>
+                                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('payment-date',this)"></i>
                                         <input type="text" id="payment-date" class="jalali-date" placeholder="تاریخ">
-                                        <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('payment-date',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
                                     </div>
                                     <div class="bill-field bill-field-icononly">
                                         <i class="fas fa-file-signature bill-field-icon"></i>
@@ -3403,8 +3395,8 @@
                                     <div class="form-group">
                                         <label for="proforma-date">تاریخ</label>
                                         <div style="position:relative;display:flex;align-items:center;">
-                                        <input type="text" id="proforma-date" class="jalali-date" style="flex:1;padding-left:34px;">
-                                        <button type="button" onclick="openDualCalendarPicker('proforma-date',this)" title="انتخاب تاریخ" style="position:absolute;left:6px;background:transparent;border:none;color:var(--primary,#6366f1);cursor:pointer;padding:4px 6px;font-size:14px;"><i class="fas fa-calendar-alt"></i></button>
+                                        <input type="text" id="proforma-date" class="jalali-date" style="flex:1;padding-right:34px;">
+                                        <button type="button" onclick="openDualCalendarPicker('proforma-date',this)" title="انتخاب تاریخ" style="position:absolute;right:6px;background:transparent;border:none;color:var(--primary,#6366f1);cursor:pointer;padding:4px 6px;font-size:14px;"><i class="fas fa-calendar-alt"></i></button>
                                         </div>
                                     </div>
                                 </div>
@@ -3421,8 +3413,8 @@
                                     <div class="form-group">
                                         <label for="proforma-valid-until">اعتبار تا</label>
                                         <div style="position:relative;display:flex;align-items:center;">
-                                        <input type="text" id="proforma-valid-until" class="jalali-date" placeholder="تاریخ انقضا..." style="flex:1;padding-left:34px;">
-                                        <button type="button" onclick="openDualCalendarPicker('proforma-valid-until',this)" title="انتخاب تاریخ" style="position:absolute;left:6px;background:transparent;border:none;color:var(--primary,#6366f1);cursor:pointer;padding:4px 6px;font-size:14px;"><i class="fas fa-calendar-alt"></i></button>
+                                        <input type="text" id="proforma-valid-until" class="jalali-date" placeholder="تاریخ انقضا..." style="flex:1;padding-right:34px;">
+                                        <button type="button" onclick="openDualCalendarPicker('proforma-valid-until',this)" title="انتخاب تاریخ" style="position:absolute;right:6px;background:transparent;border:none;color:var(--primary,#6366f1);cursor:pointer;padding:4px 6px;font-size:14px;"><i class="fas fa-calendar-alt"></i></button>
                                         </div>
                                     </div>
                                     <div class="form-group">
@@ -3606,8 +3598,8 @@
                                     <div class="form-group">
                                         <label for="return-date">تاریخ *</label>
                                         <div style="position:relative;display:flex;align-items:center;">
-                                        <input type="text" id="return-date" class="jalali-date" required style="flex:1;padding-left:34px;">
-                                        <button type="button" onclick="openDualCalendarPicker('return-date',this)" title="انتخاب تاریخ" style="position:absolute;left:6px;background:transparent;border:none;color:var(--primary,#6366f1);cursor:pointer;padding:4px 6px;font-size:14px;"><i class="fas fa-calendar-alt"></i></button>
+                                        <input type="text" id="return-date" class="jalali-date" required style="flex:1;padding-right:34px;">
+                                        <button type="button" onclick="openDualCalendarPicker('return-date',this)" title="انتخاب تاریخ" style="position:absolute;right:6px;background:transparent;border:none;color:var(--primary,#6366f1);cursor:pointer;padding:4px 6px;font-size:14px;"><i class="fas fa-calendar-alt"></i></button>
                                         </div>
                                     </div>
                                 </div>
@@ -3800,9 +3792,8 @@
                         <select id="expense-currency" class="bill-inline-input"></select>
                     </div>
                     <div class="bill-field bill-field-icononly">
-                        <i class="fas fa-calendar-alt bill-field-icon"></i>
+                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('expense-date',this)"></i>
                         <input type="text" id="expense-date" class="jalali-date" placeholder="تاریخ">
-                        <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('expense-date',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
                     </div>
                     <div class="bill-field bill-field-icononly">
                         <i class="fas fa-money-bill-wave bill-field-icon"></i>
@@ -4094,9 +4085,8 @@
                         <select id="transfer-currency" required></select>
                     </div>
                     <div class="bill-field">
-                        <i class="fas fa-calendar-alt bill-field-icon"></i>
+                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('transfer-datetime',this)"></i>
                         <input type="text" id="transfer-datetime" class="jalali-datetime" placeholder="زمان">
-                        <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('transfer-datetime',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
                     </div>
                 </div>
                 <button type="button" class="bill-more-toggle bill-more-toggle-full" onclick="billToggleMore('transfer')"><i class="fas fa-sliders-h"></i> اطلاعات بیشتر</button>
@@ -4142,9 +4132,8 @@
                         <select id="deposit-currency" required></select>
                     </div>
                     <div class="bill-field">
-                        <i class="fas fa-calendar-alt bill-field-icon"></i>
+                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('deposit-datetime',this)"></i>
                         <input type="text" id="deposit-datetime" class="jalali-datetime" placeholder="زمان">
-                        <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('deposit-datetime',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
                     </div>
                 </div>
                 <button type="button" class="bill-more-toggle bill-more-toggle-full" onclick="billToggleMore('deposit')"><i class="fas fa-sliders-h"></i> اطلاعات بیشتر</button>
@@ -4190,9 +4179,8 @@
                         <select id="withdraw-currency" required></select>
                     </div>
                     <div class="bill-field">
-                        <i class="fas fa-calendar-alt bill-field-icon"></i>
+                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('withdraw-datetime',this)"></i>
                         <input type="text" id="withdraw-datetime" class="jalali-datetime" placeholder="زمان">
-                        <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('withdraw-datetime',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
                     </div>
                 </div>
                 <button type="button" class="bill-more-toggle bill-more-toggle-full" onclick="billToggleMore('withdraw')"><i class="fas fa-sliders-h"></i> اطلاعات بیشتر</button>
@@ -4285,9 +4273,8 @@
                     </div>
 
                     <div class="bill-field">
-                        <i class="fas fa-calendar-alt bill-field-icon"></i>
+                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('cc-datetime',this)"></i>
                         <input type="text" id="cc-datetime" class="jalali-datetime" placeholder="زمان">
-                        <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('cc-datetime',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
                     </div>
 
                     <div class="bill-field">
@@ -4342,9 +4329,8 @@
                             <input type="tel" id="employee-phone" placeholder="شماره تماس" required dir="rtl" style="text-align:right;direction:rtl;">
                         </div>
                         <div class="bill-field bill-field-icononly">
-                            <i class="fas fa-calendar-alt bill-field-icon"></i>
+                            <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('employee-hire-date',this)"></i>
                             <input type="text" id="employee-hire-date" class="jalali-date" placeholder="شروع قرار داد">
-                            <button type="button" class="bill-inline-btn" onclick="openDualCalendarPicker('employee-hire-date',this)" title="انتخاب تاریخ"><i class="fas fa-calendar-alt"></i></button>
                         </div>
                     </div>
                     <div class="product-col product-col-side">
@@ -5167,6 +5153,10 @@
     </div>
 
     <!-- اسکریپت‌ها -->
+    <!-- لایهٔ فشرده‌سازیِ شفافِ حافظهٔ محلی — باید پیش از هر خواننده/نویسندهٔ حافظه
+         بیاید. ترتیبِ بقیهٔ اسکریپت‌ها دست‌نخورده است؛ این فقط به ابتدا افزوده شده.
+         اگر این فایل نباشد، برنامه دقیقاً مثلِ قبل (بدونِ فشرده‌سازی) کار می‌کند. -->
+    <script src="jouya-store.js" onerror="console.warn('jouya-store.js not found — حافظه بدونِ فشرده‌سازی کار می‌کند')"></script>
     <!-- کتابخانه‌های آفلاین از پوشه assets/js -->
     <script src="assets/js/jquery-3.6.0.min.js"></script>
     <script src="assets/js/chart.min.js"></script>
@@ -5353,6 +5343,8 @@
     <!-- سیستم احراز هویت، فعال‌سازی لایسنس و بک‌آپ ایمیل (مستقل) -->
     <script src="auth-system.js" onerror="console.warn('auth-system.js not found')"></script>
     <!-- پشتیبان‌گیری Google Drive (مستقل) -->
+    <!-- شناسهٔ کلاینتِ وبِ گوگل — باید پیش از drive-backup.js بار شود -->
+    <script src="jouya-google-config.js" onerror="console.warn('jouya-google-config.js not found')"></script>
     <script src="drive-backup.js" onerror="console.warn('drive-backup.js not found')"></script>
     <!-- پچ نهایی آپدیت آنی دیتابیس — حتماً آخرین script باشد -->
     <script src="instant-update-fix.js" onerror="console.warn('instant-update-fix.js not found')"></script>

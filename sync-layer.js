@@ -107,10 +107,30 @@
     //   • وقتی Realtime قطع است → هر ۸ ثانیه تا سینک همچنان سریع کار کند
     // این تغییر منطقِ سینک (cursor/incremental/conflict/bootstrap) را دست نمی‌زند؛ فقط فرکانسِ
     // polling را کم می‌کند. نتیجه: تا ~۹۵٪ کاهشِ درخواست‌های بی‌نتیجه و افتِ چشمگیرِ Egress.
-    var POLL_SLOW_MS  = 30000;   // fallback وقتی Realtime سالم/وصل است
-    var POLL_FAST_MS  = 8000;    // fallback وقتی Realtime قطع است
-    var RETRY_MS      = 6000;    // تلاشِ دوبارهٔ صف هنگامِ خطا
-    var BATCH_UPLOAD  = 500;
+    // ── گامِ دوم (کاهشِ شمارِ درخواست، بدونِ از دست‌دادنِ «سینکِ لحظه‌ای») ──────────
+    //  اندازه‌گیریِ واقعی: هر چرخهٔ poll ۱۳ درخواستِ موازی می‌فرستاد (۱۲ جدول + تنظیمات).
+    //  با ۳۰ ثانیه و ۱۲ کاربر ≈ ۱۰۶٬۰۰۰ درخواست در روز → همان Egress/Logِ پرشده.
+    //  مسیرِ «لحظه‌ای» هیچ‌وقت polling نبوده: ثبتِ معامله روی دستگاهِ A → push (۱۲۰ms) →
+    //  Realtime (WebSocket) → دستگاهِ B یک pull فوری می‌زند. polling فقط تورِ ایمنی است.
+    //  پس سه اصلاح اعمال شد و هیچ‌کدام مسیرِ لحظه‌ای را لمس نمی‌کند:
+    //    ۱) وقتی برنامه پنهان/مینیمایز است pollِ داده کاملاً می‌ایستد (Realtime باز می‌ماند).
+    //    ۲) وقتی Realtime «سالم» است فاصلهٔ poll ۵ دقیقه می‌شود (به‌جای ۳۰ ثانیه).
+    //    ۳) جدول‌های کم‌تغییر فقط هر چند چرخه یک‌بار واکشی می‌شوند.
+    //  نکتهٔ مهمِ ایمنی: «سالم» یعنی فقط باز بودنِ سوکت کافی نیست — پیوستن به کانال باید
+    //  تأیید شده باشد و پیام/ضربان تازه رسیده باشد؛ وگرنه فوراً به ۸ ثانیه برمی‌گردیم.
+    var POLL_SLOW_MS   = 300000;  // ۵ دقیقه — پشتیبان، وقتی Realtime سالم است
+    var POLL_FAST_MS   = 8000;    // بدونِ Realtime (مثلِ قبل)
+    var POLL_HIDDEN_MS = 900000;  // پنهان + Realtime ناسالم → ضربانِ ایمنیِ ۱۵ دقیقه‌ای
+    var RT_STALE_MS    = 90000;   // بی‌خبریِ بیش از این = Realtime ناسالم
+    var RETRY_MS       = 6000;    // تلاشِ دوبارهٔ صف هنگامِ خطا
+    var BATCH_UPLOAD   = 500;
+
+    // جدول‌هایی که در عملِ روزمره به‌ندرت عوض می‌شوند. هر تغییرِ واقعیِ آن‌ها باز هم
+    // «لحظه‌ای» از Realtime می‌رسد (رویدادِ Realtime یک pullِ کامل می‌زند، نه lean)؛
+    // این فهرست فقط جلوی واکشیِ بی‌نتیجه در چرخه‌های پشتیبان را می‌گیرد.
+    var COLD_TABLES = { currencies: 1, exchange_rates: 1, warehouses: 1, services: 1, warehouse_transfers: 1 };
+    var COLD_EVERY_RT = 10;   // Realtime سالم → هر ۱۰ چرخه (هر ۵۰ دقیقه)
+    var COLD_EVERY_NO = 3;    // Realtime قطع → هر ۳ چرخه (هر ۲۴ ثانیه)
 
     // ===========================================================================
     //  ابزارِ محلی
@@ -120,6 +140,34 @@
     function readArray(key) { try { var v = JSON.parse(LS_get(key) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
     function writeArray(key, arr) { LS_set(key, JSON.stringify(arr || [])); }
     function nowIso() { return new Date().toISOString(); }
+
+    // ── cursorِ جداگانه برای هر جدول ───────────────────────────────────────────────
+    //  چرا لازم است: اگر بخواهیم بعضی جدول‌ها را در بعضی چرخه‌ها واکشی نکنیم ولی cursorِ
+    //  مشترک جلو برود، تغییراتِ همان جدول‌ها برای همیشه از قلم می‌افتند (از دست رفتنِ داده).
+    //  پس هر جدول cursorِ خودش را دارد و فقط وقتی جلو می‌رود که واقعاً واکشی شده باشد.
+    //  سازگاری با نصبِ قبلی: بارِ اول همهٔ cursorها از cursorِ مشترکِ موجود مقداردهی
+    //  می‌شوند، پس نه چیزی دوباره دانلود می‌شود و نه چیزی جا می‌ماند.
+    var TCUR_KEY = 'jouya_sync_cursors';
+    var EPOCH    = '1970-01-01T00:00:00Z';
+    function allSyncTables() { return COLLECTIONS.map(function (c) { return c.table; }).concat([STORE_SETTINGS_TABLE]); }
+    function tcurRead() {
+        var m; try { m = JSON.parse(LS_get(TCUR_KEY) || '{}'); } catch (e) { m = {}; }
+        if (!m || typeof m !== 'object' || Array.isArray(m)) m = {};
+        var g = LS_get(CURSOR_KEY) || EPOCH, t = allSyncTables();
+        for (var i = 0; i < t.length; i++) if (typeof m[t[i]] !== 'string' || !m[t[i]]) m[t[i]] = g;
+        return m;
+    }
+    function tcurWrite(m) {
+        LS_set(TCUR_KEY, JSON.stringify(m || {}));
+        // cursorِ مشترک را روی «کمینهٔ» cursorها نگه می‌داریم تا هر کدِ قدیمی که آن را
+        // بخواند هرگز جلوتر از واقعیت نباشد (محافظه‌کارانه = بدونِ از دست‌رفتنِ داده).
+        try {
+            var t = allSyncTables(), min = null;
+            for (var i = 0; i < t.length; i++) { var v = m[t[i]] || EPOCH; if (min === null || v < min) min = v; }
+            if (min) LS_set(CURSOR_KEY, min);
+        } catch (e) {}
+    }
+    function tcurReset() { try { localStorage.removeItem(TCUR_KEY); } catch (e) {} LS_set(CURSOR_KEY, EPOCH); }
 
     // ===========================================================================
     //  پاک‌سازیِ تنظیمات پیش از سینک:
@@ -247,6 +295,14 @@
     }
     // pull تعارض‌های ابری و ادغام در نمای محلی (dedup با conflict_key). Remote را دوباره
     // به‌عنوان تعارضِ جدید ثبت نمی‌کند و دوباره push نمی‌کند (synced:true) → بدونِ loop/Duplicate.
+    var _lastConflictPull = 0;
+    var CONFLICT_MIN_MS = 300000;   // حداکثر هر ۵ دقیقه یک‌بار
+    function pullConflictsThrottled(lean) {
+        var now = Date.now();
+        if (lean && (now - _lastConflictPull) < CONFLICT_MIN_MS) return Promise.resolve(0);
+        _lastConflictPull = now;
+        return pullConflicts();
+    }
     function pullConflicts() {
         if (!workspaceId) return Promise.resolve(0);
         return ensureToken().then(function () {
@@ -872,7 +928,11 @@
     function stripDevice(recordId) { var i = recordId.indexOf(':'); return i >= 0 ? recordId.slice(i + 1) : recordId; }
 
     var _pullInFlight = false;
-    function pullNow() {
+    var _pollTick = 0;
+    // opts.lean = true فقط در چرخه‌های پشتیبان به کار می‌رود و جدول‌های کم‌تغییر را
+    // هر چند چرخه یک‌بار می‌خواند. هر pullِ دیگری (Realtime، bootstrap، آنلاین‌شدن،
+    // بازگشت از حالتِ پنهان، فراخوانیِ دستی) کامل است و هیچ جدولی را جا نمی‌اندازد.
+    function pullNow(opts) {
         // ⚠ عمداً هیچ گاردِ «فقط محلی» این‌جا نیست: دانلود از ابرِ خودِ کاربر هرگز داده‌ای
         // را فاش نمی‌کند و متوقف‌کردنش باعثِ «حسابِ خالی» می‌شد (bootstrap هم روی همین
         // تابع ساخته شده). محافظت فقط در pushNow/pushConflicts اعمال می‌شود.
@@ -883,26 +943,52 @@
         if (!online || !workspaceId) return Promise.resolve(0);
         if (_pullInFlight) return Promise.resolve(0);   // از هم‌پوشانیِ pullها جلوگیری کن
         _pullInFlight = true;
-        var cursor = LS_get(CURSOR_KEY) || '1970-01-01T00:00:00Z';
+        var lean = !!(opts && opts.lean);
+        if (lean) _pollTick++;
+        var cursors = tcurRead();
+        var coldEvery = rtHealthy() ? COLD_EVERY_RT : COLD_EVERY_NO;
+        // opts.only = فهرستِ جدول‌هایی که Realtime دقیقاً نامشان را داده است. چون هر جدول
+        // cursorِ خودش را دارد، واکشیِ هدفمند هیچ چیزی را جا نمی‌اندازد (cursorِ بقیه تکان
+        // نمی‌خورد). اگر نامِ ناشناخته‌ای بیاید، به pullِ کامل برمی‌گردیم.
+        var only = (opts && opts.only && opts.only.length) ? opts.only : null;
+        var tables = allSyncTables().filter(function (t) {
+            if (only) return only.indexOf(t) >= 0;
+            if (!lean) return true;
+            if (!COLD_TABLES[t]) return true;
+            return (_pollTick % coldEvery) === 0;
+        });
+        if (only && !tables.length) tables = allSyncTables();
         return ensureToken().then(function () {
             var incoming = {};   // table -> [records]
-            var maxU = cursor;
-            // همهٔ جدول‌ها را «موازی» واکشی کن (نه پشتِ‌سرهم) — تأخیرِ pull از ~۱۴×RTT به ~۱×RTT می‌رسد.
-            var tables = COLLECTIONS.map(function (c) { return c.table; }).concat([STORE_SETTINGS_TABLE]);
+            var maxU = {};       // table -> بیشینهٔ updated_atِ همین جدول
+            // جدول‌ها را «موازی» واکشی کن (نه پشتِ‌سرهم) — تأخیرِ pull ~۱×RTT می‌ماند.
             return Promise.all(tables.map(function (table) {
-                return Sb.pullSince(table, workspaceId, cursor, 1000).then(function (recs) {
+                var since = cursors[table] || EPOCH;
+                return Sb.pullSince(table, workspaceId, since, 1000).then(function (recs) {
                     if (recs && recs.length) {
                         incoming[table] = recs;
-                        recs.forEach(function (r) { if (r.updated_at > maxU) maxU = r.updated_at; });
+                        var mx = since;
+                        recs.forEach(function (r) { if (r.updated_at > mx) mx = r.updated_at; });
+                        maxU[table] = mx;
+                    } else {
+                        maxU[table] = since;   // بدونِ تغییر — cursor همان‌جا می‌ماند
                     }
-                }).catch(function () { /* یک جدول خطا داد؛ بقیه ادامه دهند */ });
+                }).catch(function () { /* یک جدول خطا داد؛ cursorِ آن جلو نمی‌رود */ });
             })).then(function () {
                 var applied = applyIncoming(incoming);
-                if (maxU > cursor) LS_set(CURSOR_KEY, maxU);
+                // cursor فقط برای جدول‌هایی جلو می‌رود که واقعاً و بدونِ خطا واکشی شدند.
+                var moved = false;
+                Object.keys(maxU).forEach(function (t) {
+                    if (maxU[t] && maxU[t] > (cursors[t] || EPOCH)) { cursors[t] = maxU[t]; moved = true; }
+                });
+                if (moved || LS_get(TCUR_KEY) == null) tcurWrite(cursors);
                 if (applied > 0) { refreshApp(); log('pull:', applied, 'رکورد اعمال شد'); }
                 // تعارض‌ها را جدا و «بدونِ نگه‌داشتنِ pull» همگام کن: ابتدا محلی‌های همگام‌نشده را
                 // push، سپس ابری‌ها را pull/merge (idempotent با conflict_key، بدونِ loop).
-                pushConflicts().then(function () { return pullConflicts(); });
+                // لاگِ تعارض یک ابزارِ بازبینی است، نه مسیرِ داده: دانلودش هر بار یک
+                // درخواستِ کاملِ اضافه بود (چهاردهمین درخواستِ هر چرخه). آپلود فوری
+                // می‌ماند (مهم است)، ولی دانلود حداکثر هر ۵ دقیقه یک‌بار انجام می‌شود.
+                pushConflicts().then(function () { return pullConflictsThrottled(lean); });
                 return applied;
             });
         }).catch(function (e) { warn('pull ناموفق:', e.message); return 0; })
@@ -1081,20 +1167,58 @@
         scheduleNextPoll();  // fallback با فاصلهٔ تطبیقی (نظر به وضعیتِ Realtime)
         log('حلقهٔ سینک شروع شد (poll تطبیقی: Realtime-on', POLL_SLOW_MS, 'ms / Realtime-off', POLL_FAST_MS, 'ms)');
     }
-    // زمان‌بندِ تطبیقیِ polling: اگر WebSocketِ Realtime باز باشد با فاصلهٔ زیاد (کم‌مصرف)،
-    // وگرنه با فاصلهٔ کم اجرا می‌شود. با setTimeoutِ بازگشتی تا فاصله در هر چرخه بازارزیابی شود.
-    function scheduleNextPoll() {
-        var wsOpen = !!(wsAccel && wsAccel.readyState === 1);   // 1 = WebSocket.OPEN
-        var delay = wsOpen ? POLL_SLOW_MS : POLL_FAST_MS;
-        pollTimer = setTimeout(function () {
-            if (online) { pushNow(); pullNow(); }
-            scheduleNextPoll();
-        }, delay);
+    // ── سلامتِ Realtime ──────────────────────────────────────────────────────────
+    //  «باز بودنِ سوکت» کافی نیست: ممکن است سوکت باز باشد ولی پیوستن به کانال رد شده
+    //  باشد (RLS/توکن) و هیچ رویدادی هرگز نیاید. در آن حالت اگر فاصلهٔ poll را ۵ دقیقه
+    //  کنیم سینک عملاً می‌میرد. پس «سالم» یعنی: سوکت باز + joinِ تأییدشده + خبرِ تازه.
+    var rtJoined = false, rtLastMsg = 0, rtRetry = 0, rtTimer = null;
+    var _rtPending = {}, _rtPendingAll = false;
+    function rtHealthy() {
+        return !!(wsAccel && wsAccel.readyState === 1 && rtJoined && (Date.now() - rtLastMsg) < RT_STALE_MS);
     }
+    function isHidden() {
+        try { return (typeof document !== 'undefined') && document.visibilityState === 'hidden'; } catch (e) { return false; }
+    }
+
+    // زمان‌بندِ تطبیقیِ polling. سه حالت:
+    //   • پنهان + Realtime سالم → هیچ pollی (Realtime خودش همه‌چیز را می‌آورد)
+    //   • پنهان + Realtime ناسالم → ضربانِ ایمنیِ ۱۵ دقیقه‌ای (برنامه هرگز کور نمی‌ماند)
+    //   • روی صفحه → ۵ دقیقه با Realtimeِ سالم، ۸ ثانیه بدونِ آن
+    function pollDelay() {
+        if (isHidden()) return rtHealthy() ? 0 : POLL_HIDDEN_MS;   // 0 = فعلاً نزن
+        return rtHealthy() ? POLL_SLOW_MS : POLL_FAST_MS;
+    }
+    function scheduleNextPoll() {
+        if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+        var delay = pollDelay();
+        var wait = delay || POLL_HIDDEN_MS;   // در حالتِ «نزن» فقط دوباره ارزیابی می‌کنیم
+        pollTimer = setTimeout(function () {
+            pollTimer = null;
+            if (online && pollDelay() > 0) { pushNow(); pullNow({ lean: true }); }
+            scheduleNextPoll();
+        }, wait);
+    }
+    // بازگشت به صفحه: فوراً همگام شو و اگر Realtime افتاده بود دوباره وصل کن.
+    function onVisible() {
+        if (isHidden()) { scheduleNextPoll(); return; }
+        if (!CFG.liveSyncEnabled || !workspaceId || isTrialActive()) return;
+        if (!rtHealthy()) connectRealtime();
+        if (online) { pushNow(); pullNow(); }   // pullِ کامل، نه lean
+        scheduleNextPoll();
+    }
+    if (typeof document !== 'undefined' && document.addEventListener) {
+        document.addEventListener('visibilitychange', onVisible);
+    }
+    if (typeof window !== 'undefined' && window.addEventListener) {
+        window.addEventListener('focus', function () { if (!isHidden()) onVisible(); });
+    }
+
     function stopLoops() {
         if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
         if (retryTimer) { clearTimeout(retryTimer); retryTimer = null; }
-        if (wsAccel && wsAccel.close) { try { wsAccel.close(); } catch (e) {} wsAccel = null; }
+        if (rtTimer) { clearTimeout(rtTimer); rtTimer = null; }
+        rtJoined = false; rtLastMsg = 0; rtRetry = 0;
+        if (wsAccel && wsAccel.close) { try { wsAccel.__hbNoRetry = true; wsAccel.close(); } catch (e) {} wsAccel = null; }
     }
     function queueRetry() {
         if (retryTimer) return;
@@ -1102,7 +1226,7 @@
     }
 
     if (typeof window !== 'undefined' && window.addEventListener) {
-        window.addEventListener('online',  function () { online = true;  log('آنلاین شد — سینک از سر گرفته می‌شود'); pushNow(); pullNow(); });
+        window.addEventListener('online',  function () { online = true;  log('آنلاین شد — سینک از سر گرفته می‌شود'); if (!rtHealthy()) connectRealtime(); pushNow(); pullNow(); scheduleNextPoll(); });
         window.addEventListener('offline', function () { online = false; log('آفلاین شد — تغییرات محلی صف می‌شوند'); });
     }
 
@@ -1125,9 +1249,13 @@
         try {
             var ref = Sb.url.replace(/^https?:\/\//, '').split('.')[0];
             var wsUrl = Sb.url.replace(/^http/, 'ws') + '/realtime/v1/websocket?apikey=' + encodeURIComponent(Sb.anon) + '&vsn=1.0.0';
+            if (wsAccel && (wsAccel.readyState === 0 || wsAccel.readyState === 1)) return;   // از اتصالِ دوگانه جلوگیری کن
+            if (rtTimer) { clearTimeout(rtTimer); rtTimer = null; }
             var ws = new WebSocket(wsUrl);
             wsAccel = ws;
+            rtJoined = false; rtLastMsg = Date.now();
             var refN = 0;
+            var joinRef = null;
             var hb = null;
             ws.onopen = function () {
                 // join روی کانالِ postgres_changes برای این workspace
@@ -1137,7 +1265,7 @@
                     payload: { config: { postgres_changes: COLLECTIONS.map(function (c) {
                         return { event: '*', schema: 'public', table: c.table, filter: 'workspace_id=eq.' + workspaceId };
                     }).concat([{ event: '*', schema: 'public', table: STORE_SETTINGS_TABLE, filter: 'workspace_id=eq.' + workspaceId }]) } },
-                    ref: String(++refN)
+                    ref: String(joinRef = ++refN)
                 };
                 // احراز هویتِ کانال با توکنِ کاربر (برای RLS)
                 if (SESSION && SESSION.access_token) {
@@ -1150,17 +1278,50 @@
                 log('Realtime وصل شد');
             };
             ws.onmessage = function (evt) {
-                // هر پیامِ تغییرِ داده → یک pull فوری (near-instant)
+                rtLastMsg = Date.now();
                 try {
                     var msg = JSON.parse(evt.data);
-                    if (msg && (msg.event === 'postgres_changes' || msg.event === 'INSERT' || msg.event === 'UPDATE' || msg.event === 'DELETE')) {
+                    if (!msg) return;
+                    // تأییدِ پیوستن به کانال: تا این‌جا «سالم» حساب نمی‌شود.
+                    if (msg.event === 'phx_reply' && msg.ref && String(msg.ref) === String(joinRef)) {
+                        var okJoin = !!(msg.payload && msg.payload.status === 'ok');
+                        rtJoined = okJoin;
+                        if (okJoin) { rtRetry = 0; log('Realtime: کانال تأیید شد — poll به حالتِ کم‌مصرف می‌رود'); }
+                        else warn('Realtime: پیوستن به کانال رد شد — poll سریع می‌ماند');
+                        scheduleNextPoll();   // فاصله را با وضعیتِ تازه بازارزیابی کن
+                        return;
+                    }
+                    if (msg.event === 'phx_error' || msg.event === 'phx_close') { rtJoined = false; scheduleNextPoll(); return; }
+                    // هر پیامِ تغییرِ داده → یک pullِ کامل و فوری (near-instant)
+                    if (msg.event === 'postgres_changes' || msg.event === 'INSERT' || msg.event === 'UPDATE' || msg.event === 'DELETE') {
+                        // اگر خودِ رویداد نامِ جدول را بدهد، فقط همان جدول واکشی می‌شود
+                        // (۱ درخواست به‌جای ۱۴). نامِ ناشناخته → pullِ کامل.
+                        var tb = null;
+                        try { tb = (msg.payload && (msg.payload.table || (msg.payload.data && msg.payload.data.table))) || null; } catch (e2) { tb = null; }
+                        if (tb && (KEY_BY_TABLE[tb] || tb === STORE_SETTINGS_TABLE)) _rtPending[tb] = 1; else _rtPendingAll = true;
                         clearTimeout(window._syncPullDebounce);
-                        window._syncPullDebounce = setTimeout(function () { pullNow(); }, 150);
+                        window._syncPullDebounce = setTimeout(function () {
+                            var list = Object.keys(_rtPending);
+                            var all = _rtPendingAll;
+                            _rtPending = {}; _rtPendingAll = false;
+                            if (all || !list.length) pullNow(); else pullNow({ only: list });
+                        }, 150);
                     }
                 } catch (e) {}
             };
-            ws.onclose = function () { if (hb) clearInterval(hb); if (wsAccel === ws) wsAccel = null; /* polling ادامه دارد */ };
-            ws.onerror = function () { /* بی‌صدا؛ polling جای‌گزین است */ };
+            ws.onclose = function () {
+                if (hb) clearInterval(hb);
+                if (wsAccel === ws) { wsAccel = null; rtJoined = false; }
+                // وصلِ دوباره با عقب‌نشینیِ نمایی. بدونِ این، یک قطعیِ لحظه‌ایِ شبکه
+                // «سینکِ لحظه‌ای» را تا راه‌اندازیِ بعدیِ برنامه از بین می‌برد.
+                if (!ws.__hbNoRetry && CFG.liveSyncEnabled && workspaceId && !isTrialActive()) {
+                    var wait = Math.min(60000, 3000 * Math.pow(2, Math.min(rtRetry++, 4)));
+                    if (rtTimer) clearTimeout(rtTimer);
+                    rtTimer = setTimeout(function () { rtTimer = null; if (online) connectRealtime(); }, wait);
+                }
+                scheduleNextPoll();   // تا وصلِ دوباره، poll سریع می‌شود
+            };
+            ws.onerror = function () { /* بی‌صدا؛ onclose کارِ وصلِ دوباره را می‌کند */ };
         } catch (e) { /* WebSocket نشد؛ polling کافی است */ }
     }
 
@@ -1209,7 +1370,7 @@
         try { maybeReleaseLocalOnly(); } catch (e) {}
         if (isLocalOnly()) warn('bootstrap در حالتِ «فقط محلی»: دانلود انجام می‌شود، آپلود نه.');
         // ۱) دانلودِ کاملِ ابر از ابتدا → داده‌های ابری وارد لوکال می‌شوند (فقط افزودن/به‌روزرسانی).
-        LS_set(CURSOR_KEY, '1970-01-01T00:00:00Z');
+        tcurReset();   // cursorهای هر جدول هم به ابتدا برمی‌گردند (دانلودِ کاملِ ابر)
         return pullNow().then(function (downloaded) {
             // ۲) آپلودِ رکوردهای فقط‌محلی (detectChanges در برابرِ snapshotِ ساخته‌شده از pull).
             return pushNow().then(function () {
@@ -1262,7 +1423,7 @@
             var allOk = Object.keys(verify).every(function (t) { return verify[t].ok; });
             if (allOk) {
                 snapWrite(seedSnap);                       // snapshot اولیه = وضعیتِ آپلودشده
-                LS_set(CURSOR_KEY, '1970-01-01T00:00:00Z'); // اولین pull همهٔ دادهٔ ابری (شاملِ دستگاه‌های دیگر) را دانلود کند؛ رکوردهای خودی با echo رد می‌شوند
+                tcurReset(); // اولین pull همهٔ دادهٔ ابری (شاملِ دستگاه‌های دیگر) را دانلود کند؛ رکوردهای خودی با echo رد می‌شوند
                 LS_set('jouya_sync_migrated', 'true');
                 LS_set('jouya_sync_workspace', wsId);
                 log('✅ مهاجرت کامل و تأیید شد', verify);
@@ -1393,6 +1554,21 @@
         stop: stopLoops,
         pushNow: pushNow,
         pullNow: pullNow,
+
+        // گزارشِ کوتاهِ وضعیتِ مصرف — برای بازبینی، بدونِ هیچ اثری بر منطق.
+        pollInfo: function () {
+            return {
+                realtimeHealthy: rtHealthy(),
+                realtimeJoined: rtJoined,
+                socketState: wsAccel ? wsAccel.readyState : -1,
+                hidden: isHidden(),
+                nextPollMs: pollDelay(),
+                tick: _pollTick,
+                coldEvery: rtHealthy() ? COLD_EVERY_RT : COLD_EVERY_NO,
+                coldTables: Object.keys(COLD_TABLES),
+                cursors: tcurRead()
+            };
+        },
 
         _sb: Sb,
         _detectChanges: detectChanges,

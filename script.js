@@ -280,6 +280,97 @@ function sortNewestFirst(a, b) {
 }
 
 // ════════════════════════════════════════════════════════════════════════
+//  کلیدِ زمانیِ گزارش‌ها  (__hbRepChronoKey)
+//  ──────────────────────────────────────────────────────────────────────
+//  فقط و فقط برای «چیدمانِ سطرهای» گزارشِ معاملاتِ شخص و گزارشِ معاملاتِ حساب.
+//  هیچ محاسبهٔ مالی‌ای از این تابع استفاده نمی‌کند و هیچ بخشِ دیگری آن را صدا نمی‌زند.
+//
+//  چرا لازم شد: تاریخ‌ها به شکلِ «1405/03/26 3:59:38 PM» ذخیره می‌شوند و مقایسهٔ
+//  رشته‌ای (localeCompare) ساعت را اشتباه می‌چیند — مثلاً «9:05 AM» را بعد از
+//  «11:40 AM» می‌گذارد و «1:15 PM» را قبل از «9:05 AM». افزون بر این، لاگ‌های صندوق
+//  createdAt میلادیِ ISO دارند و با رشته‌های جلالی اصلاً قابلِ مقایسه نیستند، برای همین
+//  در گزارشِ حساب همهٔ آن‌ها ته‌نشین می‌شدند.
+//  این تابع هر دو شکل را به یک عددِ یکتا و مقایسه‌پذیر تبدیل می‌کند.
+function __hbG2J(gy, gm, gd) {
+    try {
+        var gdm = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+        if ((gy % 4 === 0 && gy % 100 !== 0) || gy % 400 === 0) gdm[2] = 29;
+        var gy2 = gy - 1600, gm2 = gm - 1, gd2 = gd - 1, i;
+        var gDay = 365 * gy2 + Math.floor((gy2 + 3) / 4) - Math.floor((gy2 + 99) / 100) + Math.floor((gy2 + 399) / 400);
+        for (i = 1; i < gm; i++) gDay += gdm[i];
+        gDay += gd2;
+        var jDay = gDay - 79;
+        var jNp = Math.floor(jDay / 12053); jDay %= 12053;
+        var jy = 979 + 33 * jNp + 4 * Math.floor(jDay / 1461);
+        jDay %= 1461;
+        if (jDay >= 366) { jy += Math.floor((jDay - 1) / 365); jDay = (jDay - 1) % 365; }
+        var jdm = [31, 31, 31, 31, 31, 31, 30, 30, 30, 30, 30, 29];
+        for (i = 0; i < 12 && jDay >= jdm[i]; i++) jDay -= jdm[i];
+        return [jy, i + 1, jDay + 1];
+    } catch (e) { return [0, 1, 1]; }
+}
+function __hbRepOneKey(s) {
+    if (s == null) return null;
+    s = String(s).trim();
+    if (!s) return null;
+    var y, mo, d, hh = 0, mi = 0, se = 0;
+    var iso = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2}))?)?/.exec(s);
+    if (iso) {
+        var dt = new Date(s);
+        if (!isNaN(dt.getTime())) {
+            var j = __hbG2J(dt.getFullYear(), dt.getMonth() + 1, dt.getDate());
+            y = j[0]; mo = j[1]; d = j[2]; hh = dt.getHours(); mi = dt.getMinutes(); se = dt.getSeconds();
+        } else {
+            var j2 = __hbG2J(+iso[1], +iso[2], +iso[3]);
+            y = j2[0]; mo = j2[1]; d = j2[2];
+            hh = +(iso[4] || 0); mi = +(iso[5] || 0); se = +(iso[6] || 0);
+        }
+    } else {
+        var m = /(\d{3,4})[\/\-](\d{1,2})[\/\-](\d{1,2})/.exec(s);
+        if (!m) return null;
+        y = +m[1]; mo = +m[2]; d = +m[3];
+        var rest = s.slice(m.index + m[0].length);
+        var t = /(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/.exec(rest);
+        if (t) {
+            hh = +t[1]; mi = +t[2]; se = +(t[3] || 0);
+            var pm = null;
+            if (/\b(PM|pm)\b/.test(s) || s.indexOf('بعد از ظهر') > -1 || s.indexOf('ب.ظ') > -1) pm = true;
+            else if (/\b(AM|am)\b/.test(s) || s.indexOf('قبل از ظهر') > -1 || s.indexOf('ق.ظ') > -1) pm = false;
+            if (pm === true && hh < 12) hh += 12;
+            else if (pm === false && hh === 12) hh = 0;
+        }
+    }
+    if (!(y > 0) || !(mo >= 1 && mo <= 12) || !(d >= 1 && d <= 31)) return null;
+    if (!(hh >= 0 && hh < 24)) hh = 0;
+    if (!(mi >= 0 && mi < 60)) mi = 0;
+    if (!(se >= 0 && se < 60)) se = 0;
+    return ((((y * 13 + mo) * 32 + d) * 24 + hh) * 60 + mi) * 60 + se;
+}
+// primary = همان رشته‌ای که در ستونِ «تاریخ» نشان داده می‌شود؛ secondary فقط پشتیبان است.
+function __hbRepChronoKey(primary, secondary, tiebreak) {
+    var k = __hbRepOneKey(primary);
+    if (k === null) k = __hbRepOneKey(secondary);
+    if (k === null) k = -1;
+    return k;
+}
+// مقایسه‌گرِ «قدیمی → جدید». مانده‌های در جریان باید به همین ترتیب محاسبه شوند؛
+// وارونه‌سازی فقط هنگامِ چاپِ سطرها انجام می‌شود، نه هنگامِ محاسبه.
+function __hbRepAsc(a, b) {
+    var ka = __hbRepChronoKey(a && a.date, a && a.createdAt);
+    var kb = __hbRepChronoKey(b && b.date, b && b.createdAt);
+    if (ka !== kb) return ka - kb;
+    var ca = __hbRepChronoKey(a && a.createdAt, null);
+    var cb = __hbRepChronoKey(b && b.createdAt, null);
+    if (ca !== cb) return ca - cb;
+    var ia = Number(a && a.id) || 0, ib = Number(b && b.id) || 0;
+    return ia - ib;
+}
+if (typeof window !== 'undefined') {
+    window.__hbRepChronoKey = __hbRepChronoKey;
+    window.__hbRepAsc = __hbRepAsc;
+}
+
+// ════════════════════════════════════════════════════════════════════════
 //  مدیریتِ «مقصدِ بازگشت» پس از ثبت/ویرایش/برگشتِ فرم‌ها
 //  ──────────────────────────────────────────────────────────────────────
 //  فقط برای هدایتِ صفحه است و هیچ اثری بر منطقِ محاسبات ندارد.
@@ -2834,7 +2925,45 @@ if (fab) {
 }
 
         // به‌روزرسانی عنوان صفحه و فراخوانی توابع مربوطه
+/**
+ * بازنشانیِ اسکرول هنگامِ ورود به هر بخش.
+ * مشکل: کاربر فرمی را اسکرول می‌کرد، می‌بست، و دفعهٔ بعد همان فرم از وسط باز
+ * می‌شد. علت این است که بخش‌ها از DOM حذف نمی‌شوند و مرورگر جای اسکرولِ هر
+ * ظرفِ اسکرول‌شونده را نگه می‌دارد. این‌جا فقط «جای اسکرول» صفر می‌شود؛ هیچ
+ * داده، فیلد یا منطقی لمس نمی‌شود.
+ */
+function __hbResetSectionScroll(sectionId) {
+    try {
+        var sec = document.getElementById(sectionId);
+        if (!sec) return;
+        // فقط فرم‌ها. لیست‌ها حافظهٔ اسکرولِ عمدیِ خودشان را دارند و نباید صفر شوند.
+        if (typeof _jqIsFormSection === 'function' && !_jqIsFormSection(sectionId)) return;
+        var zero = function (el) { try { if (el) { el.scrollTop = 0; el.scrollLeft = 0; } } catch (e) {} };
+        zero(sec);
+        var kids = sec.querySelectorAll('.bill-layout, .bill-body, .product-grid, .form-container, .section-body, .table-container, .modal-body, [data-scroll]');
+        for (var i = 0; i < kids.length; i++) zero(kids[i]);
+        zero(document.scrollingElement || document.documentElement);
+        zero(document.body);
+        var main = document.querySelector('.main-content, .content-area, #app-main');
+        zero(main);
+    } catch (e) {}
+}
+if (typeof window !== 'undefined') window.__hbResetSectionScroll = __hbResetSectionScroll;
+
 const pageTitle = document.getElementById('page-title');
+        try {
+            __hbResetSectionScroll(sectionId);
+            // یک بار هم پس از نمایان‌شدنِ بخش: پیش از آن، ظرفِ پنهان اسکرول نمی‌پذیرد
+            // و مرورگر پس از نمایش جای قبلی را برمی‌گرداند.
+            requestAnimationFrame(function () {
+                try { __hbResetSectionScroll(sectionId); } catch (e) {}
+                requestAnimationFrame(function () { try { __hbResetSectionScroll(sectionId); } catch (e) {} });
+            });
+            // مرورگر با «لنگرِ اسکرول» جای قبلی را پس از چیده‌شدنِ دوبارهٔ بخش
+            // برمی‌گردانَد؛ یک بازنشانیِ کوتاهِ دیگر آن را خنثی می‌کند.
+            setTimeout(function () { try { __hbResetSectionScroll(sectionId); } catch (e) {} }, 60);
+            setTimeout(function () { try { __hbResetSectionScroll(sectionId); } catch (e) {} }, 200);
+        } catch (e) {}
         if (pageTitle) {
             switch (sectionId) {
                 case 'dashboard':
@@ -3065,17 +3194,34 @@ const storeInfo = document.querySelector('.store-info-header');
 // دست نمی‌خورد. اسکرولِ واقعیِ برنامه روی خودِ سند است، و بخشِ «امور مالی» استثناست
 // (اسکرولش داخلِ .financial-content-wrapper است) که همان هم پوشش داده می‌شود.
 var _jqScrollMem = {};
+/**
+ * آیا این بخش یک «فرم» است؟
+ * حافظهٔ اسکرول برای لیست‌ها مفید است (کاربر به همان ردیف برمی‌گردد) ولی برای
+ * فرم‌ها آزاردهنده: فرمِ «خدمت جدید» از وسط باز می‌شد. پس فرم‌ها همیشه از بالا
+ * باز می‌شوند و رفتارِ لیست‌ها دست‌نخورده می‌مانَد.
+ */
+function _jqIsFormSection(sectionId) {
+    try {
+        if (!sectionId) return false;
+        if (/form/i.test(String(sectionId))) return true;
+        var sec = document.getElementById(sectionId);
+        return !!(sec && sec.querySelector && sec.querySelector('form'));
+    } catch (e) { return false; }
+}
+if (typeof window !== 'undefined') window._jqIsFormSection = _jqIsFormSection;
 function _jqScrollY() {
     try { return window.scrollY || window.pageYOffset || (document.documentElement && document.documentElement.scrollTop) || 0; } catch (e) { return 0; }
 }
 function _jqScrollSave() {
     var cur = document.querySelector('.section.active');
     if (!cur || !cur.id) return;
+    if (_jqIsFormSection(cur.id)) { delete _jqScrollMem[cur.id]; return; }   // فرم‌ها ذخیره نمی‌شوند
     var inner = 0;
     try { var w = cur.querySelector('.financial-content-wrapper'); if (w) inner = w.scrollTop || 0; } catch (e) {}
     _jqScrollMem[cur.id] = { y: _jqScrollY(), inner: inner };
 }
 function _jqScrollRestore(sectionId) {
+    if (_jqIsFormSection(sectionId)) return;   // فرم‌ها همیشه از بالا
     var st = _jqScrollMem[sectionId];
     if (!st) return;                       // بخشِ تازه → از بالا باز شود (رفتارِ قبلی)
     var apply = function () {
@@ -12029,16 +12175,24 @@ function __hbInstallStorageGuard() {
 
 /** گزارشِ کوتاهِ وضعیتِ حافظه — برای عیب‌یابی از کنسول */
 function __hbStorageReport() {
-    var rows = [], total = 0;
+    var rows = [], total = 0, plain = 0;
     try {
+        // اگر لایهٔ فشرده‌سازی فعال باشد، «اندازهٔ واقعیِ ذخیره‌شده» گزارش می‌شود، نه
+        // اندازهٔ بازشده؛ وگرنه عدد بی‌ربط با سهمیهٔ واقعیِ مرورگر می‌شد.
+        var rawLen = (typeof window !== 'undefined' && typeof window.__jqStoreRawLen === 'function')
+            ? window.__jqStoreRawLen : null;
         for (var i = 0; i < localStorage.length; i++) {
             var k = localStorage.key(i);
-            var len = (localStorage.getItem(k) || '').length + k.length;
-            total += len; rows.push({ key: k, chars: len });
+            var len = (rawLen ? rawLen(k) : (localStorage.getItem(k) || '').length) + k.length;
+            var plainLen = (localStorage.getItem(k) || '').length + k.length;
+            total += len; rows.push({ key: k, chars: len, plainChars: plainLen });
+            plain += plainLen;
         }
     } catch (e) {}
     rows.sort(function (a, b) { return b.chars - a.chars; });
-    return { totalChars: total, limitChars: 5242880,
+    return { totalChars: total, plainChars: plain, limitChars: 5242880,
+             compressed: (typeof window !== 'undefined' && !!window.__JQ_STORE_READY),
+             ratio: total ? Math.round(plain / total * 10) / 10 : 1,
              percent: Math.round(total * 100 / 5242880), top: rows.slice(0, 10) };
 }
 if (typeof window !== 'undefined') {
@@ -13721,11 +13875,9 @@ function generatePersonReport(personId) {
 
     const allTx = db.getTransactions() || [];
     const personTxs = allTx.filter(t => t.personId == person.id || t.customerId == person.id || t.supplierId == person.id);
-    personTxs.sort(function(a, b) {
-        var da = a.createdAt || a.date || '';
-        var db_ = b.createdAt || b.date || '';
-        return da.localeCompare(db_);
-    });
+    // چیدمانِ محاسبه: قدیمی → جدید (مانده‌های در جریان باید به ترتیبِ زمان ساخته شوند).
+    // نمایشِ سطرها در پایین وارونه می‌شود تا جدیدترین در سطرِ اول بیفتد.
+    personTxs.sort(__hbRepAsc);
 
     let balanceAFN = 0, balanceUSD = 0;
     var balMap = {};  // ماندهٔ در جریان به تفکیک هر ارز (شاملِ ارزِ سوم)
@@ -13867,51 +14019,69 @@ function generatePersonReport(personId) {
     });
 
     // ---- ردیف‌های جدول HTML ----
-    let txRowsHTML = '';
+    // سقفِ شمارِ ردیف در هر <tbody>. یک بلِ خیلی بلند (بیش از این تعداد قلم) از ارتفاعِ
+    // یک صفحهٔ A4 بیشتر می‌شود؛ آن‌وقت مرورگر دیگر نمی‌تواند «نشکستنِ گروه» را رعایت کند و
+    // گروه را وسطِ صفحه نصف می‌کند — سلول‌های rowspan روی صفحهٔ قبل جا می‌مانند و ادامهٔ
+    // سطر با ستون‌های خالی ظاهر می‌شود (همان «خراب‌شدنِ سطرِ آخرِ صفحه»). برای همین چنین
+    // بلی به چند قطعهٔ کوتاه‌تر تقسیم می‌شود و هر قطعه ستون‌های شناساییِ خودش را دارد.
+    // بل‌های معمولی (تا ۱۸ قلم) دقیقاً مثلِ قبل و بدونِ هیچ تغییری چاپ می‌شوند.
+    const REP_MAX_ROWS = 18;
+    const repRows = [];           // هر عضو = HTMLِ کاملِ یک معامله (یک یا چند <tbody>)
     records.forEach(function(rec) {
         const rowBg = rec.kind === 'prev' ? 'background:#f0fdf4;font-weight:600;' : '';
-        const itemCount = (rec.items && rec.items.length) ? rec.items.length : 1;
-        const span = itemCount;
         const moreHTML = (rec.moreLines && rec.moreLines.length)
             ? rec.moreLines.map(function(l) { return '<div class="more-line">' + esc(l) + '</div>'; }).join('')
             : esc(rec.more);
+        const items = (rec.items && rec.items.length) ? rec.items : null;
+        const total = items ? items.length : 1;
+        const chunks = [];
+        if (!items || total <= REP_MAX_ROWS) chunks.push([0, total]);
+        else for (var s0 = 0; s0 < total; s0 += REP_MAX_ROWS) chunks.push([s0, Math.min(REP_MAX_ROWS, total - s0)]);
 
-        // سلولِ اقلام: هر قلم یک ردیفِ داخلی با شرح/تعداد/قیمت واحد
-        let descCells = '';
-        if (rec.items && rec.items.length) {
-            descCells =
-                '<td class="c-desc">' + esc(rec.items[0].name) + '</td>' +
-                '<td class="c-qty">' + fn(rec.items[0].qty) + (rec.items[0].unit ? ' <span class="u">' + esc(rec.items[0].unit) + '</span>' : '') + '</td>' +
-                '<td class="c-price">' + fn(rec.items[0].price) + '</td>';
-        } else {
-            descCells = '<td class="c-desc" colspan="3" style="text-align:right;">' + esc(rec.desc || '-') + '</td>';
-        }
-
-        // هر معامله در یک <tbody> جدا تا در چاپ/PDF بینِ صفحات نصف نشود و هیچ ردیفی حذف نگردد
-        txRowsHTML += '<tbody class="tx-group">';
-        txRowsHTML += '<tr style="' + rowBg + '">' +
-            '<td class="c-num" rowspan="' + span + '">' + rec.idx + '</td>' +
-            '<td class="c-date" rowspan="' + span + '">' + esc(rec.dateStr) + '</td>' +
-            '<td class="c-bill" rowspan="' + span + '">' + esc(rec.billNumber) + '</td>' +
-            '<td class="c-type" rowspan="' + span + '"><span class="type-badge" style="background:' + rec.typeBg + ';">' + esc(rec.typeLabel) + '</span></td>' +
-            descCells +
-            '<td class="c-amount" rowspan="' + span + '">' + esc(rec.amountStr) + '</td>' +
-            '<td class="c-bal" rowspan="' + span + '" style="color:' + rec.balColor + ';font-weight:700;">' + esc(rec.balStr) + '<br><small>' + esc(rec.balLabel) + '</small></td>' +
-            '<td class="c-more" rowspan="' + span + '">' + moreHTML + '</td>' +
-        '</tr>';
-
-        // ردیف‌های اقلامِ بعدی (فقط شرح/تعداد/قیمت واحد)
-        if (rec.items && rec.items.length > 1) {
-            for (var k = 1; k < rec.items.length; k++) {
-                txRowsHTML += '<tr style="' + rowBg + '">' +
-                    '<td class="c-desc">' + esc(rec.items[k].name) + '</td>' +
-                    '<td class="c-qty">' + fn(rec.items[k].qty) + (rec.items[k].unit ? ' <span class="u">' + esc(rec.items[k].unit) + '</span>' : '') + '</td>' +
-                    '<td class="c-price">' + fn(rec.items[k].price) + '</td>' +
-                '</tr>';
+        let html = '';
+        chunks.forEach(function (ch, ci) {
+            const from = ch[0], span = ch[1], cont = ci > 0;
+            const cell = function (c, body, extra) {
+                return '<td class="' + c + '" rowspan="' + span + '"' + (extra || '') + '>' + body + '</td>';
+            };
+            let descCells;
+            if (items) {
+                descCells =
+                    '<td class="c-desc">' + esc(items[from].name) + '</td>' +
+                    '<td class="c-qty">' + fn(items[from].qty) + (items[from].unit ? ' <span class="u">' + esc(items[from].unit) + '</span>' : '') + '</td>' +
+                    '<td class="c-price">' + fn(items[from].price) + '</td>';
+            } else {
+                descCells = '<td class="c-desc" colspan="3" style="text-align:right;">' + esc(rec.desc || '-') + '</td>';
             }
-        }
-        txRowsHTML += '</tbody>';
+            // هر معامله (یا هر قطعهٔ آن) در یک <tbody> جدا تا در چاپ/PDF نصف نشود
+            html += '<tbody class="tx-group">';
+            html += '<tr style="' + rowBg + '">' +
+                cell('c-num', cont ? ('<span class="c-cont">' + rec.idx + '<br><small>ادامه</small></span>') : String(rec.idx)) +
+                cell('c-date', esc(rec.dateStr)) +
+                cell('c-bill', esc(rec.billNumber)) +
+                cell('c-type', '<span class="type-badge" style="background:' + rec.typeBg + ';">' + esc(rec.typeLabel) + '</span>') +
+                descCells +
+                cell('c-amount', cont ? '—' : esc(rec.amountStr)) +
+                cell('c-bal', cont ? '—' : (esc(rec.balStr) + '<br><small>' + esc(rec.balLabel) + '</small>'),
+                     cont ? '' : ' style="color:' + rec.balColor + ';font-weight:700;"') +
+                cell('c-more', cont ? '—' : moreHTML) +
+            '</tr>';
+            if (items && span > 1) {
+                for (var k = from + 1; k < from + span; k++) {
+                    html += '<tr style="' + rowBg + '">' +
+                        '<td class="c-desc">' + esc(items[k].name) + '</td>' +
+                        '<td class="c-qty">' + fn(items[k].qty) + (items[k].unit ? ' <span class="u">' + esc(items[k].unit) + '</span>' : '') + '</td>' +
+                        '<td class="c-price">' + fn(items[k].price) + '</td>' +
+                    '</tr>';
+                }
+            }
+            html += '</tbody>';
+        });
+        repRows.push(html);
     });
+    // چیدمانِ خواسته‌شده: آخرین معامله در سطرِ اول، اولین معامله در سطرِ آخر.
+    // فقط ترتیبِ چاپ وارونه می‌شود؛ شماره‌ها، مانده‌ها و مجموع‌ها دست‌نخورده‌اند.
+    const txRowsHTML = repRows.slice().reverse().join('');
 
     // ردیف نهایی مانده
     // مشتق‌سازیِ اسکالرهای نمایشیِ ثابتِ افغانی/دالر از نگاشت‌ها (نقشه‌ها منبعِ حقیقت‌اند).
@@ -14020,7 +14190,8 @@ function generatePersonReport(personId) {
         '</tr>';
         // ردیف‌ها — بدونِ rowspan (اکسل با merge عمودیِ HTML دچار خطای «مشکل در محتوا» و حذفِ ردیف می‌شود)
         // هر قلم یک ردیفِ کامل و مستقل؛ سلول‌های مشترک فقط در ردیفِ نخستِ هر معامله پر می‌شوند.
-        records.forEach(function(rec) {
+        // همان چیدمانِ جدولِ گزارش: آخرین معامله در سطرِ اول (فقط ترتیبِ چاپ، نه محاسبه)
+        records.slice().reverse().forEach(function(rec) {
             var moreCell = (rec.moreLines && rec.moreLines.length) ? rec.moreLines.join(' — ') : (rec.more || '—');
             var balCell = esc(rec.balStr) + ' (' + esc(rec.balLabel) + ')';
             if (rec.items && rec.items.length) {
@@ -14095,9 +14266,13 @@ function generatePersonReport(personId) {
             .no-print { display: none !important; }
             /* جلوگیری از بریده‌شدنِ ردیف‌ها در چاپ/PDF: کانتینر نباید محتوای صفحاتِ بعد را قیچی کند */
             .bill-wrap { overflow: visible !important; border: none !important; border-radius: 0 !important; max-width: 100% !important; box-shadow: none !important; }
-            .items-table thead { display: table-header-group; }
-            .items-table tbody { page-break-inside: avoid; }
-            .items-table tr { page-break-inside: avoid; }
+            .items-table thead { display: table-header-group; break-after: avoid; page-break-after: avoid; }
+            /* هم نامِ مدرن و هم نامِ قدیمی نوشته می‌شود: وب‌ویوِ اندروید و موتورهای
+               قدیمی‌تر فقط یکی از این دو را می‌شناسند. */
+            .items-table tbody { break-inside: avoid; page-break-inside: avoid; }
+            .items-table tr    { break-inside: avoid; page-break-inside: avoid; }
+            .items-table td, .items-table th { break-inside: avoid; page-break-inside: avoid; }
+            .items-table, .bill-wrap { break-inside: auto; page-break-inside: auto; }
         }
         body {
             font-family: ${fontFamily};
@@ -14170,6 +14345,8 @@ function generatePersonReport(personId) {
         .items-table thead th { padding: 7px 4px; text-align: center; border: 1px solid ${navy}; font-weight: bold; }
         .items-table thead th i { margin-inline-end: 4px; opacity: 0.9; }
         .items-table tbody tr:nth-child(even) { background: #f4f6fa; }
+        .items-table tbody tr.rep-alt { background: #f4f6fa; }
+        .items-table .c-cont small { display: block; font-size: 8px; font-weight: normal; color: #64748b; }
         .items-table tbody td { border: 1px solid #b0bbcc; padding: 5px 4px; text-align: center; vertical-align: middle; }
         .items-table .c-desc { text-align: right; }
         .items-table .c-qty .u { color: #6b7688; font-size: 0.85em; }
@@ -14535,13 +14712,13 @@ function generateCashboxReport(cashboxId) {
         })
     ];
 
-    allItems.sort(function(a, b) {
-        var da = a.createdAt || a.date || '';
-        var db_ = b.createdAt || b.date || '';
-        return da.localeCompare(db_);
-    });
+    // چیدمانِ محاسبه: قدیمی → جدید (موجودیِ در جریان باید به ترتیبِ زمان ساخته شود).
+    // پیش از این مقایسه رشته‌ای بود؛ چون تاریخِ معاملات جلالی با AM/PM است و createdAtِ
+    // لاگ‌های صندوق ISOِ میلادی، همهٔ لاگ‌ها ته‌نشین می‌شدند و ساعت‌ها هم بد مرتب می‌شد.
+    allItems.sort(__hbRepAsc);
 
     let txRowsHTML = '';
+    var _repRowsCb = [];
     // مانده و مجموع‌ها به تفکیکِ هر ارز (گزارشِ چند-ارزی مانندِ گزارشِ شخص)
     var _runByCur = {};
     var _inByCur = {}, _outByCur = {};
@@ -14572,7 +14749,7 @@ function generateCashboxReport(cashboxId) {
 
         let balColor = _rowRun >= 0 ? '#10b981' : '#ef4444';
 
-        txRowsHTML += `<tr>
+        _repRowsCb.push(`<tr>
             <td style="text-align:center;padding:5px;">${idx + 1}</td>
             <td style="text-align:center;padding:5px;font-size:10px;">${(typeof formatAfghanDateTime === 'function' ? formatAfghanDateTime(item.date, item.createdAt) : item.date) || '---'}</td>
             <td style="text-align:center;padding:5px;"><span style="background:${typeBgColor};color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;">${item.type}</span></td>
@@ -14580,8 +14757,22 @@ function generateCashboxReport(cashboxId) {
             <td style="text-align:right;padding:5px;font-size:10px;">${item.desc}</td>
             <td style="text-align:center;padding:5px;color:${isIncome?'#10b981':'#ef4444'};font-weight:600;">${isIncome?'+':'-'}${fn(item.amount)} ${_icLbl}</td>
             <td style="text-align:center;padding:5px;color:${balColor};font-weight:700;">${fn(Math.abs(_rowRun))} ${_icLbl}</td>
-        </tr>`;
+        </tr>`);
     });
+
+    // ── چیدمان و شکستِ صفحه ───────────────────────────────────────────────────────
+    //  ۱) آخرین معامله در سطرِ اول، اولین در سطرِ آخر (فقط ترتیبِ چاپ؛ موجودیِ هر سطر
+    //     از پیش و به ترتیبِ زمان محاسبه شده است).
+    //  ۲) پیش از این همهٔ سطرها در یک <tbody> بودند و روی آن page-break-inside:avoid
+    //     نشسته بود. چون آن یک <tbody> از یک صفحه بلندتر است، مرورگر نمی‌تواند خواسته را
+    //     برآورده کند و کلِ جدول را به صفحهٔ بعد هل می‌دهد — اندازه‌گیری روی دادهٔ واقعیِ
+    //     شما: ۲۳۲ از ۵۹۶ پوینتِ صفحهٔ اول سفید می‌ماند. حالا هر سطر <tbody>ی جداگانه
+    //     دارد، پس شکستِ صفحه فقط «بینِ» سطرها رخ می‌دهد و هیچ سطری نصف نمی‌شود.
+    //  ۳) راه‌راهِ یک‌درمیان با :nth-child وابسته به تک‌بودنِ tbody بود؛ حالا با کلاسِ
+    //     صریحِ rep-alt ساخته می‌شود تا ظاهر دقیقاً مثلِ قبل بماند.
+    txRowsHTML = _repRowsCb.slice().reverse().map(function (r, i) {
+        return '<tbody class="tx-group">' + (i % 2 === 1 ? r.replace('<tr>', '<tr class="rep-alt">') : r) + '</tbody>';
+    }).join('');
 
     // خلاصهٔ چند-ارزی: مجموعِ ورودی/خروجی و موجودیِ نهایی به تفکیکِ هر ارز
     var _allRepCurs = {};
@@ -14617,9 +14808,13 @@ function generateCashboxReport(cashboxId) {
             body { margin: 0; padding: 0; background: #fff; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
             .no-print { display: none !important; }
             .bill-wrap { overflow: visible !important; border: none !important; border-radius: 0 !important; max-width: 100% !important; box-shadow: none !important; }
-            .items-table thead { display: table-header-group; }
-            .items-table tbody { page-break-inside: avoid; }
-            .items-table tr { page-break-inside: avoid; }
+            .items-table thead { display: table-header-group; break-after: avoid; page-break-after: avoid; }
+            /* هم نامِ مدرن و هم نامِ قدیمی نوشته می‌شود: وب‌ویوِ اندروید و موتورهای
+               قدیمی‌تر فقط یکی از این دو را می‌شناسند. */
+            .items-table tbody { break-inside: avoid; page-break-inside: avoid; }
+            .items-table tr    { break-inside: avoid; page-break-inside: avoid; }
+            .items-table td, .items-table th { break-inside: avoid; page-break-inside: avoid; }
+            .items-table, .bill-wrap { break-inside: auto; page-break-inside: auto; }
         }
         body {
             font-family: ${fontFamily};
@@ -14691,6 +14886,8 @@ function generateCashboxReport(cashboxId) {
         .items-table thead th { padding: 7px 4px; text-align: center; border: 1px solid ${navy}; font-weight: bold; }
         .items-table thead th i { margin-inline-end: 4px; opacity: 0.9; }
         .items-table tbody tr:nth-child(even) { background: #f4f6fa; }
+        .items-table tbody tr.rep-alt { background: #f4f6fa; }
+        .items-table .c-cont small { display: block; font-size: 8px; font-weight: normal; color: #64748b; }
         .items-table tbody td { border: 1px solid #b0bbcc; padding: 5px 4px; text-align: center; vertical-align: middle; }
         .bill-ft {
             display: flex; align-items: center; justify-content: space-between;
@@ -14807,8 +15004,8 @@ function generateCashboxReport(cashboxId) {
                 <th style="width:18%"><i class="fas fa-balance-scale"></i>مانده حساب</th>
             </tr>
         </thead>
-        <tbody>
-            ${txRowsHTML}
+        ${txRowsHTML}
+        <tbody class="final-group">
             <tr style="background:#eef3fb;font-weight:bold;border-top:2px solid ${navy};">
                 <td colspan="5" style="text-align:left;color:${navy};padding:6px;">موجودی نهایی حساب</td>
                 <td style="text-align:center;padding:6px;color:${navy};font-size:12px;font-weight:900;">${_finalBalHtml}</td>
@@ -33168,6 +33365,28 @@ function svcPickConfirm() {
     }, 60);
 }
 
+/**
+ * افزودنِ فوریِ یک خدمت به بل و برگشت به همان بل.
+ * جایگزینِ «تیک‌زدن + نوارِ افزودن به بل»: کاربر روی خدمت می‌زند و تمام.
+ * منطقِ افزودن دقیقاً همان توابعِ قبلی است (addServiceToSale / addServiceToPurchase)
+ * و هیچ چیزِ دیگری در این لیست تغییر نمی‌کند.
+ */
+function svcPickOne(id) {
+    var mode = _svcMode();
+    if (!mode) return;
+    var back = _svcBack();
+    _svcMode(null); _svcSel().length = 0; _svcBack(null);
+    if (back) showSection(back);
+    setTimeout(function () {
+        try {
+            if (mode === 'purchase' && typeof addServiceToPurchase === 'function') addServiceToPurchase(id);
+            else if (typeof addServiceToSale === 'function') addServiceToSale(id);
+        } catch (e) { console.warn('add service to bill:', e); }
+        window._returningFromServicePicker = null;
+    }, 60);
+}
+if (typeof window !== 'undefined') window.svcPickOne = svcPickOne;
+
 /** تیک/حذفِ تیکِ یک خدمت در حالتِ انتخاب */
 function svcPickToggle(id) {
     if (!_svcMode()) return;
@@ -33207,13 +33426,9 @@ function loadServicesList() {
     } catch (e) {}
 
     // نوارِ حالتِ انتخاب
+    // نوارِ «افزودن به بل» حذف شد: حالا کلیک روی خودِ خدمت آن را به بل اضافه می‌کند.
     var bar = document.getElementById('svc-pick-bar');
-    if (bar) {
-        bar.style.display = _svcMode() ? '' : 'none';
-        var cnt = document.getElementById('svc-pick-count');
-        if (cnt) cnt.textContent = (typeof formatNumber === 'function')
-            ? formatNumber(_svcSel().length) : String(_svcSel().length);
-    }
+    if (bar) bar.style.display = 'none';
 
     // گزینه‌های فیلترِ واحد (از خودِ داده)
     var uSel = document.getElementById('filter-service-unit');
@@ -33279,12 +33494,11 @@ function loadServicesList() {
             row.style.cursor = 'pointer';
             row.onclick = function (e) {
                 if (e && e.target && e.target.closest && e.target.closest('.person-card-kebab')) return;
-                svcPickToggle(s.id);
+                svcPickOne(s.id);
             };
         }
-        var actionsHtml = _svcMode()
-            ? '<span class="svc-pick-check"><i class="fas ' + (picked ? 'fa-check-circle' : 'fa-circle') + '"></i></span>'
-            : '<button class="person-card-kebab action-trigger-btn" type="button" onmouseenter="showServiceActionBar(event,' + s.id + ')" onmouseleave="handleActionButtonMouseLeave(event)" onclick="event.stopPropagation();showServiceActionBar(event,' + s.id + ')" title="عملیات"><i class="fas fa-ellipsis-v"></i></button>';
+        // در هر دو حالت همان دکمهٔ سه‌نقطه — دیگر تیکِ انتخاب لازم نیست
+        var actionsHtml = '<button class="person-card-kebab action-trigger-btn" type="button" onmouseenter="showServiceActionBar(event,' + s.id + ')" onmouseleave="handleActionButtonMouseLeave(event)" onclick="event.stopPropagation();showServiceActionBar(event,' + s.id + ')" title="عملیات"><i class="fas fa-ellipsis-v"></i></button>';
         var _cost = (parseFloat(s.cost) || 0);
         row.innerHTML =
             '<td class="person-card-cell">'
@@ -34932,7 +35146,10 @@ function _attachDateTimePickerToInput(input) {
     if (wrap.classList && wrap.classList.contains('jalali-datetime-wrapper')) return; // قبلاً نصب شده
     // اگر در والد یک دکمه‌ی تقویم با عملکرد موجود است (HTML اصلی)، آیکن تزئینی اضافه نکن
     // تا فیلد دارای دو آیکن تکراری نشود — فقط دکمه عملکرددار حفظ شود
-    if (wrap.querySelector && wrap.querySelector('button[onclick*="openDualCalendarPicker"], button[onclick*="openDateOnlyCalendarPicker"]')) {
+    //  ⚠ سلکتور عمداً به button محدود نیست: آیکنِ عملکردیِ تاریخ حالا یک <i> است
+    //     (دکمهٔ تکراریِ سمتِ چپ حذف شد). اگر این‌جا فقط button دیده می‌شد، این کد
+    //     دوباره یک آیکنِ تزئینی می‌ساخت و همان «دو آیکن» برمی‌گشت.
+    if (wrap.querySelector && wrap.querySelector('[onclick*="openDualCalendarPicker"], [onclick*="openDateOnlyCalendarPicker"]')) {
         return;
     }
 
@@ -41412,7 +41629,7 @@ function __hbShowInstDiag() {
  * می‌بست، پس اگر زنجیرهٔ تلاش‌ها «موفقِ دروغین» می‌داد (Browser/AppLauncher نشانیِ
  * file:// را می‌پذیرند ولی نصب را شروع نمی‌کنند) برنامه بسته می‌شد و نصبی در کار نبود.
  */
-function __hbAndroidOpenApkVerified(uri) {
+function __hbAndroidOpenApkVerified(uri, src) {
     try { window.__hbPendingApkUri = uri || window.__hbPendingApkUri || ''; } catch (e) {}
     try {
         if (typeof ndUpdCurrentVersion === 'function') {
@@ -41433,13 +41650,13 @@ function __hbAndroidOpenApkVerified(uri) {
     if (/^file:/i.test(String(uri)) && env.plugins.FileOpener === 'ندارد') {
         __hbIlog('پیش‌بررسی', 'هشدار', 'نشانی file:// است و FileOpener نصب نیست — نصب تقریباً حتماً شروع نمی‌شود');
     }
-    var watch = __hbWatchInstaller(4000);
-    return __hbAndroidOpenApk(uri).then(function (who) {
-        __hbIlog('بازکردن', 'ادعایِ موفقیت', String(who || ''));
-        return watch;
+    // زنجیره خودش هر تلاش را تأیید می‌کند؛ رسیدن به این‌جا یعنی واقعاً باز شده.
+    return __hbAndroidOpenApk(uri, (typeof src !== 'undefined') ? src : null).then(function (who) {
+        __hbIlog('بازکردن', 'تأییدشده', String(who || ''));
+        return true;
     }, function (err) {
         __hbIlog('بازکردن', 'شکست', err);
-        return watch.then(function () { return false; });
+        return false;
     }).then(function (reallyOpened) {
         if (reallyOpened) {
             __hbIlog('نتیجه', 'نصب‌کننده واقعاً جلو آمد', 'بستنِ برنامه');
@@ -41461,48 +41678,100 @@ if (typeof window !== 'undefined') {
     window.__hbAndroidOpenApkVerified = __hbAndroidOpenApkVerified;
 }
 
-function __hbAndroidOpenApk(uri) {
+function __hbAndroidOpenApk(uri, src) {
     if (!uri) return Promise.reject(new Error('نشانیِ فایل نامعتبر است'));
     var APK = 'application/vnd.android.package-archive';
-    // مسیرِ خام بدونِ پیشوندِ file:// — بعضی نسخه‌های افزونه فقط همین را می‌پذیرند
+    // مسیرِ خامِ بدونِ پیشوند — شکلِ مستندِ افزونهٔ FileOpener همین است
     var plain = String(uri).replace(/^file:\/\//, '');
+    var PER_TRY = 1800;        // مهلتِ تأییدِ هر تلاش (میلی‌ثانیه)
 
-    // ── زنجیرهٔ تلاش‌ها ────────────────────────────────────────────────────────
-    //  اول FileOpener (تنها راهِ درست: content:// از FileProvider با اجازهٔ خواندن).
-    //  اگر افزونه در این بیلد نبود یا شکست خورد، راه‌های جایگزین امتحان می‌شوند تا
-    //  کاربر در عمل به صفحهٔ نصب برسد: AppLauncher، Browser، و در آخر خودِ WebView.
-    //  هر کدام که موفق شد، همان‌جا متوقف می‌شویم.
-    var tries = [];
-    var names = [];
-    [
-        { filePath: uri,   contentType: APK },
-        { filePath: plain, contentType: APK },
-        { filePath: plain, contentType: APK, openWithDefault: true },
-        { filePath: plain, fileMimeType: APK }               // نام‌گذاریِ قدیمی‌ترِ افزونه
-    ].forEach(function (o, k) {
-        names.push('FileOpener.open#' + (k + 1));
-        tries.push(function () { return __jouyaAndCall('FileOpener', 'open', o); });
+    // ╔══════════════════════════════════════════════════════════════════════════╗
+    // ║  ⚠ درسِ گرفته‌شده از گزارشِ دستگاهِ واقعی (نسخهٔ ۱.۳.۲ → ۱.۳.۶):            ║
+    // ║                                                                          ║
+    // ║      [81741ms] FileOpener.open#1 → بدونِ خطا برگشت                        ║
+    // ║      [85525ms] watch → هیچ‌رویدادی                                        ║
+    // ║                                                                          ║
+    // ║  افزونه نصب بود و بدونِ خطا برگشت، ولی هیچ کاری نکرد. علت: به تلاشِ اول    ║
+    // ║  نشانی را با پیشوندِ file:// داده بودیم؛ افزونه از آن رشته یک File         ║
+    // ║  می‌سازد که مسیرِ معتبری نیست، پس بی‌سروصدا هیچ نمی‌کند و callback را        ║
+    // ║  موفق صدا می‌زند. زنجیرهٔ قبلی به همان «موفقیت» اعتماد می‌کرد و هرگز به     ║
+    // ║  تلاشِ دوم (مسیرِ خام) نمی‌رسید.                                           ║
+    // ║                                                                          ║
+    // ║  اصلاح: «بدونِ خطا برگشتن» دیگر به‌معنای موفقیت نیست. پس از هر تلاش        ║
+    // ║  منتظر می‌مانیم ببینیم برنامه واقعاً به پس‌زمینه می‌رود (یعنی نصب‌کننده      ║
+    // ║  جلو آمده). اگر نیامد، همان‌جا سراغِ شکلِ بعدی می‌رویم.                     ║
+    // ╚══════════════════════════════════════════════════════════════════════════╝
+    var tries = [], names = [];
+    var add = function (name, fn) { names.push(name); tries.push(fn); };
+
+    // ۱) مسیرِ خام — شکلِ درست و مستند؛ حالا اولِ صف است
+    add('FileOpener(مسیرِ خام)', function () {
+        return __jouyaAndCall('FileOpener', 'open', { filePath: plain, contentType: APK });
     });
-    // جایگزین‌ها — فقط وقتی FileOpener کار نکرد
-    names.push('AppLauncher.openUrl');
-    tries.push(function () { return __jouyaAndCall('AppLauncher', 'openUrl', { url: uri }); });
-    names.push('Browser.open');
-    tries.push(function () { return __jouyaAndCall('Browser', 'open', { url: uri }); });
-    // ⚠ «کلیکِ لنگر» عمداً حذف شد: نشانیِ APK را هرگز به نصب‌کننده نمی‌دهد و در عوض
-    //   خودِ WebView را به آن نشانی می‌بَرَد، یعنی صفحهٔ برنامه از بین می‌رود و کاربر
-    //   با صفحهٔ سفید می‌مانَد. در آزمونِ شبیه‌سازی دقیقاً همین رخ داد.
+    // ۲) همان، با نام‌گذاریِ قدیمی‌ترِ افزونه
+    add('FileOpener(mimeType قدیمی)', function () {
+        return __jouyaAndCall('FileOpener', 'open', { filePath: plain, fileMimeType: APK });
+    });
+    // ۳) با openWithDefault
+    add('FileOpener(openWithDefault)', function () {
+        return __jouyaAndCall('FileOpener', 'open', { filePath: plain, contentType: APK, openWithDefault: true });
+    });
+    // ۴) با پیشوندِ file:// — بعضی نسخه‌های افزونه همین را می‌خواهند
+    add('FileOpener(file://)', function () {
+        return __jouyaAndCall('FileOpener', 'open', { filePath: uri, contentType: APK });
+    });
+    // ۵) کپی به پوشهٔ عمومیِ Downloads و بازکردن از آن‌جا.
+    //    چرا: فایل در حافظهٔ داخلیِ برنامه (/data/user/0/<پکیج>/cache) است و
+    //    نصب‌کنندهٔ اندروید پروسهٔ جداست؛ برای خواندنِ آن‌جا به FileProvider نیاز
+    //    دارد که اگر مسیرِ cache در file_paths.xml پوشش داده نشده باشد کار نمی‌کند.
+    //    پوشهٔ عمومیِ Downloads این محدودیت را ندارد. کپی نیتیو است، نه جاوااسکریپتی.
+    add('کپی به Downloads سپس بازکردن', function () {
+        var name = '';
+        try { name = decodeURIComponent(plain.split('/').pop() || 'update.apk'); } catch (e) { name = 'update.apk'; }
+        var destRel = 'Download/' + (typeof __hbAppDir === 'function' ? __hbAppDir() : 'Hesabdar') + '/' + name;
+        var fromDir = (src && src.dir) || null;
+        var fromPath = (src && src.path) || plain;
+        var copyOpts = { to: destRel, toDirectory: 'EXTERNAL_STORAGE' };
+        if (fromDir) { copyOpts.from = fromPath; copyOpts.directory = fromDir; }
+        else { copyOpts.from = plain; }
+        return __jouyaAndCall('Filesystem', 'copy', copyOpts).then(function () {
+            return __jouyaAndCall('Filesystem', 'getUri', { path: destRel, directory: 'EXTERNAL_STORAGE' });
+        }).then(function (r) {
+            var u2 = (r && (r.uri || r.path)) || '';
+            var p2 = String(u2).replace(/^file:\/\//, '');
+            try { window.__hbPendingApkUri = u2 || window.__hbPendingApkUri; } catch (e) {}
+            try { __hbIlog('کپی', 'انجام شد', p2); } catch (e) {}
+            return __jouyaAndCall('FileOpener', 'open', { filePath: p2, contentType: APK });
+        });
+    });
+    // ۶) واگذاری به خودِ سیستم — آخرین راه
+    add('AppLauncher.openUrl', function () {
+        return __jouyaAndCall('AppLauncher', 'openUrl', { url: uri });
+    });
+    add('Share.share', function () {
+        return __jouyaAndCall('Share', 'share', { title: 'نصبِ بروزرسانی', files: [uri] });
+    });
 
     var step = function (i, lastErr) {
         if (i >= tries.length) {
             var hint = __hbAndPlugin('FileOpener') ? '' : ' — افزونهٔ FileOpener در این نسخه نصب نیست';
-            try { __hbIlog('زنجیره', 'همه شکست خوردند', 'آخرین خطا: ' + ((lastErr && lastErr.message) || lastErr || '—')); } catch (e) {}
+            try { __hbIlog('زنجیره', 'همه شکست خوردند', 'آخرین: ' + ((lastErr && lastErr.message) || lastErr || '—')); } catch (e) {}
             return Promise.reject(new Error('نصب‌کنندهٔ بسته باز نشد' + hint +
                 (lastErr ? (' — ' + (lastErr.message || lastErr)) : '')));
         }
+        // شنونده پیش از فراخوانی مسلح می‌شود تا رویداد از دست نرود
+        var watch = __hbWatchInstaller(PER_TRY);
         return Promise.resolve().then(tries[i]).then(function () {
-            try { __hbIlog(names[i], 'بدونِ خطا برگشت', ''); } catch (e) {}
-            return names[i];
-        }).catch(function (e) {
+            try { __hbIlog(names[i], 'بدونِ خطا برگشت', 'منتظرِ تأیید…'); } catch (e) {}
+            return watch.then(function (really) {
+                if (really) {
+                    try { __hbIlog(names[i], '✔ تأیید شد', 'نصب‌کننده جلو آمد'); } catch (e) {}
+                    return names[i];
+                }
+                try { __hbIlog(names[i], '✖ موفقِ دروغین', 'نصب‌کننده نیامد — شکلِ بعدی'); } catch (e) {}
+                return step(i + 1, new Error(names[i] + ': بدونِ خطا ولی بی‌اثر'));
+            });
+        }, function (e) {
             try { __hbIlog(names[i], 'خطا', e); } catch (e2) {}
             return step(i + 1, e);
         });
@@ -41569,6 +41838,7 @@ function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
         cleanup();
         setPct(100);
         try { __hbIlog('دانلود', 'موفق', 'پوشه: ' + d.dir); } catch (e) {}
+        try { window.__hbPendingApkSrc = { dir: d.dir, path: fileName }; } catch (e) {}
         note('در حال بازکردنِ نصب‌کننده…');
         return Promise.resolve(__jouyaAndCall('Filesystem', 'getUri', { path: fileName, directory: d.dir }))
             .then(function (u) { return (u && (u.uri || u.path)) || (d.res && (d.res.uri || d.res.path)) || ''; })
@@ -41580,7 +41850,9 @@ function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
         try { window.__hbPendingApkUri = uri; } catch (e) {}
         // تأییدِ واقعیِ بازشدنِ نصب‌کننده: اگر باز شد، برنامه بسته می‌شود و هیچ
         // گزارشی چاپ نمی‌شود؛ اگر باز نشد، برنامه باز می‌ماند و گزارش می‌آید.
-        return __hbAndroidOpenApkVerified(uri).then(function (opened) {
+        return __hbAndroidOpenApkVerified(uri, (function () {
+            try { return window.__hbPendingApkSrc || null; } catch (e) { return null; }
+        })()).then(function (opened) {
             if (!opened) { closeOv(); return; }
             setTimeout(function () {
                 closeOv();
@@ -41614,7 +41886,9 @@ function __hbRetryOpenApk() {
     if (!uri) { ndUpdSetStatus('فایلِ بروزرسانی پیدا نشد — دوباره «بررسی بروزرسانی» را بزنید.', 'warn'); return; }
     ndUpdSetStatus('در حال بازکردنِ نصب‌کننده…', 'info');
     try { __hbInstReset(); } catch (e) {}
-    __hbAndroidOpenApkVerified(uri).then(function (opened) {
+    __hbAndroidOpenApkVerified(uri, (function () {
+        try { return window.__hbPendingApkSrc || null; } catch (e) { return null; }
+    })()).then(function (opened) {
         if (opened) ndUpdSetStatus('نصب‌کننده باز شد — روی «نصب» بزنید.', 'ok');
         else ndUpdSetStatus('نصب‌کننده باز نشد — گزارشِ تشخیصی روی صفحه آمد؛ لطفاً همان را بفرستید.' +
             '<br><small>«نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید و دوباره تلاش کنید.</small>', 'warn');
