@@ -1817,6 +1817,85 @@ function computeDeficitProfitAdjustment(saleTxs, products) {
 }
 if (typeof window !== 'undefined') window.computeDeficitProfitAdjustment = computeDeficitProfitAdjustment;
 
+// ════════════════════════════════════════════════════════════════════════
+//  همان تعدیلِ کسری، ولی «قلم‌به‌قلم»
+//  ──────────────────────────────────────────────────────────────────────
+//  computeDeficitProfitAdjustment بالا مجموعِ هر ارز را می‌دهد؛ داشبورد از همان
+//  استفاده می‌کند. ولی جدولِ جزئیاتِ گزارشِ مفاد (PDF/اکسل) یک سطر برای هر قلمِ
+//  فروش دارد و باید عددِ همان سطر هم با داشبورد یکی باشد. این تابع همان مبلغِ
+//  بخشیده‌شده را به اقلامِ فروش نسبت می‌دهد.
+//
+//  ⚠ هم‌خوانیِ تضمین‌شده: ترتیبِ ارزها و سقفِ «کلِ کسری» عیناً همان قواعدِ تابعِ
+//  بالاست، و مجموعِ خروجیِ این تابع برای هر ارز دقیقاً برابرِ byCur همان تابع
+//  می‌شود (چون در هر ارز همان take بینِ اقلام تقسیم می‌شود، نه بیشتر و نه کمتر).
+//  پس «مجموعِ مفاد» و «سطرهای جزئیات» هرگز از هم نمی‌پاشند.
+//
+//  خروجی: { "txId|index": مبلغِ بهای خریدِ بخشیده‌شده در ارزِ همان سند }
+// ════════════════════════════════════════════════════════════════════════
+function _deficitWaivedByItem(saleTxs, products) {
+    var out = {};
+    try {
+        var prods = products || ((typeof db !== 'undefined') ? (((db.getAllProducts && db.getAllProducts()) || (db.getProducts && db.getProducts())) || []) : []);
+        if (!prods || !prods.length) return out;
+        var _base = (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : 'AFN';
+        // اقلامِ فروشِ هر جنس، به تفکیکِ ارز، به ترتیبِ ثبت
+        var byProd = {};
+        (saleTxs || []).forEach(function (t) {
+            if (!t || t.type !== 'فروش' || !Array.isArray(t.items)) return;
+            var cur = t.currency || _base;
+            t.items.forEach(function (it, idx) {
+                if (!it || it.isService) return;
+                if (it.productId == null) return;
+                var qty = parseFloat(it.quantity) || 0;
+                if (it.unitType === 'secondary') {
+                    var f = parseFloat(it.secondaryFactor) || 0;
+                    if (f > 0) qty = qty * f;
+                }
+                if (qty <= 0) return;
+                if (!byProd[it.productId]) byProd[it.productId] = {};
+                if (!byProd[it.productId][cur]) byProd[it.productId][cur] = [];
+                byProd[it.productId][cur].push({ key: t.id + '|' + idx, qty: qty });
+            });
+        });
+        prods.forEach(function (p) {
+            var stock = parseFloat(p.stock) || 0;
+            if (stock >= 0) return;                 // کسری نیست → چیزی بخشیده نمی‌شود
+            var deficit = -stock;
+            var m = byProd[p.id];
+            if (!m) return;
+            var codes = Object.keys(m).sort(function (a, b) {
+                if (a === _base) return -1; if (b === _base) return 1;
+                if (a === 'AFN') return -1; if (b === 'AFN') return 1;
+                if (a === 'USD') return -1; if (b === 'USD') return 1;
+                return a < b ? -1 : (a > b ? 1 : 0);
+            });
+            var remaining = deficit;
+            codes.forEach(function (c) {
+                if (remaining <= 0) return;
+                var rows = m[c], totalInCur = 0;
+                rows.forEach(function (r) { totalInCur += r.qty; });
+                var take = Math.min(totalInCur, remaining);
+                remaining -= take;
+                if (take <= 0) return;
+                var cost = (typeof db !== 'undefined' && db.getPurchasePrice) ? (parseFloat(db.getPurchasePrice(p, c)) || 0) : 0;
+                if (!(cost > 0)) return;
+                // تقسیم از تازه‌ترین فروش به عقب — کسری را آخرین فروش‌ها ساخته‌اند
+                var left = take;
+                for (var i = rows.length - 1; i >= 0 && left > 1e-9; i--) {
+                    var use = Math.min(rows[i].qty, left);
+                    if (use <= 0) continue;
+                    left -= use;
+                    out[rows[i].key] = (out[rows[i].key] || 0) + use * cost;
+                }
+            });
+        });
+    } catch (e) {
+        console.warn('_deficitWaivedByItem:', e);
+    }
+    return out;
+}
+if (typeof window !== 'undefined') window._deficitWaivedByItem = _deficitWaivedByItem;
+
 
 // --- توابع کمکی مورد نیاز برای کد بالا ---
 
@@ -17744,9 +17823,52 @@ function _rpBuildReportAOA(kind) {
                 var vals = rp.customFields || {};
                 return _cfDefs.map(function (f) { var v = vals[f.id]; return (v == null) ? '' : String(v); });
             };
-            aoa.push(['نام جنس', 'کد جنس', 'گتگوری', 'ورودی', 'خروجی', 'موجودی فعلی', 'واحد شمارش', 'قیمت خرید (' + _ppBase + ')', 'تاریخ انقضا'].concat(_cfNames, ['اطلاعات بیشتر']));
+            // ── ستونِ «قیمت خرید» عمومی و به تفکیکِ ارزِ خودِ هر جنس ─────────────
+            //  پیش از این سرستون به ارزِ پایه قید می‌شد و هر سطر هم با همان ارز
+            //  نوشته می‌شد؛ در نتیجه جنسی که خریدش به دالر/ارزِ سوم بود، در ستونِ
+            //  افغانی دیده می‌شد. حالا سرستون عمومی است و هر سطر ارزِ خودش را
+            //  همراه دارد. مقدارِ عددی از همان منابعِ قبلی می‌آید (قیمتِ تمام‌شدهٔ
+            //  آخرین خرید، وگرنه قیمتِ ثبت‌شدهٔ خودِ جنس) پس عددی تغییر نمی‌کند —
+            //  فقط ارزش در ارزِ درستِ خودش نشان داده می‌شود.
+            var _ppNative = {};
+            try {
+                var _pTxs = ((db.getTransactions && db.getTransactions()) || []).filter(function (t) { return t && t.type === 'خرید' && Array.isArray(t.items); });
+                _pTxs.sort(function (a, b) { return String(a.createdAt || a.date || '').localeCompare(String(b.createdAt || b.date || '')); });
+                _pTxs.forEach(function (tx) {
+                    var _c = tx.currency || _ppBase;
+                    var _ship = parseFloat(tx.shipping || 0) || 0, _dist = null;
+                    if (_ship > 0 && typeof _computeShippingDistribution === 'function') {
+                        try { _dist = _computeShippingDistribution(tx.items, _ship, tx.shippingMethod || 'value'); } catch (e) { _dist = null; }
+                    }
+                    tx.items.forEach(function (it, idx) {
+                        if (!it || it.isService || it.productId == null) return;
+                        var _v = parseFloat(it.price) || 0;
+                        if (!(_v > 0)) return;
+                        if (_dist && _dist[idx] && _dist[idx].landedUnitCost != null) _v = parseFloat(_dist[idx].landedUnitCost) || 0;
+                        _ppNative[it.productId] = { val: _v, cur: _c };
+                    });
+                });
+            } catch (e) {}
+            // عدد و کدِ ارز با یک فاصله از هم جدا می‌شوند تا در سِل به هم نچسبند.
+            var _ppCell = function (id) {
+                var n = _ppNative[id];
+                if (n && n.val > 0) return R(n.val) + ' ' + n.cur;
+                var rp = _rawPPById[id] || {};
+                var pp = rp.purchasePrices;
+                if (pp && typeof pp === 'object' && !Array.isArray(pp)) {
+                    var codes = Object.keys(pp).filter(function (c) { return (parseFloat(pp[c]) || 0) > 0; });
+                    codes.sort(function (a, b) {
+                        if (a === _ppBase) return -1; if (b === _ppBase) return 1;
+                        return a < b ? -1 : (a > b ? 1 : 0);
+                    });
+                    if (codes.length) return R(parseFloat(pp[codes[0]]) || 0) + ' ' + codes[0];
+                }
+                var v = _ppFor(id);
+                return (v > 0) ? (R(v) + ' ' + _ppBase) : '';
+            };
+            aoa.push(['نام جنس', 'کد جنس', 'گتگوری', 'ورودی', 'خروجی', 'موجودی فعلی', 'واحد شمارش', 'قیمت خرید', 'تاریخ انقضا'].concat(_cfNames, ['اطلاعات بیشتر']));
             list.forEach(function (p) {
-                aoa.push([p.name, p.code, p.category, R(p.inQ), R(p.outQ), R(p.stock), p.unit, R(_ppFor(p.id)), p.expiry].concat(_cfValFor(p.id), [p.notes]));
+                aoa.push([p.name, p.code, p.category, R(p.inQ), R(p.outQ), R(p.stock), p.unit, _ppCell(p.id), p.expiry].concat(_cfValFor(p.id), [p.notes]));
             });
         } else if (kind === 'f_expenses') {
             title = 'مصارفات';
@@ -17775,6 +17897,12 @@ function _rpBuildReportAOA(kind) {
             var fifo = (typeof _getFifoMaps === 'function') ? _getFifoMaps() : { itemMap: {} };
             var itemMap = (fifo && fifo.itemMap) ? fifo.itemMap : {};
             var salesR = (db.getTransactions() || []).filter(function (t) { return t.type === 'فروش' && isInNewReportDateRange(t.date || t.createdAt || '', dr.fromDate, dr.toDate); });
+            // جنسِ کسری (موجودیِ منفی): بهای خریدِ واحدهای کسری هنوز پرداخت نشده، پس
+            // مطابقِ داشبورد کلِ مبلغِ فروش مفاد است. به‌محضِ خریدِ آن جنس، موجودی از
+            // کسری درمی‌آید و همین سطر خودش به عددِ واقعی (فروش − خرید) برمی‌گردد.
+            var _waived = (typeof _deficitWaivedByItem === 'function')
+                ? _deficitWaivedByItem(salesR, (db.getAllProducts && db.getAllProducts()) || [])
+                : {};
             salesR.forEach(function (t) {
                 var cur = t.currency || _baseCur();
                 var when = (t.date || (t.createdAt || '').split('T')[0] || '');
@@ -17782,7 +17910,9 @@ function _rpBuildReportAOA(kind) {
                 (Array.isArray(t.items) ? t.items : []).forEach(function (it, idx) {
                     if (!it || it.isService) return;
                     var q = parseFloat(it.quantity) || 0; var pr = parseFloat(it.price) || 0;
-                    var prof = itemMap[t.id + '|' + idx]; if (prof == null) prof = 0;
+                    var _k = t.id + '|' + idx;
+                    var prof = itemMap[_k]; if (prof == null) prof = 0;
+                    prof += (parseFloat(_waived[_k]) || 0);
                     aoa.push([it.productName || '', q, it.unit || '', cur, R(pr), R(prof), buyer, when, it.notes || t.notes || '']);
                 });
             });
@@ -27238,6 +27368,7 @@ function ssbGetTitle(key) {
         dbinit:   '<i class="fas fa-tools"></i> تصحیح دیتابیس',
         delete:   '<i class="fas fa-trash-alt"></i> حذف داده‌ها',
         datasettings: '<i class="fas fa-cogs"></i> تنظیمات اطلاعات',
+        serversync: '<i class="fas fa-right-left"></i> ارسال و دریافت اطلاعات',
         update:   '<i class="fas fa-cloud-arrow-down"></i> بروزرسانی',
     };
     return titles[key] || '<i class="fas fa-cog"></i> تنظیمات';
@@ -27629,6 +27760,11 @@ function ssbLoadSubContent(key) {
                     <span class="ssb-item-label">ورود افراد</span>
                     <i class="fas fa-chevron-left ssb-arrow"></i>
                 </li>
+                <li onclick="ssbOpenSub('serversync')">
+                    <span class="ssb-item-icon"><i class="fas fa-right-left"></i></span>
+                    <span class="ssb-item-label">ارسال و دریافت اطلاعات</span>
+                    <i class="fas fa-chevron-left ssb-arrow"></i>
+                </li>
                 <li onclick="ssbOpenSub('dbinit')">
                     <span class="ssb-item-icon"><i class="fas fa-tools"></i></span>
                     <span class="ssb-item-label">تصحیح دیتابیس</span>
@@ -27640,6 +27776,36 @@ function ssbLoadSubContent(key) {
                     <i class="fas fa-chevron-left ssb-arrow"></i>
                 </li>
             </ul>`;
+
+        case 'serversync':
+            return `
+            <div class="ssb-card">
+                <h4><i class="fas fa-cloud-arrow-up"></i> ارسال اطلاعات به سرور</h4>
+                <p style="font-size:.82rem;color:#94a3b8;line-height:1.7;margin:0 0 10px;">
+                    تمامِ اطلاعاتِ همین دستگاه به سرور فرستاده می‌شود و <b>جایِ تمامِ اطلاعاتِ
+                    اکانتِ شما در سرور</b> را می‌گیرد. بعد از این، هر دستگاهِ دیگری که
+                    «دریافت اطلاعات از سرور» را بزند، دقیقاً همین اطلاعات را می‌گیرد.
+                </p>
+                <div id="ssb-srv-counts" style="font-size:.8rem;color:#94a3b8;margin-bottom:10px;"></div>
+                <button class="ssb-btn ssb-btn-primary" onclick="jouyaPushAllToServer()">
+                    <i class="fas fa-cloud-arrow-up"></i> ارسال اطلاعات به سرور
+                </button>
+            </div>
+            <div class="ssb-card">
+                <h4><i class="fas fa-cloud-arrow-down"></i> دریافت اطلاعات از سرور</h4>
+                <p style="font-size:.82rem;color:#94a3b8;line-height:1.7;margin:0 0 10px;">
+                    تمامِ اطلاعاتِ سرور روی همین دستگاه می‌نشیند و <b>جایِ اطلاعاتِ فعلیِ
+                    همین دستگاه</b> را می‌گیرد. برای این‌که اطلاعاتِ دو دستگاه کاملاً یکی
+                    شود، روی دستگاهِ مبدأ «ارسال» و روی این دستگاه «دریافت» را بزنید.
+                </p>
+                <button class="ssb-btn ssb-btn-warning" onclick="jouyaPullAllFromServer()">
+                    <i class="fas fa-cloud-arrow-down"></i> دریافت اطلاعات از سرور
+                </button>
+            </div>
+            <div class="ssb-card">
+                <h4><i class="fas fa-circle-info"></i> وضعیت</h4>
+                <div id="ssb-srv-status" style="font-size:.84rem;color:#94a3b8;line-height:1.8;">—</div>
+            </div>`;
 
         default:
             return '<div class="ssb-card"><p style="color:#94a3b8">این بخش در دست ساخت است.</p></div>';
@@ -27660,6 +27826,11 @@ function ssbPopulateForm(key) {
             } catch (e) {}
             // بررسیِ خودکار به‌محضِ باز شدنِ پنل (یک‌کلیکی: کاربر فقط «بروزرسانی» را زده)
             try { setTimeout(function () { if (typeof ndUpdCheck === 'function') ndUpdCheck(); }, 80); } catch (e) {}
+            return;
+        }
+        if (key === 'serversync') {
+            // شمارشِ رکوردهای این دستگاه + وضعیتِ آمادگی، به‌محضِ باز شدنِ پنل
+            try { if (typeof _jsrvFillCounts === 'function') _jsrvFillCounts(); } catch (e) {}
             return;
         }
         const settings = db.getSettings ? db.getSettings() : {};
@@ -41811,10 +41982,18 @@ function __hbShowInstDiag() {
         // راهِ همیشه‌کار: سپردنِ نشانی به مرورگرِ سیستم. این دکمه به هیچ افزونه،
         // FileProvider یا مجوزِ حافظه وابسته نیست — پس حتی وقتی همهٔ راه‌های
         // درون‌برنامه‌ای شکست می‌خورند، کاربر از این‌جا می‌تواند نصب را تمام کند.
+        // اول اجازهٔ نصب — چون در عملِ واقعی تقریباً همیشه همین کم است و فایل
+        // از قبل داخلِ برنامه دانلود شده، پس دانلودِ دوباره بی‌مورد است.
+        try {
+            var pb = mk('روشن کردن اجازهٔ نصب', function () {
+                try { __hbAndroidOpenInstallPermSettings(); } catch (e) {}
+            });
+            ft.appendChild(pb);
+        } catch (e) {}
         var _pub = '';
         try { _pub = String(window.__hbPendingApkUrl || ''); } catch (e) { _pub = ''; }
         if (_pub && /^https?:/i.test(_pub)) {
-            var bb = mk('دانلود با مرورگر (همیشه کار می‌کند)', function () {
+            var bb = mk('دانلود با مرورگر (راه آخر)', function () {
                 try { ov.remove(); } catch (e) {}
                 try { __hbOpenApkViaBrowser(); } catch (e) {}
             });
@@ -41991,30 +42170,27 @@ function __hbAndroidOpenApk(uri, src) {
     //    نتیجه‌اش «Share canceled» است. اشتراک‌گذاریِ فایل هیچ‌وقت APK نصب نمی‌کند،
     //    پس بودنش در زنجیره فقط یک قدمِ گیج‌کننده بود.
     // ══════════════════════════════════════════════════════════════════════════
-    //  ۸) آخرین حلقه — سپردنِ نشانیِ اینترنتی به مرورگرِ سیستم.
+    //  ⚠ «مرورگرِ سیستم (دانلودِ مستقیم)» از زنجیرهٔ خودکار برداشته شد.
     //  ──────────────────────────────────────────────────────────────────────
-    //  همهٔ تلاش‌های بالا یک نقطهٔ ضعفِ مشترک دارند: همگی باید بتوانند یک نشانیِ
-    //  خواندنی به نصب‌کننده بدهند، و این به FileProvider و پیکربندیِ APK وابسته است.
-    //  اگر آن پیکربندی ناقص باشد، هیچ‌کدام هرگز کار نمی‌کنند — هرچقدر هم تلاش کنیم.
+    //  این حلقه نشانیِ https را به مرورگر می‌سپرد. دو عیبِ جدی داشت:
     //
-    //  این راه آن وابستگی را کاملاً دور می‌زند: نشانیِ https را به مرورگر می‌دهیم،
-    //  Download Managerِ خودِ اندروید فایل را می‌گیرد و در اعلان «باز کردن» می‌گذارد؛
-    //  با زدنِ آن، سیستم خودش نصب‌کننده را با یک content:// معتبر باز می‌کند.
-    //  نه FileProvider می‌خواهد، نه مجوزِ حافظه، نه افزونه. هزینه‌اش فقط یک‌بار
-    //  دانلودِ دوباره است — که در برابرِ «اصلاً نصب نشدن» هزینه‌ای نیست.
+    //   ۱) فایل همین حالا داخلِ برنامه دانلود شده است؛ سپردنِ نشانی به مرورگر
+    //      یعنی همان فایل بارِ دوم — این‌بار بیرونِ برنامه — دانلود شود. کاربر
+    //      می‌دید که نوارِ پیشرفتِ درون‌برنامه کامل شد و بعد ناگهان مرورگر با
+    //      نشانیِ گیت‌هاب باز شد و دانلود از نو شروع کرد.
+    //
+    //   ۲) بدتر از آن، __hbWatchInstaller تنها «به پس‌زمینه رفتنِ برنامه» را
+    //      می‌سنجد. بازشدنِ مرورگر هم برنامه را به پس‌زمینه می‌برد، پس این حلقه
+    //      «تأییدشده» شمرده می‌شد و برنامه بسته می‌شد — در حالی که هیچ
+    //      نصب‌کننده‌ای باز نشده بود.
+    //
+    //  حالا همه چیز داخلِ برنامه تمام می‌شود: اگر هیچ‌کدام از راه‌های بالا
+    //  نصب‌کننده را باز نکند، برنامه باز می‌ماند، دلیل را می‌گوید و اجازهٔ
+    //  «نصبِ برنامه‌های ناشناس» را از کاربر می‌خواهد. دانلودِ مرورگری فقط با
+    //  زدنِ آگاهانهٔ دکمهٔ خودش انجام می‌شود، نه به‌صورتِ خودکار.
+    //  (pubUrl همان‌جا می‌ماند چون همان دکمهٔ دستی از آن استفاده می‌کند.)
     // ══════════════════════════════════════════════════════════════════════════
-    if (pubUrl && /^https?:/i.test(pubUrl)) {
-        add('مرورگرِ سیستم (دانلودِ مستقیم)', function () {
-            // AppLauncher نخست است: مرورگرِ بیرونی را باز می‌کند و Download Manager
-            // کار را می‌گیرد. Browser (تبِ درون‌برنامه‌ای) گاهی دانلودِ APK را رد می‌کند.
-            return __jouyaAndCall('AppLauncher', 'openUrl', { url: pubUrl }).catch(function () {
-                return __jouyaAndCall('Browser', 'open', { url: pubUrl });
-            }).catch(function () {
-                try { window.open(pubUrl, '_system'); } catch (e) { location.href = pubUrl; }
-                return true;
-            });
-        });
-    }
+    void pubUrl;
 
     var step = function (i, lastErr) {
         if (i >= tries.length) {
@@ -42051,6 +42227,69 @@ function __hbAndroidOpenApk(uri, src) {
 //  نصب‌کنندهٔ اندروید یک اکتیویتیِ جداست و بسته‌شدنِ برنامه هیچ داده‌ای را نمی‌برد:
 //  بروزرسانی روی همان پکیج و همان امضا می‌نشیند، پس localStorage و کلِ دادهٔ برنامه
 //  دست‌نخورده باقی می‌ماند. کمی تأخیر می‌دهیم تا صفحهٔ نصب واقعاً جلو بیاید.
+// ── مجوزها ───────────────────────────────────────────────────────────────────
+//  درخواستِ کاربر: «اگر به کدام مجوز ضرورت دارید از کاربر بخواهید آنرا فعال کند».
+//  دو مجوز در کارِ نصب دخیل‌اند:
+//
+//   ۱) نوشتن در حافظه — برای کپیِ فایل به پوشهٔ Downloads (یکی از راه‌های نصب).
+//      این یکی را خودِ افزونهٔ Filesystem می‌تواند از کاربر بخواهد، پس پیش از
+//      دانلود می‌پرسیم. اگر کاربر رد کند هیچ مشکلی پیش نمی‌آید: راه‌های دیگرِ
+//      زنجیره (حافظهٔ خارجیِ مخصوصِ برنامه) هیچ مجوزی نمی‌خواهند.
+//
+//   ۲) «نصب برنامه‌های ناشناس» — این را هیچ کدِ جاوااسکریپتی نمی‌تواند روشن کند؛
+//      اندروید عمداً فقط خودِ کاربر را مجاز می‌داند. کاری که می‌شود کرد این است
+//      که صفحهٔ تنظیماتش را باز کنیم. اگر هیچ‌کدام از راه‌ها نشد، مسیرِ دستی را
+//      سرِ راست به کاربر می‌گوییم.
+function __hbAndroidEnsureStoragePerm() {
+    try {
+        var FS = __hbAndPlugin('Filesystem');
+        if (!FS) return Promise.resolve(false);
+        var ask = function () {
+            if (typeof FS.requestPermissions !== 'function') return Promise.resolve(false);
+            return Promise.resolve(FS.requestPermissions())
+                .then(function (r) { return !!(r && (r.publicStorage === 'granted' || r.granted)); })
+                .catch(function () { return false; });
+        };
+        if (typeof FS.checkPermissions === 'function') {
+            return Promise.resolve(FS.checkPermissions()).then(function (r) {
+                if (r && (r.publicStorage === 'granted' || r.granted)) return true;
+                return ask();
+            }).catch(ask);
+        }
+        return ask();
+    } catch (e) { return Promise.resolve(false); }
+}
+
+function __hbAndroidOpenInstallPermSettings() {
+    // چند راهِ ممکن، به ترتیبِ دقت. هر کدام که در این نسخه موجود باشد کار می‌کند.
+    var steps = [
+        function () { return __jouyaAndCall('NativeSettings', 'openAndroid', { option: 'manage_unknown_app_sources' }); },
+        function () { return __jouyaAndCall('NativeSettings', 'open', { optionAndroid: 'manage_unknown_app_sources' }); },
+        function () { return __jouyaAndCall('AppLauncher', 'openUrl', { url: 'android-app://com.android.settings' }); },
+        function () { return __jouyaAndCall('App', 'openSettings', {}); }
+    ];
+    var step = function (i) {
+        if (i >= steps.length) return Promise.reject(new Error('no-route'));
+        return Promise.resolve().then(steps[i]).catch(function () { return step(i + 1); });
+    };
+    return step(0).then(function () { return true; }).catch(function () {
+        // هیچ راهی نبود — مسیرِ دستی را می‌گوییم. هیچ ادعایی نمی‌کنیم که باز شد.
+        try {
+            if (typeof ndUpdSetStatus === 'function') {
+                ndUpdSetStatus('این نسخه نمی‌تواند صفحهٔ تنظیمات را خودش باز کند. ' +
+                    'لطفاً دستی این مسیر را بروید:' +
+                    '<br><small>تنظیمات ← برنامه‌ها ← حسابدار ← نصب برنامه‌های ناشناس (Install unknown apps) ← اجازه بده</small>' +
+                    '<br><small>سپس به همین صفحه برگردید و «باز کردن نصب‌کننده» را بزنید.</small>', 'warn');
+            }
+        } catch (e) {}
+        return false;
+    });
+}
+if (typeof window !== 'undefined') {
+    window.__hbAndroidEnsureStoragePerm = __hbAndroidEnsureStoragePerm;
+    window.__hbAndroidOpenInstallPermSettings = __hbAndroidOpenInstallPermSettings;
+}
+
 function __hbAndroidExitAfterInstaller(delayMs) {
     try {
         setTimeout(function () {
@@ -42110,7 +42349,16 @@ function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
     };
 
     note('در حال دانلود…');
-    tryDir(0).then(function (d) {
+    // مجوزِ حافظه پیش از دانلود پرسیده می‌شود تا راهِ «کپی به Downloads» هم در
+    // دسترس باشد. رد شدنش مانعِ کار نیست — فقط یک راه از زنجیره کم می‌شود.
+    Promise.resolve(
+        (typeof __hbAndroidEnsureStoragePerm === 'function')
+            ? __hbAndroidEnsureStoragePerm().catch(function () { return false; })
+            : false
+    ).then(function (granted) {
+        try { __hbIlog('مجوزِ حافظه', granted ? 'داده شد' : 'داده نشد', granted ? '' : 'راه‌های بی‌نیاز از مجوز استفاده می‌شوند'); } catch (e) {}
+        return tryDir(0);
+    }).then(function (d) {
         cleanup();
         setPct(100);
         try { __hbIlog('دانلود', 'موفق', 'پوشه: ' + d.dir); } catch (e) {}
@@ -42143,14 +42391,22 @@ function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
             // دانلود موفق بود ولی نصب‌کننده باز نشد → راهنماییِ دقیق + دکمهٔ تلاشِ دوباره
             closeOv();
             try { __hbIlog('مسیرِ نیتیو', 'خطا', openErr); __hbShowInstDiag(); } catch (e) {}
-            ndUpdSetStatus('فایلِ بروزرسانی دانلود شد، اما نصب‌کنندهٔ اندروید باز نشد.' +
+            // فایل داخلِ برنامه دانلود شده و روی گوشی هست — دوباره دانلود لازم نیست.
+            // فقط اجازهٔ نصب کم است. پس اول کاربر را به همان اجازه می‌بریم و
+            // دکمهٔ مرورگر را به‌عنوان آخرین راه، با عنوانِ صادقانه، نگه می‌داریم.
+            ndUpdSetStatus('فایلِ بروزرسانی کاملاً داخلِ برنامه دانلود شد و روی گوشی آماده است، ' +
+                'اما اندروید اجازهٔ بازکردنِ نصب‌کننده را نداد.' +
                 '<br><small>' + ((openErr && openErr.message) || '') + '</small>' +
-                '<br><small>در تنظیماتِ گوشی، «نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید، ' +
-                'سپس دکمهٔ زیر را بزنید.</small>' +
+                '<br><small>یک‌بار اجازهٔ «نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید؛ ' +
+                'بعد از آن بروزرسانی همیشه داخلِ خودِ برنامه تمام می‌شود.</small>' +
+                '<br><button type="button" class="btn-primary" style="margin-top:8px" ' +
+                'onclick="__hbAndroidOpenInstallPermSettings()">روشن کردن اجازهٔ نصب</button>' +
                 '<br><button type="button" class="btn-primary" style="margin-top:8px" ' +
                 'onclick="__hbRetryOpenApk()">باز کردن نصب‌کننده</button>' +
-                '<br><button type="button" class="btn-primary" style="margin-top:8px;background:#15803d" ' +
-                'onclick="__hbOpenApkViaBrowser()">دانلود با مرورگر (همیشه کار می‌کند)</button>', 'warn');
+                '<br><small style="opacity:.75">اگر با وجودِ اجازه هم باز نشد، راهِ آخر: ' +
+                'دانلودِ دوبارهٔ فایل با مرورگر.</small>' +
+                '<br><button type="button" class="btn-primary" style="margin-top:6px;background:#15803d" ' +
+                'onclick="__hbOpenApkViaBrowser()">دانلود با مرورگر (راه آخر)</button>', 'warn');
         });
     }).catch(function (err) {
         cleanup();
@@ -42190,10 +42446,14 @@ function __hbRetryOpenApk() {
         try { return window.__hbPendingApkSrc || null; } catch (e) { return null; }
     })()).then(function (opened) {
         if (opened) ndUpdSetStatus('نصب‌کننده باز شد — روی «نصب» بزنید.', 'ok');
-        else ndUpdSetStatus('نصب‌کننده باز نشد — گزارشِ تشخیصی روی صفحه آمد؛ لطفاً همان را بفرستید.' +
-            '<br><small>«نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید و دوباره تلاش کنید.</small>' +
-            '<br><button type="button" class="btn-primary" style="margin-top:8px;background:#15803d" ' +
-            'onclick="__hbOpenApkViaBrowser()">دانلود با مرورگر (همیشه کار می‌کند)</button>', 'warn');
+        else ndUpdSetStatus('نصب‌کننده باز نشد. فایل همچنان روی گوشی آماده است — دانلودِ دوباره لازم نیست.' +
+            '<br><small>اجازهٔ «نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید و دوباره تلاش کنید.</small>' +
+            '<br><button type="button" class="btn-primary" style="margin-top:8px" ' +
+            'onclick="__hbAndroidOpenInstallPermSettings()">روشن کردن اجازهٔ نصب</button>' +
+            '<br><button type="button" class="btn-primary" style="margin-top:8px" ' +
+            'onclick="__hbRetryOpenApk()">تلاشِ دوباره</button>' +
+            '<br><button type="button" class="btn-primary" style="margin-top:6px;background:#15803d" ' +
+            'onclick="__hbOpenApkViaBrowser()">دانلود با مرورگر (راه آخر)</button>', 'warn');
     }).catch(function (e) {
         try { __hbIlog('تلاشِ دوباره', 'خطا', e); __hbShowInstDiag(); } catch (e2) {}
         ndUpdSetStatus('نصب‌کننده باز نشد: ' + ((e && e.message) || '') +
@@ -43003,4 +43263,213 @@ if (typeof window !== 'undefined') {
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', function () { try { _bleInstall(); } catch (e) {} });
     }
+}
+
+
+// ╔════════════════════════════════════════════════════════════════════════════╗
+// ║  ارسال و دریافتِ دستیِ اطلاعات از سرور                                      ║
+// ║  ─────────────────────────────────────────────────────────────────────────  ║
+// ║  این بخش در کنارِ سینکِ زندهٔ موجود کار می‌کند، نه به‌جای آن. سینک همان‌طور      ║
+// ║  که بود تغییرِ لحظه‌ای را جابه‌جا می‌کند؛ این دو دکمه برای وقتی است که کاربر   ║
+// ║  می‌خواهد یک‌بار و به‌طورِ قطعی، اطلاعاتِ یک دستگاه را «مرجع» کند.             ║
+// ║                                                                            ║
+// ║  ⚠ در sync-layer.js هیچ خطی تغییر نکرده است. هر دو عملیات فقط از همان        ║
+// ║    توابعِ عمومیِ آزمایش‌شدهٔ خودِ لایهٔ سینک استفاده می‌کنند:                   ║
+// ║      • ارسال  = cloudWipe()  →  migrate()                                  ║
+// ║      • دریافت = localOnlyWipe()  →  bootstrap()                            ║
+// ║    پس هیچ مسیرِ تازه‌ای در جریانِ ذخیره و همگام‌سازی باز نمی‌شود.               ║
+// ╚════════════════════════════════════════════════════════════════════════════╝
+
+function _jsrvStatus(html, kind) {
+    try {
+        var el = document.getElementById('ssb-srv-status');
+        if (!el) return;
+        var color = (kind === 'ok') ? '#22c55e' : (kind === 'err') ? '#ef4444' : (kind === 'warn') ? '#f59e0b' : '#94a3b8';
+        el.style.color = color;
+        el.innerHTML = String(html == null ? '' : html);
+    } catch (e) {}
+}
+
+// پیش‌نیازها. هیچ عملیاتی بدونِ گذر از این بررسی شروع نمی‌شود — مخصوصاً «ارسال»
+// که اگر وسطِ راه قطع شود، سرور ناقص می‌ماند.
+function _jsrvReady() {
+    var J = (typeof window !== 'undefined') ? window.JouyaSync : null;
+    if (!J) return { ok: false, why: 'لایهٔ همگام‌سازی بارگذاری نشده است.' };
+    var s = null;
+    try { s = (typeof J.session === 'function') ? J.session() : null; } catch (e) {}
+    if (!s || !s.access_token) return { ok: false, why: 'برای این کار باید وارد حسابِ ابریِ خود شده باشید.' };
+    var ws = '';
+    try { ws = localStorage.getItem('jouya_sync_workspace') || ''; } catch (e) {}
+    if (!ws) return { ok: false, why: 'فضای کاریِ ابری پیدا نشد — یک‌بار از برنامه خارج و دوباره وارد شوید.' };
+    try { if (typeof navigator !== 'undefined' && navigator.onLine === false) return { ok: false, why: 'اتصالِ اینترنت لازم است.' }; } catch (e) {}
+    return { ok: true, J: J, ws: ws };
+}
+
+// شمارشِ رکوردهای محلی — هم برای نمایش در پنل، هم برای متنِ تاییدیه.
+function _jsrvLocalSummary() {
+    var out = { total: 0, lines: [] };
+    try {
+        var J = window.JouyaSync;
+        var c = (J && typeof J.localCounts === 'function') ? J.localCounts() : {};
+        var fa = {
+            transactions: 'معاملات', products: 'اجناس', persons: 'اشخاص', expenses: 'مصارف',
+            cashboxes: 'حساب‌ها', cashbox_transactions: 'تراکنشِ حساب‌ها', returns: 'برگشتی‌ها',
+            warehouses: 'گدام‌ها', warehouse_transfers: 'انتقالِ گدام', services: 'خدمات',
+            currencies: 'ارزها', exchange_rates: 'نرخِ ارز'
+        };
+        Object.keys(c).forEach(function (t) {
+            var n = parseInt(c[t], 10) || 0;
+            out.total += n;
+            if (n > 0) out.lines.push((fa[t] || t) + ': ' + n);
+        });
+    } catch (e) {}
+    return out;
+}
+
+// پر کردنِ شمارشِ بالای پنل (از ssbPopulateForm صدا می‌شود)
+function _jsrvFillCounts() {
+    try {
+        var el = document.getElementById('ssb-srv-counts');
+        if (!el) return;
+        var s = _jsrvLocalSummary();
+        el.innerHTML = s.total
+            ? ('روی این دستگاه: <b>' + s.total + '</b> رکورد — ' + s.lines.join('، '))
+            : 'روی این دستگاه رکوردی برای ارسال نیست.';
+        var r = _jsrvReady();
+        _jsrvStatus(r.ok ? 'آمادهٔ ارسال و دریافت.' : r.why, r.ok ? 'ok' : 'warn');
+    } catch (e) {}
+}
+
+// ── ۱) ارسالِ همهٔ اطلاعات به سرور (جایگزینیِ کاملِ اطلاعاتِ اکانت در سرور) ──────
+function jouyaPushAllToServer() {
+    var r = _jsrvReady();
+    if (!r.ok) { _jsrvStatus(r.why, 'err'); if (typeof showMessage === 'function') showMessage('ارسال ممکن نیست', r.why); return; }
+    var sum = _jsrvLocalSummary();
+    if (!sum.total) {
+        _jsrvStatus('روی این دستگاه داده‌ای نیست؛ ارسال انجام نشد تا اطلاعاتِ سرور پاک نشود.', 'warn');
+        if (typeof showMessage === 'function') showMessage('ارسال انجام نشد', 'روی این دستگاه داده‌ای برای ارسال وجود ندارد. اگر این کار انجام می‌شد، اطلاعاتِ سرور خالی می‌شد.');
+        return;
+    }
+    var msg = 'تمامِ اطلاعاتِ این دستگاه (' + sum.total + ' رکورد) به سرور فرستاده می‌شود و ' +
+        '<b>جایِ تمامِ اطلاعاتِ اکانتِ شما در سرور</b> را می‌گیرد.\n\n' +
+        'اطلاعاتِ همین دستگاه دست‌نخورده می‌ماند — فقط نسخهٔ سرور عوض می‌شود.\n' +
+        'هر دستگاهِ دیگری هم که به همین اکانت وصل است، به‌تدریج همین اطلاعات را می‌گیرد.\n\n' +
+        'ادامه می‌دهید؟';
+    showStyledConfirm('ارسال اطلاعات به سرور', msg, function () { _jsrvDoPush(r); });
+}
+
+function _jsrvDoPush(r) {
+    var J = r.J, ws = r.ws;
+    _jsrvStatus('در حال بررسیِ اتصال…', 'info');
+    var connCheck = (typeof J.testConnection === 'function')
+        ? Promise.resolve(J.testConnection()).catch(function () { return false; })
+        : Promise.resolve(true);
+    connCheck.then(function (okConn) {
+        if (okConn === false) throw new Error('اتصال به سرور برقرار نشد — ارسال آغاز نشد و اطلاعاتِ سرور دست‌نخورده ماند.');
+        // سینکِ زنده در طولِ عملیات متوقف می‌شود تا هم‌زمان چیزی به سرور نرود.
+        try { if (typeof J.stop === 'function') J.stop(); } catch (e) {}
+        _jsrvStatus('در حال خالی‌کردنِ نسخهٔ سرور…', 'info');
+        return Promise.resolve(J.cloudWipe());
+    }).then(function (w) {
+        if (w && w.ok === false && w.error) throw new Error('خالی‌کردنِ نسخهٔ سرور ناموفق بود: ' + w.error);
+        _jsrvStatus('در حال ارسالِ اطلاعاتِ این دستگاه…', 'info');
+        return Promise.resolve(J.migrate(ws));
+    }).then(function (m) {
+        // migrate خودش شمارشِ محلی و ابری را مقایسه می‌کند. اگر برابر نشد، یک‌بار
+        // دیگر تلاش می‌کنیم؛ دادهٔ محلی در هیچ حالتی تغییر نمی‌کند، پس تلاشِ دوباره
+        // بی‌خطر است.
+        if (m && m.ok) return m;
+        _jsrvStatus('ارسال ناتمام ماند — تلاشِ دوباره…', 'warn');
+        return Promise.resolve(J.migrate(ws));
+    }).then(function (m) {
+        try { if (typeof J.start === 'function') J.start(); } catch (e) {}
+        if (m && m.ok) {
+            var n = 0;
+            try { Object.keys(m.uploaded || {}).forEach(function (t) { n += (parseInt(m.uploaded[t], 10) || 0); }); } catch (e) {}
+            _jsrvStatus('✅ ارسال کامل شد — ' + n + ' رکورد روی سرور نشست و نسخهٔ سرور دقیقاً برابرِ همین دستگاه است.' +
+                '<br>حالا روی دستگاهِ دیگر «دریافت اطلاعات از سرور» را بزنید.', 'ok');
+            if (typeof showMessage === 'function') showMessage('ارسال کامل شد', 'اطلاعاتِ این دستگاه روی سرور نشست. برای یکی‌شدنِ دستگاهِ دوم، روی آن «دریافت اطلاعات از سرور» را بزنید.');
+        } else {
+            var bad = [];
+            try { Object.keys((m && m.verify) || {}).forEach(function (t) { if (m.verify[t] && !m.verify[t].ok) bad.push(t + ' (محلی ' + m.verify[t].local + ' / سرور ' + m.verify[t].cloud + ')'); }); } catch (e) {}
+            _jsrvStatus('⚠ ارسال کامل نشد. اطلاعاتِ این دستگاه دست‌نخورده است — دوباره «ارسال اطلاعات به سرور» را بزنید.' +
+                (bad.length ? ('<br><small>ناهم‌خوان: ' + bad.join('، ') + '</small>') : ''), 'err');
+            if (typeof showMessage === 'function') showMessage('ارسال کامل نشد', 'اطلاعاتِ این دستگاه سالم و دست‌نخورده است. لطفاً اتصالِ اینترنت را بررسی کنید و دوباره «ارسال اطلاعات به سرور» را بزنید.');
+        }
+        try { _jsrvFillCounts(); } catch (e) {}
+    }).catch(function (e) {
+        try { if (typeof J.start === 'function') J.start(); } catch (e2) {}
+        var why = (e && e.message) || String(e);
+        _jsrvStatus('⚠ ' + why + '<br><small>اطلاعاتِ این دستگاه دست‌نخورده است.</small>', 'err');
+        if (typeof showMessage === 'function') showMessage('ارسال ناموفق', why);
+    });
+}
+
+// ── ۲) دریافتِ همهٔ اطلاعات از سرور (جایگزینیِ کاملِ اطلاعاتِ این دستگاه) ─────────
+function jouyaPullAllFromServer() {
+    var r = _jsrvReady();
+    if (!r.ok) { _jsrvStatus(r.why, 'err'); if (typeof showMessage === 'function') showMessage('دریافت ممکن نیست', r.why); return; }
+    var sum = _jsrvLocalSummary();
+    var msg = 'تمامِ اطلاعاتِ سرور روی این دستگاه می‌نشیند و <b>جایِ اطلاعاتِ فعلیِ همین ' +
+        'دستگاه</b> را می‌گیرد.\n\n' +
+        (sum.total ? ('اطلاعاتِ فعلیِ این دستگاه (' + sum.total + ' رکورد) پاک می‌شود و به‌جایش نسخهٔ سرور می‌آید.\n') : '') +
+        'اگر چیزی روی این دستگاه هست که هنوز به سرور نرفته، از بین می‌رود. اگر مطمئن ' +
+        'نیستید، اول روی همین دستگاه «ارسال اطلاعات به سرور» را بزنید یا یک فایلِ ' +
+        'پشتیبان بگیرید.\n\nادامه می‌دهید؟';
+    showStyledConfirm('دریافت اطلاعات از سرور', msg, function () { _jsrvDoPull(r); });
+}
+
+function _jsrvDoPull(r) {
+    var J = r.J, ws = r.ws;
+    _jsrvStatus('در حال بررسیِ اتصال…', 'info');
+    var connCheck = (typeof J.testConnection === 'function')
+        ? Promise.resolve(J.testConnection()).catch(function () { return false; })
+        : Promise.resolve(true);
+    connCheck.then(function (okConn) {
+        if (okConn === false) throw new Error('اتصال به سرور برقرار نشد — اطلاعاتِ این دستگاه دست‌نخورده ماند.');
+        // سینکِ زنده متوقف می‌شود تا وسطِ پاک‌سازی و دانلود چیزی به سرور نرود.
+        try { if (typeof J.stop === 'function') J.stop(); } catch (e) {}
+        // کلیدهایی که باید جایشان را به نسخهٔ سرور بدهند: دادهٔ کسب‌وکار + فهرست‌های
+        // ساختهٔ کاربر (کتگوری، واحدِ شمارش، فیلدهای دلخواه).
+        //  ⚠ «اطلاعاتِ فروشگاه» (settings) در این فهرست نیست و عمداً پاک نمی‌شود:
+        //    خودِ دانلود آن را از سرور روی مقدارِ فعلی می‌نویسد، پس در پایان هم‌خوان
+        //    می‌شود بدونِ آن‌که لحظه‌ای برنامه بی‌تنظیمات بماند.
+        var keys = [];
+        try { keys = (J.ALL_BUSINESS_KEYS || []).slice(); } catch (e) { keys = []; }
+        try {
+            var ul = (typeof J.userListKeys === 'function') ? (J.userListKeys() || []) : [];
+            ul.forEach(function (k) { if (keys.indexOf(k) === -1) keys.push(k); });
+        } catch (e) {}
+        if (!keys.length) throw new Error('فهرستِ کلیدهای داده خوانده نشد — عملیات انجام نشد.');
+        _jsrvStatus('در حال آماده‌سازی…', 'info');
+        // localOnlyWipe عمداً «فقط محلی» است: ورودی‌های snapshot را هم برمی‌دارد تا
+        // این پاک‌سازی به‌عنوانِ «حذفِ کاربر» به سرور نرود. سرور دست‌نخورده می‌ماند.
+        return Promise.resolve(J.localOnlyWipe(keys, { flushFirst: false }));
+    }).then(function () {
+        _jsrvStatus('در حال دریافتِ اطلاعات از سرور…', 'info');
+        // bootstrap همان مسیرِ آزمایش‌شدهٔ «دستگاهِ تازه» است: cursorها از ابتدا،
+        // دانلودِ کاملِ سرور، سپس یک push که چون محلی و سرور یکی شده‌اند کاری ندارد.
+        return Promise.resolve(J.bootstrap(ws));
+    }).then(function (b) {
+        if (b && b.ok === false) throw new Error((b.error || 'دریافت کامل نشد') + '');
+        var n = (b && b.downloaded) || 0;
+        _jsrvStatus('✅ دریافت کامل شد — ' + n + ' رکورد از سرور آمد. صفحه تازه می‌شود…', 'ok');
+        try { if (typeof showMessage === 'function') showMessage('دریافت کامل شد', 'اطلاعاتِ این دستگاه با نسخهٔ سرور یکی شد. صفحه تازه می‌شود.'); } catch (e) {}
+        // تازه‌سازی لازم است: نماها و شمارنده‌ها از localStorage خوانده شده‌اند و
+        // حالا کلِ دادهٔ زیرِ آن‌ها عوض شده است.
+        setTimeout(function () { try { location.reload(); } catch (e) {} }, 1400);
+    }).catch(function (e) {
+        try { if (typeof J.start === 'function') J.start(); } catch (e2) {}
+        var why = (e && e.message) || String(e);
+        _jsrvStatus('⚠ ' + why, 'err');
+        if (typeof showMessage === 'function') showMessage('دریافت ناموفق', why);
+    });
+}
+
+if (typeof window !== 'undefined') {
+    window.jouyaPushAllToServer = jouyaPushAllToServer;
+    window.jouyaPullAllFromServer = jouyaPullAllFromServer;
+    window._jsrvFillCounts = _jsrvFillCounts;
+    window._jsrvReady = _jsrvReady;
+    window._jsrvLocalSummary = _jsrvLocalSummary;
 }
