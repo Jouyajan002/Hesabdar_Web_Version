@@ -27805,6 +27805,9 @@ function ssbLoadSubContent(key) {
             <div class="ssb-card">
                 <h4><i class="fas fa-circle-info"></i> وضعیت</h4>
                 <div id="ssb-srv-status" style="font-size:.84rem;color:#94a3b8;line-height:1.8;">—</div>
+                <button class="ssb-btn" style="margin-top:10px" onclick="jouyaCheckServerLink()">
+                    <i class="fas fa-plug-circle-check"></i> بررسی اتصال
+                </button>
             </div>`;
 
         default:
@@ -43305,6 +43308,43 @@ function _jsrvReady() {
     return { ok: true, J: J, ws: ws };
 }
 
+// بررسیِ واقعیِ اتصال، پیش از هر عملیاتِ خطرناک.
+// ────────────────────────────────────────────────────────────────────────────
+//  چرا از testConnection/ping استفاده نمی‌کنیم: آن تابع یک درخواستِ ساده به
+//  «ریشهٔ REST» می‌زند و فقط پاسخِ ۲۰۰/۴۰۴/۴۰۰ را سالم می‌شمارد. سرور می‌تواند
+//  برای همان ریشه ۴۰۱ یا ۴۰۳ بدهد در حالی که خواندن و نوشتنِ جدول‌ها کاملاً
+//  سالم است — نتیجه‌اش «اتصال برقرار نشد»ِ دروغین بود.
+//
+//  این بررسی دقیقاً همان کاری را می‌کند که خودِ عملیات می‌کند: یک درخواستِ
+//  احرازهویت‌شده روی یکی از همان جدول‌ها با همان workspace. اگر این جواب بدهد،
+//  یعنی هم شبکه هست، هم توکن معتبر است، هم دسترسیِ جدول برقرار است.
+function _jsrvProbe(J, ws) {
+    var Sb = null;
+    try { Sb = J._sb; } catch (e) { Sb = null; }
+    if (Sb && typeof Sb.req === 'function') {
+        return Sb.req('/rest/v1/products?workspace_id=eq.' + encodeURIComponent(ws) + '&limit=1&select=record_id')
+            .then(function () { return { ok: true }; })
+            .catch(function (e) {
+                var st = (e && e.status) || 0;
+                var why;
+                if (st === 401 || st === 403) {
+                    why = 'دسترسیِ حسابِ ابری تأیید نشد (کدِ ' + st + ') — یک‌بار از برنامه خارج و دوباره وارد شوید.';
+                } else {
+                    why = 'اتصال به سرور برقرار نشد' + (st ? (' (کدِ ' + st + ')') : '') +
+                          ((e && e.message) ? (' — ' + e.message) : '');
+                }
+                return { ok: false, why: why };
+            });
+    }
+    // اگر دسترسیِ مستقیم نبود، به بررسیِ سادهٔ خودِ لایهٔ سینک برمی‌گردیم
+    if (typeof J.testConnection === 'function') {
+        return Promise.resolve(J.testConnection())
+            .then(function (okc) { return okc ? { ok: true } : { ok: false, why: 'اتصال به سرور برقرار نشد.' }; })
+            .catch(function () { return { ok: false, why: 'اتصال به سرور برقرار نشد.' }; });
+    }
+    return Promise.resolve({ ok: true });
+}
+
 // شمارشِ رکوردهای محلی — هم برای نمایش در پنل، هم برای متنِ تاییدیه.
 function _jsrvLocalSummary() {
     var out = { total: 0, lines: [] };
@@ -43361,11 +43401,8 @@ function jouyaPushAllToServer() {
 function _jsrvDoPush(r) {
     var J = r.J, ws = r.ws;
     _jsrvStatus('در حال بررسیِ اتصال…', 'info');
-    var connCheck = (typeof J.testConnection === 'function')
-        ? Promise.resolve(J.testConnection()).catch(function () { return false; })
-        : Promise.resolve(true);
-    connCheck.then(function (okConn) {
-        if (okConn === false) throw new Error('اتصال به سرور برقرار نشد — ارسال آغاز نشد و اطلاعاتِ سرور دست‌نخورده ماند.');
+    _jsrvProbe(J, ws).then(function (c) {
+        if (!c.ok) throw new Error(c.why + ' ارسال آغاز نشد و اطلاعاتِ سرور دست‌نخورده ماند.');
         // سینکِ زنده در طولِ عملیات متوقف می‌شود تا هم‌زمان چیزی به سرور نرود.
         try { if (typeof J.stop === 'function') J.stop(); } catch (e) {}
         _jsrvStatus('در حال خالی‌کردنِ نسخهٔ سرور…', 'info');
@@ -43422,11 +43459,8 @@ function jouyaPullAllFromServer() {
 function _jsrvDoPull(r) {
     var J = r.J, ws = r.ws;
     _jsrvStatus('در حال بررسیِ اتصال…', 'info');
-    var connCheck = (typeof J.testConnection === 'function')
-        ? Promise.resolve(J.testConnection()).catch(function () { return false; })
-        : Promise.resolve(true);
-    connCheck.then(function (okConn) {
-        if (okConn === false) throw new Error('اتصال به سرور برقرار نشد — اطلاعاتِ این دستگاه دست‌نخورده ماند.');
+    _jsrvProbe(J, ws).then(function (c) {
+        if (!c.ok) throw new Error(c.why + ' اطلاعاتِ این دستگاه دست‌نخورده ماند.');
         // سینکِ زنده متوقف می‌شود تا وسطِ پاک‌سازی و دانلود چیزی به سرور نرود.
         try { if (typeof J.stop === 'function') J.stop(); } catch (e) {}
         // کلیدهایی که باید جایشان را به نسخهٔ سرور بدهند: دادهٔ کسب‌وکار + فهرست‌های
@@ -43466,9 +43500,45 @@ function _jsrvDoPull(r) {
     });
 }
 
+// ── بررسیِ اتصال، بدونِ هیچ تغییری در داده ──────────────────────────────────
+//  فقط می‌خواند و گزارش می‌دهد؛ نه چیزی به سرور می‌فرستد و نه چیزی را پاک می‌کند.
+function jouyaCheckServerLink() {
+    var r = _jsrvReady();
+    if (!r.ok) { _jsrvStatus('⚠ ' + r.why, 'err'); return; }
+    _jsrvStatus('در حال بررسی…', 'info');
+    var t0 = Date.now();
+    _jsrvProbe(r.J, r.ws).then(function (c) {
+        var ms = Date.now() - t0;
+        if (!c.ok) { _jsrvStatus('⚠ ' + c.why + '<br><small>زمانِ پاسخ: ' + ms + ' میلی‌ثانیه</small>', 'err'); return; }
+        // اتصال سالم است — حالا تعدادِ رکوردهای سرور را هم نشان می‌دهیم
+        return Promise.resolve(r.J.migrationVerify()).then(function (v) {
+            var lines = [], tb = (v && v.tables) || {};
+            var fa = {
+                transactions: 'معاملات', products: 'اجناس', persons: 'اشخاص', expenses: 'مصارف',
+                cashboxes: 'حساب‌ها', cashbox_transactions: 'تراکنشِ حساب‌ها', returns: 'برگشتی‌ها',
+                warehouses: 'گدام‌ها', warehouse_transfers: 'انتقالِ گدام', services: 'خدمات',
+                currencies: 'ارزها', exchange_rates: 'نرخِ ارز'
+            };
+            Object.keys(tb).forEach(function (t) {
+                var x = tb[t]; if (!x) return;
+                if ((x.local || 0) === 0 && (x.cloud || 0) <= 0) return;
+                lines.push((fa[t] || t) + ': این دستگاه ' + x.local + ' / سرور ' + (x.cloud < 0 ? '؟' : x.cloud));
+            });
+            _jsrvStatus('✅ اتصال سالم است (' + ms + ' میلی‌ثانیه).' +
+                (lines.length ? ('<br><small>' + lines.join('<br>') + '</small>') : ''), 'ok');
+        }).catch(function () {
+            _jsrvStatus('✅ اتصال سالم است (' + ms + ' میلی‌ثانیه).', 'ok');
+        });
+    }).catch(function (e) {
+        _jsrvStatus('⚠ بررسی ناموفق: ' + ((e && e.message) || e), 'err');
+    });
+}
+
 if (typeof window !== 'undefined') {
     window.jouyaPushAllToServer = jouyaPushAllToServer;
     window.jouyaPullAllFromServer = jouyaPullAllFromServer;
+    window.jouyaCheckServerLink = jouyaCheckServerLink;
+    window._jsrvProbe = _jsrvProbe;
     window._jsrvFillCounts = _jsrvFillCounts;
     window._jsrvReady = _jsrvReady;
     window._jsrvLocalSummary = _jsrvLocalSummary;
