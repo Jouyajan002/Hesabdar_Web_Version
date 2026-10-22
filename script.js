@@ -10781,14 +10781,22 @@ function loadCashboxTransactionsList(cashboxId) {
                 _pairKey: log.pairKey || null
             };
         })
-    ].sort(sortNewestFirst);
-    
+    ].sort(
+        // جدیدترین در اولین ردیف و قدیمی‌ترین در آخرین ردیف — با همان کلیدِ زمانیِ
+        // درستِ گزارش (معکوسِ __hbRepAsc)، نه مقایسهٔ متنیِ ساعتِ ۱۲-ساعته.
+        (typeof __hbRepAsc === 'function')
+            ? function (a, b) { return __hbRepAsc(b, a); }
+            : sortNewestFirst
+    );
+
     const tbody = document.getElementById('cashbox-transactions-tbody');
     if (!tbody) return;
     tbody.innerHTML = '';
     
     if (allItems.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;">هیچ معامله‌ای در این حساب ثبت نشده است</td></tr>';
+        // در چیدمانِ کارتی، tbody بلوکی است؛ پس ردیفِ پیام هم بلوکی نوشته می‌شود
+        // تا وسط‌چین و کامل دیده شود.
+        tbody.innerHTML = '<tr class="cbtx-empty-row" style="display:block;"><td style="display:block;text-align:center;padding:24px;color:var(--text-muted,#64748b);">هیچ معامله‌ای در این حساب ثبت نشده است</td></tr>';
         return;
     }
     
@@ -10802,11 +10810,20 @@ function loadCashboxTransactionsList(cashboxId) {
         return (t === 'خرید' || t === 'پرداخت' || t === 'مصرف' || t === 'برداشت از حساب' || t === 'برداشت مبلغ از حساب' || t === 'انتقال خروجی');
     };
     
-    var _chronoItems = allItems.slice().sort(function(a, b) {
-        var da = a.createdAt || a.date || '';
-        var db_ = b.createdAt || b.date || '';
-        return da.localeCompare(db_);
-    });
+    // ترتیبِ زمانیِ واقعی (قدیمی → جدید) برای محاسبهٔ مانده.
+    //  چرا __hbRepAsc و نه مقایسهٔ متنی: ساعتِ ۱۲-ساعته با AM/PM به‌صورتِ رشته
+    //  درست مرتب نمی‌شود («۶:۳۰ صبح» از «۱۱:۰۱ صبح» بزرگ‌تر خوانده می‌شد). همین
+    //  تابع از قبل در «گزارشِ معاملات حساب» استفاده می‌شود، پس صفحه و گزارش
+    //  دقیقاً یک ترتیب و یک مانده می‌دهند.
+    var _chronoItems = allItems.slice().sort(
+        (typeof __hbRepAsc === 'function')
+            ? __hbRepAsc
+            : function (a, b) {
+                var da = a.createdAt || a.date || '';
+                var db_ = b.createdAt || b.date || '';
+                return da.localeCompare(db_);
+            }
+    );
     
     // محاسبه اثر کل تراکنش‌ها به تفکیکِ هر ارز (برای یافتنِ موجودیِ اولیهٔ هر ارز)
     var _bmapCb = (cashbox.balances && typeof cashbox.balances === 'object' && !Array.isArray(cashbox.balances)) ? cashbox.balances : {};
@@ -10861,23 +10878,37 @@ function loadCashboxTransactionsList(cashboxId) {
             : ((item.desc && item.desc !== '-') ? item.desc : '');
         
         const row = document.createElement('tr');
-        row.className = 'cbtx-card-row ' + _rowClass;
+        // ── ردیفِ کارتی، عیناً همان ساختارِ «لیست معاملات شخص» ──────────────────
+        //  کلاس‌های ptx-row و sales-card-row همان استایلِ کارت را می‌آورند؛ کلاسِ
+        //  cbtx-row فقط برای رنگِ نوارِ کناریِ مخصوصِ حساب است. داده‌ها و محاسبات
+        //  همان‌اند که بودند — فقط شکلِ نمایش عوض شده است.
+        row.className = 'sales-card-row ptx-row cbtx-row ' + _rowClass;
         row.dataset.date = (item.date || '').split(' ')[0];
         row.dataset.amount = item.amount;
         row.dataset.type = item.type;
         row.dataset.person = (item.person || '').toLowerCase();
         // ===== دکمه سه‌نقطه عملیات (مانند سایر لیست‌های دیتابیس) =====
+        //  هر دو کلاس نگه داشته می‌شوند: cbtx-kebab برای رفتارِ موجود و
+        //  sales-card-kebab برای جاگرفتن در کارت.
         var _kebab =
-            '<button class="btn-icon cbtx-kebab" title="عملیات" onclick="event.stopPropagation(); showCashboxTxActionBar(event, \'' + item._source + '\', \'' + item._srcId + '\', \'' + cashboxId + '\')"><i class="fas fa-ellipsis-v"></i></button>';
-        row.innerHTML = `
-            <td class="cbtx-cell cbtx-c-type">${item.type}</td>
-            <td class="cbtx-cell cbtx-c-bill">${item.billNumber}</td>
-            <td class="cbtx-cell cbtx-c-time">${formatAfghanDateTime(item.date, item.createdAt) || '-'}</td>
-            <td class="cbtx-cell cbtx-c-amount">${formatNumber(item.amount)} <span class="cbtx-cur-tag">${(typeof getCurrencyLabel === 'function') ? getCurrencyLabel(item.currency) : (item.currency||'')}</span></td>
-            <td class="cbtx-cell cbtx-c-total">${formatNumber(item._runningBalance || 0)} <span class="cbtx-cur-tag">${(typeof getCurrencyLabel === 'function') ? getCurrencyLabel(item.currency) : (item.currency||'')}</span></td>
-            <td class="cbtx-cell cbtx-c-reason">${_reason}</td>
-            <td class="cbtx-cell cbtx-c-ops">${_kebab}</td>
-        `;
+            '<button class="btn-icon cbtx-kebab sales-card-kebab action-trigger-btn" type="button" title="عملیات" onclick="event.stopPropagation(); showCashboxTxActionBar(event, \'' + item._source + '\', \'' + item._srcId + '\', \'' + cashboxId + '\')"><i class="fas fa-ellipsis-v"></i></button>';
+        var _curLbl = (typeof getCurrencyLabel === 'function') ? getCurrencyLabel(item.currency) : (item.currency || '');
+        row.innerHTML = (typeof _ptxSalesCardHtml === 'function')
+            ? _ptxSalesCardHtml({
+                icon: (typeof _ptxTypeIcon === 'function') ? _ptxTypeIcon(item.type) : '',
+                typeText: item.type,
+                billNo: item.billNumber,
+                timeText: formatAfghanDateTime(item.date, item.createdAt) || '-',
+                amountText: formatNumber(item.amount) + ' ' + _curLbl,
+                balanceHtml: formatNumber(item._runningBalance || 0) + ' ' + _curLbl,
+                // رنگِ «مانده» بر اساسِ علامتِ موجودیِ حساب پس از همین معامله:
+                // مثبت سبز، منفی سرخ. (کلاس‌های موجودِ کارت؛ چیزی تازه ساخته نشد.)
+                balanceCls: ((parseFloat(item._runningBalance) || 0) < 0) ? 'is-remaining' : 'is-settled',
+                moreHtml: _reason,
+                kebabHtml: _kebab,
+                badgeCls: isIncome ? 'badge-green' : 'badge-black'
+              })
+            : ('<td class="sales-card-cell">' + item.type + '</td><td class="sales-card-hidden-cell"></td>');
         if (item._source === 'transaction') {
             row.style.cursor = 'pointer';
             (function(sid){ row.onclick = function(e){ if (__hbFromRowMenu(e)) return; if (typeof viewTransaction === 'function') viewTransaction(sid); }; })(item._srcId);

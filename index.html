@@ -4043,19 +4043,12 @@
 
     <div id="cashbox-transactions-summary" style="padding:8px 16px;text-align:center;font-size:13px;color:var(--text-muted,#64748b);border-bottom:1px solid var(--border-color,#e2e8f0);"></div>
 
-    <div class="table-container">
-        <table id="cashbox-txlist-table" class="cbtx-cards-table">
-            <thead class="cbtx-thead">
-                <tr>
-                    <th>نوع معامله</th>
-                    <th>بل نمبر/رسیدنمبر</th>
-                    <th>زمان</th>
-                    <th>مبلغ</th>
-                    <th>مبلغ کل</th>
-                    <th>علت معامله</th>
-                    <th></th>
-                </tr>
-            </thead>
+    <!-- ردیف‌های کارتی، دقیقاً مانندِ «لیست معاملات شخص».
+         عنوان‌های ثابتِ ستون‌ها برداشته شده‌اند؛ همان عنوان‌ها حالا به‌صورتِ
+         برچسب روی خودِ کارتِ هر ردیف می‌آیند (بل نمبر، زمان، مبلغ، مانده، اطلاعات). -->
+    <div class="table-container sales-cards-container cbtx-cards-container">
+        <table id="cashbox-txlist-table" class="sales-cards-table cbtx-cards-table">
+            <thead class="sales-cards-thead cbtx-thead"></thead>
             <tbody id="cashbox-transactions-tbody">
             </tbody>
         </table>

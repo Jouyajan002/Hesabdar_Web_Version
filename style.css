@@ -10404,3 +10404,32 @@ html, body { overflow-anchor: none; }
     /* ⚠ عمداً background نمی‌گذاریم: نوار پس‌زمینهٔ سرمه‌ایِ خودش را دارد و هر
        مقداردهیِ تازه ظاهرش را خراب می‌کند. */
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   لیستِ معاملاتِ حساب — همان رابطِ کارتیِ «لیست معاملات شخص»
+   ──────────────────────────────────────────────────────────────────
+   فقط ظاهر است. داده‌ها، ترتیب، جستجو، مرتب‌سازی و عملیاتِ همین لیست
+   دست‌نخورده‌اند؛ قواعدِ زیر عیناً همان‌هایی‌اند که برای
+   #person-transactions-list نوشته شده بودند تا هر دو یک شکل باشند.
+   ════════════════════════════════════════════════════════════════════ */
+#cashbox-transactions-list .table-container.sales-cards-container {
+    height: auto !important; max-height: none !important; min-height: 0 !important;
+    overflow: visible !important; overflow-x: visible !important; overflow-y: visible !important;
+    border: none !important; background: transparent !important; box-shadow: none !important;
+    border-radius: 0 !important; margin-top: 10px !important; padding: 2px 2px 130px 2px !important;
+}
+/* هدرِ ستون‌ها دیگر نمایش داده نمی‌شود — عنوان‌ها روی خودِ کارت‌ها آمده‌اند */
+#cashbox-transactions-list .sales-cards-thead,
+#cashbox-transactions-list .cbtx-thead { display: none !important; }
+#cashbox-transactions-list .sales-card-row { display: block !important; }
+#cashbox-transactions-list .sales-card-row[style*="display: none"],
+#cashbox-transactions-list .sales-card-row[style*="display:none"] { display: none !important; }
+
+/* نوارِ کناریِ رنگی بر اساسِ جهتِ معامله (همان رنگ‌های قبلیِ این لیست) */
+.cbtx-row .sales-card { border-left: 6px solid #94a3b8; }
+.cbtx-row.cbtx-income  .sales-card { border-left-color: #16a34a; }
+.cbtx-row.cbtx-expense .sales-card { border-left-color: #ea8a1e; }
+.cbtx-row.cbtx-neutral .sales-card { border-left-color: #94a3b8; }
+
+/* انیمیشنِ فقط opacity — مانندِ لیستِ معاملاتِ شخص */
+#cashbox-transactions-list.section { animation: listFadeOpacityOnly 0.3s ease-out !important; }
