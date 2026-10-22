@@ -10433,3 +10433,41 @@ html, body { overflow-anchor: none; }
 
 /* انیمیشنِ فقط opacity — مانندِ لیستِ معاملاتِ شخص */
 #cashbox-transactions-list.section { animation: listFadeOpacityOnly 0.3s ease-out !important; }
+
+/* ────────────────────────────────────────────────────────────────────
+   هدرِ لیستِ معاملاتِ حساب — عیناً الگوی «لیست ورودی و خروجی جنس»
+   (نوارِ سرمه‌ای چسبیده به دو طرفِ صفحه، آیکن‌های سفید، نوارِ جستجوی سفید)
+   فقط ظاهرِ هدر است؛ محتوا، دکمه‌ها و عملکردها دست‌نخورده‌اند.
+   ──────────────────────────────────────────────────────────────────── */
+#cashbox-transactions-list .list-header-filter {
+    background: #1e3a5f !important;
+    border-bottom: none !important;
+    padding: 14px 30px;
+    margin-left: -30px !important;
+    margin-right: -30px !important;
+    gap: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+}
+#cashbox-transactions-list .section-title-in-filter { color: #fff; font-size: 1.15rem; font-weight: 800; }
+#cashbox-transactions-list .section-title-in-filter .btn-back-header {
+    background: rgba(255,255,255,.14) !important; border: none !important; box-shadow: none !important;
+}
+#cashbox-transactions-list .section-title-in-filter .btn-back-header:hover {
+    background: rgba(255,255,255,.26) !important; transform: none !important;
+}
+#cashbox-transactions-list .section-title-in-filter .btn-back-header i { color: #fff !important; }
+#cashbox-transactions-list .filter-icon-btn {
+    background: rgba(255,255,255,.14); border: none; color: #fff;
+    width: 38px; height: 38px; border-radius: 9px; cursor: pointer; font-size: 17px;
+    display: inline-flex; align-items: center; justify-content: center; transition: background .15s;
+}
+#cashbox-transactions-list .filter-icon-btn:hover { background: rgba(255,255,255,.26); }
+#cashbox-transactions-list #global-search-cashbox-transactions {
+    background: #fff; border: 1px solid #fff; color: #1e293b;
+}
+#cashbox-transactions-list #global-search-cashbox-transactions::placeholder { color: #94a3b8; }
+#cashbox-transactions-list #cashbox-txlist-table {
+    max-height: none !important; height: auto !important;
+    overflow: visible !important; border: none !important; background: transparent !important;
+    box-shadow: none !important; border-radius: 0 !important; padding: 0 !important; width: 100% !important;
+}

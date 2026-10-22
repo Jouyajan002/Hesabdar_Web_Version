@@ -10893,18 +10893,18 @@ function loadCashboxTransactionsList(cashboxId) {
         var _kebab =
             '<button class="btn-icon cbtx-kebab sales-card-kebab action-trigger-btn" type="button" title="عملیات" onclick="event.stopPropagation(); showCashboxTxActionBar(event, \'' + item._source + '\', \'' + item._srcId + '\', \'' + cashboxId + '\')"><i class="fas fa-ellipsis-v"></i></button>';
         var _curLbl = (typeof getCurrencyLabel === 'function') ? getCurrencyLabel(item.currency) : (item.currency || '');
-        row.innerHTML = (typeof _ptxSalesCardHtml === 'function')
-            ? _ptxSalesCardHtml({
-                icon: (typeof _ptxTypeIcon === 'function') ? _ptxTypeIcon(item.type) : '',
-                typeText: item.type,
-                billNo: item.billNumber,
-                timeText: formatAfghanDateTime(item.date, item.createdAt) || '-',
-                amountText: formatNumber(item.amount) + ' ' + _curLbl,
-                balanceHtml: formatNumber(item._runningBalance || 0) + ' ' + _curLbl,
-                // رنگِ «مانده» بر اساسِ علامتِ موجودیِ حساب پس از همین معامله:
-                // مثبت سبز، منفی سرخ. (کلاس‌های موجودِ کارت؛ چیزی تازه ساخته نشد.)
-                balanceCls: ((parseFloat(item._runningBalance) || 0) < 0) ? 'is-remaining' : 'is-settled',
-                moreHtml: _reason,
+        // محتوای کارت = همان شش ستونِ خودِ این لیست، با همان مقادیرِ قبلی.
+        row.innerHTML = (typeof _cbtxSalesCardHtml === 'function')
+            ? _cbtxSalesCardHtml({
+                icon: (typeof _cbtxTypeIcon === 'function') ? _cbtxTypeIcon(item.type) : '',
+                typeText: item.type,                                                   // نوع معامله
+                billNo: item.billNumber,                                               // بل نمبر/رسید نمبر
+                timeText: formatAfghanDateTime(item.date, item.createdAt) || '-',      // زمان (تاریخ و ساعت)
+                amountText: formatNumber(item.amount) + ' ' + _curLbl,                 // مبلغ
+                totalText: formatNumber(item._runningBalance || 0) + ' ' + _curLbl,    // مبلغ کل
+                // رنگِ «مبلغ کل» بر اساسِ علامتِ خودِ عدد: مثبت سبز، منفی سرخ.
+                totalCls: ((parseFloat(item._runningBalance) || 0) < 0) ? 'is-remaining' : 'is-settled',
+                reasonText: _reason,                                                   // علت معامله
                 kebabHtml: _kebab,
                 badgeCls: isIncome ? 'badge-green' : 'badge-black'
               })
@@ -43927,4 +43927,58 @@ if (typeof window !== 'undefined') {
     window._wsNormalRows = _wsNormalRows;
     window._wsDropRow = _wsDropRow;
     window._wsReset = _wsReset;
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  کارتِ ردیفِ «لیست معاملات حساب»
+//  ──────────────────────────────────────────────────────────────────────────
+//  ظاهر دقیقاً همان کارتِ لیستِ معاملاتِ شخص و لیستِ ورودی/خروجیِ جنس است، ولی
+//  محتوایش همان شش موردِ خودِ لیستِ معاملاتِ حساب:
+//     نوع معامله · بل نمبر/رسید نمبر · زمان · مبلغ · مبلغ کل · علت معامله
+//  (هیچ داده‌ای تازه ساخته نمی‌شود؛ همان مقادیرِ قبلیِ همین لیست‌اند.)
+// ════════════════════════════════════════════════════════════════════════════
+function _cbtxSalesCardHtml(o) {
+    var _metaReason = (o.reasonText && o.reasonText !== '-' && o.reasonText !== '—')
+        ? '<span class="sales-card-meta-item"><b class="sales-meta-label">علت معامله:</b><span class="sales-meta-val">' + o.reasonText + '</span></span>'
+        : '';
+    return '<td class="sales-card-cell">' +
+                '<div class="sales-card ptx-sales-card">' +
+                    '<div class="sales-card-main">' +
+                        '<span class="sales-card-icon">' + (o.icon || '<i class="fas fa-exchange-alt"></i>') + '</span>' +
+                        '<span class="sales-card-name">' + (o.typeText || '-') + '</span>' +
+                    '</div>' +
+                    '<div class="sales-card-meta">' +
+                        '<span class="sales-card-meta-item"><b class="sales-meta-label">بل نمبر/رسید نمبر:</b><span class="sales-meta-val">' + (o.billNo || '-') + '</span></span>' +
+                        '<span class="sales-card-meta-item"><b class="sales-meta-label">زمان:</b><span class="sales-meta-val">' + (o.timeText || '-') + '</span></span>' +
+                        _metaReason +
+                    '</div>' +
+                    '<div class="sales-card-amount">مبلغ: <span>' + (o.amountText || '-') + '</span></div>' +
+                    '<div class="sales-card-remaining ' + (o.totalCls || 'is-settled') + '">مبلغ کل: <span>' + (o.totalText || '-') + '</span></div>' +
+                    '<div class="sales-card-actions">' +
+                        '<span class="sales-card-status-badge ' + (o.badgeCls || 'badge-black') + '"><i class="fas fa-check"></i></span>' +
+                        (o.kebabHtml || '') +
+                    '</div>' +
+                '</div>' +
+            '</td>' +
+            '<td class="sales-card-hidden-cell" aria-hidden="true"></td>';
+}
+
+// آیکنِ متناسب با نوعِ معاملهٔ حساب (شاملِ نوع‌های مخصوصِ حساب)
+function _cbtxTypeIcon(type) {
+    var t = String(type || '');
+    if (t.indexOf('فروش') !== -1)   return '<i class="fas fa-cart-plus"></i>';
+    if (t.indexOf('خرید') !== -1)   return '<i class="fas fa-shopping-basket"></i>';
+    if (t.indexOf('دریافت') !== -1) return '<i class="fas fa-hand-holding-usd"></i>';
+    if (t.indexOf('پرداخت') !== -1) return '<i class="fas fa-money-check-alt"></i>';
+    if (t.indexOf('مصرف') !== -1)   return '<i class="fas fa-receipt"></i>';
+    if (t.indexOf('انتقال') !== -1) return '<i class="fas fa-right-left"></i>';
+    if (t.indexOf('اضافه') !== -1 || t.indexOf('ورود') !== -1) return '<i class="fas fa-arrow-down"></i>';
+    if (t.indexOf('برداشت') !== -1) return '<i class="fas fa-arrow-up"></i>';
+    return '<i class="fas fa-wallet"></i>';
+}
+
+if (typeof window !== 'undefined') {
+    window._cbtxSalesCardHtml = _cbtxSalesCardHtml;
+    window._cbtxTypeIcon = _cbtxTypeIcon;
 }
