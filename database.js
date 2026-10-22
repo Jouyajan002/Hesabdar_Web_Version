@@ -974,7 +974,9 @@ getCurrentDate() {
 
             // محاسبهٔ مقدار معادل واحد اصلی برای موجودی (آیتم‌های واحد فرعی تبدیل می‌شوند)
             var _qtyForStock = function(it) {
-                var q = parseFloat(it && it.quantity) || 0;
+                // مقدارِ ضایعاتِ همان قلم هم از گدام مصرف می‌شود. قلم‌های قدیمی این
+            // فیلد را ندارند → صفر می‌گیرند و رفتارشان عیناً همان می‌ماند.
+            var q = (parseFloat(it && it.quantity) || 0) + (parseFloat(it && it.wastageQty) || 0);
                 if (it && it.unitType === 'secondary') {
                     var f = parseFloat(it.secondaryFactor) || 0;
                     if (f > 0) return q / f;
@@ -1579,7 +1581,9 @@ recalculateAllProductsStock() {
         const transactions = this.getTransactions();
 
         const _qtyForStock = function(it) {
-            var q = parseFloat(it && it.quantity) || 0;
+            // مقدارِ ضایعاتِ همان قلم هم از گدام مصرف می‌شود. قلم‌های قدیمی این
+            // فیلد را ندارند → صفر می‌گیرند و رفتارشان عیناً همان می‌ماند.
+            var q = (parseFloat(it && it.quantity) || 0) + (parseFloat(it && it.wastageQty) || 0);
             if (it && it.unitType === 'secondary') {
                 var f = parseFloat(it.secondaryFactor) || 0;
                 if (f > 0) return q / f;

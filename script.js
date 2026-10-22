@@ -1192,8 +1192,23 @@ function _computeFifoProfitMaps() {
                     var b = _fifoItemBase(it);
                     if (b.baseQty <= 0) return;
                     var _spMap = {}; _spMap[cur] = b.perBase;
+                    // ── ضایعات ────────────────────────────────────────────────
+                    //  qty  = مقداری که از لایه‌های انبار مصرف می‌شود  → «تعداد + ضایعات»
+                    //  baseQty = مقداری که درآمدِ همین قلم از آن ساخته می‌شود → فقط «تعداد»
+                    //  چرا جدا: مبلغِ ضایعات روی سطرِ جداگانهٔ خودش در بل نشسته است؛ اگر
+                    //  درآمدِ این قلم را هم بالا می‌بردیم، یک مبلغ دو بار شمرده می‌شد.
+                    //  نتیجه برای مثالِ شما: بها ۲۱×۸۰=۱۶۸۰ ، درآمد ۲۰×۱۰۰=۲۰۰۰ ،
+                    //  مفادِ این قلم ۳۲۰ و با سطرِ ضایعات (۱۰۰) جمعاً ۴۲۰.
+                    var _wq = parseFloat(it.wastageQty) || 0;
+                    var _wBase = 0;
+                    if (_wq > 0) {
+                        var _wf = (it.unitType === 'secondary') ? (parseFloat(it.secondaryFactor) || 0) : 0;
+                        _wBase = (_wf > 0) ? (_wq / _wf) : _wq;
+                    }
+                    var _wRev = parseFloat(it.wastageAmount) || 0;
                     ensure(it.productId).push({
-                        ts: ts, kind: 1, seq: seq, qty: b.baseQty, baseQty: b.baseQty,
+                        ts: ts, kind: 1, seq: seq, qty: b.baseQty + _wBase, baseQty: b.baseQty,
+                        wastageRev: _wRev,
                         saleId: tx.id, itemIndex: idx, currency: cur,
                         perBase: _spMap,
                         discount: parseFloat(it.discount) || 0,
@@ -1399,7 +1414,10 @@ function _computeFifoProfitMaps() {
                 if (e.kind !== 1) return;
                 if (e.isPurchaseReturn) return; // برگشت از خرید: خروجیِ بدونِ سود
                 var sp = (e.perBase && e.perBase[e.currency] != null) ? e.perBase[e.currency] : 0;
-                var revenueCur = sp * e.baseQty;
+                // درآمدِ قلم = تعدادِ اصلی × قیمت، به‌علاوهٔ سهمِ همین قلم از مبلغِ
+                // ضایعات (که روی سطرِ جداگانهٔ بل دیده می‌شود). بها از قبل روی
+                // «تعداد + ضایعات» انباشته شده، پس مفاد کامل و بدونِ دوباره‌شماری است.
+                var revenueCur = sp * e.baseQty + (parseFloat(e.wastageRev) || 0);
                 var discCur = (e.discount || 0);
 
                 // ضریبِ «باقی‌مانده پس از برگشت»: اگر بخشی از این قلمِ فروش برگشت خورده،
@@ -3891,6 +3909,37 @@ function saveSale() {
         const productId = productSelect.value;
         if (!productId) return;
 
+        // ── سطرِ ضایعات ────────────────────────────────────────────────────────
+        //  این سطر فقط «نمایش و مبلغ» است: جنس نیست، پس موجودی را تکان نمی‌دهد و
+        //  در مفاد هم جداگانه شمرده نمی‌شود. مصرفِ واقعیِ گدام با wastageQty و سهمِ
+        //  مبلغ با wastageAmount روی خودِ قلم‌های جنس نشسته‌اند، تا داشبورد و همهٔ
+        //  گزارش‌ها یک عدد بدهند — مثالِ شما: درآمد ۲۱۰۰ − بها ۱۶۸۰ = مفاد ۴۲۰.
+        if (typeof _wsIsRow === 'function' && _wsIsRow(row)) {
+            var _wq = parseFloat((row.querySelector('.item-quantity') || {}).value) || 0;
+            var _wp = parseFloat((row.querySelector('.item-price') || {}).value) || 0;
+            var _wtEl = row.querySelector('.item-total');
+            var _wt = (_wtEl && _wtEl.dataset && _wtEl.dataset.raw !== undefined)
+                ? (parseFloat(_wtEl.dataset.raw) || 0)
+                : (_wq * _wp);
+            if (_wq > 0 && _wp > 0) {
+                items.push({
+                    productId: 'WASTE-BILL',
+                    productName: 'ضایعات',
+                    isService: true,          // بدونِ قیمتِ تمام‌شده → تمامِ مبلغ مفاد است
+                    isWastage: true,          // نشانهٔ سطرِ ضایعات (برگشت‌ناپذیر)
+                    quantity: _wq,
+                    unit: (row.querySelector('.item-unit') || {}).textContent || '',
+                    price: _wp,
+                    discount: 0,
+                    total: _wt,
+                    wastagePct: parseFloat(row.dataset.wastagePct) || 0,
+                    unitType: 'primary',
+                    secondaryFactor: 0
+                });
+            }
+            return;
+        }
+
         let productName = 'جنس نامشخص';
         if(productSelect.options && productSelect.selectedIndex >= 0 && productSelect.options.length > 0) {
             productName = productSelect.options[productSelect.selectedIndex].text.split(' (')[0];
@@ -3918,10 +3967,29 @@ function saveSale() {
                 quantity: quantity, unit: unit, price: price, discount: discount, total: total,
                 unitType: _unitType, secondaryFactor: _secFactor
             };
+            // ── مصرفِ واقعیِ گدام برای ضایعات ───────────────────────────────────
+            //  «تعداد» همان مقدارِ اصلیِ واردشدهٔ کاربر می‌ماند (مبنای محاسبهٔ دوباره،
+            //  تا فیصدی هرگز روی مقدارِ افزایش‌یافته سوار نشود). مقدارِ ضایعات جدا
+            //  ثبت می‌شود و فقط موجودی و موتورِ FIFO آن را به مصرف اضافه می‌کنند.
+            //  مبلغش این‌جا نمی‌آید — روی سطرِ جداگانهٔ «ضایعات» است.
+            if (!isService && typeof _wsQtyForRow === 'function') {
+                var _wsq = _wsQtyForRow(row);
+                if (_wsq > 0) {
+                    _saleItm.wastagePct = _wsPct();
+                    _saleItm.wastageQty = _wsq;
+                    // سهمِ همین سطر از مبلغِ ضایعات. مبلغ روی سطرِ جداگانه دیده
+                    // می‌شود ولی در مفاد به همین قلم بسته می‌شود تا داشبورد و
+                    // گزارش‌ها یک عدد بدهند (جمعِ سهم‌ها = مبلغِ سطرِ ضایعات).
+                    _saleItm.wastageAmount = _wsAmountForRow(row);
+                }
+            }
             // قفل‌کردن قیمت خریدِ مبنای مفاد روی لحظهٔ فروش (فقط برای فروشِ غیرکسری)
             if (!isService && typeof _saleCostSnapshot === 'function') {
                 var _snapProd = _prodsAtSale.find(function(p){ return p.id == parseInt(productId); });
-                var _snap = _saleCostSnapshot(_snapProd, quantity, _unitType, _secFactor);
+                // مقدارِ مؤثر = تعداد + ضایعات، تا بررسیِ «موجودی کافی است یا نه» با
+                // همان مقداری انجام شود که واقعاً از گدام خارج می‌شود.
+                var _snapQty = quantity + (parseFloat(_saleItm.wastageQty) || 0);
+                var _snap = _saleCostSnapshot(_snapProd, _snapQty, _unitType, _secFactor);
                 if (_snap) { _saleItm.purchasePriceAFN = _snap.purchasePriceAFN; _saleItm.purchasePriceUSD = _snap.purchasePriceUSD; }
             }
             // جزئیاتِ بل برای این قلم = «جزئیات در بل»ِ خودِ جنس؛ در خودِ بل ماندگار می‌شود
@@ -4377,7 +4445,10 @@ registerDataRebuilder({
 // مقدارِ معادلِ «واحد اصلی» برای موجودی (آیتم‌های واحد فرعی × ضریب تبدیل تبدیل می‌شوند).
 // عیناً همان _qtyForStock در saveTransaction و recalculateAllProductsStock.
 function _engQtyForStock(it) {
-    var q = parseFloat(it && it.quantity) || 0;
+    // مقدارِ ضایعاتِ همان قلمِ فروش هم واقعاً از گدام خارج می‌شود، پس به مصرف افزوده
+    // می‌شود. اقلامِ خرید، برگشت و همهٔ بل‌های قدیمی این فیلد را ندارند → صفر
+    // می‌گیرند و رفتارشان عیناً همان می‌ماند.
+    var q = (parseFloat(it && it.quantity) || 0) + (parseFloat(it && it.wastageQty) || 0);
     if (it && it.unitType === 'secondary') {
         var f = parseFloat(it.secondaryFactor) || 0;
         if (f > 0) return q / f;
@@ -8285,6 +8356,8 @@ function initSalesForm() {
         tbody.innerHTML = ''; // پاکسازی سطرهای قبلی
         addSalesItem();       // افزودن سطر اول با قابلیت جستجو
     }
+    // فرمِ تازه = ضایعاتِ صفر. اگر این کار نشود، فیصدیِ بلِ قبلی روی بلِ بعدی می‌ماند.
+    try { if (typeof _wsReset === 'function') _wsReset(); } catch (e) {}
     // اعمال ارز پیش‌فرض از تنظیمات
     try {
         var _s = (typeof db !== 'undefined' && db.getSettings) ? db.getSettings() : {};
@@ -8748,8 +8821,13 @@ function removeItem(button) {
 
 function updateRowNumbers() {
     const rows = document.querySelectorAll('#sales-items-body .item-row');
-    rows.forEach((row, index) => {
-        row.cells[0].textContent = index + 1;
+    let n = 0;
+    rows.forEach((row) => {
+        // سطرِ ضایعات شماره نمی‌گیرد؛ قلمِ انتخاب‌شدهٔ کاربر نیست و شماره‌گذاریِ
+        // سطرهای جنس را به هم می‌ریزد.
+        if (row.dataset && row.dataset.wastage === '1') { row.cells[0].textContent = '—'; return; }
+        n += 1;
+        row.cells[0].textContent = n;
     });
 }
 
@@ -8870,6 +8948,10 @@ function updateItemTotal(input) {
 }
 
 function calculateSalesTotal() {
+    // سطرِ ضایعات پیش از هر جمع‌زدنی از نو ساخته می‌شود تا با تغییرِ تعداد/قیمت/
+    // افزودن و حذفِ سطرها همیشه هم‌خوان بماند. اگر فیصدی صفر باشد، این فراخوانی
+    // هیچ کاری نمی‌کند و رفتارِ قبلیِ بل عیناً حفظ می‌شود.
+    try { if (typeof _wsSync === 'function') _wsSync(); } catch (e) {}
     const rows = document.querySelectorAll('#sales-items-body .item-row');
     let subtotal      = 0;   // مجموع (qty * price) قبل از تخفیف
     let totalDiscount = 0;   // مجموع تخفیف‌ها
@@ -15934,7 +16016,25 @@ function editTransaction(id) {
                     const tbody = document.getElementById('sales-items-body');
                     if (tbody) {
                         tbody.innerHTML = '';
+                        // ── بازگردانیِ ضایعات ───────────────────────────────────
+                        //  فیصدی از خودِ سند خوانده می‌شود، نه از نو محاسبه. «تعداد»ِ
+                        //  هر قلم همان مقدارِ اصلیِ ذخیره‌شده است (هرگز مقدارِ
+                        //  افزایش‌یافته ذخیره نشده)، پس بازکردنِ دوبارهٔ بل هیچ‌چیز را
+                        //  روی هم انباشته نمی‌کند — حتی اگر ده بار باز و ذخیره شود.
+                        try {
+                            var _wsPctSaved = 0;
+                            (tx.items || []).forEach(function (it) {
+                                if (!it) return;
+                                var v = parseFloat(it.wastagePct) || 0;
+                                if (v > 0 && !_wsPctSaved) _wsPctSaved = v;
+                            });
+                            var _wsIn = document.getElementById('sales-wastage-input');
+                            if (_wsIn) _wsIn.value = _wsPctSaved ? String(_wsPctSaved) : '0';
+                        } catch (e) {}
                         tx.items.forEach((item, idx) => {
+                            // سطرِ ضایعات از روی فیصدی از نو ساخته می‌شود، پس قلمِ
+                            // ذخیره‌شده‌اش دوباره به‌صورتِ سطرِ عادی ساخته نمی‌شود.
+                            if (item && item.isWastage) return;
                             const row = addSalesItem();
                             if (row) {
                                 const productInput = row.querySelector('.item-product');
@@ -19224,6 +19324,9 @@ function _rpProfitAggregate(fromDate, toDate) {
                 if (hasPersonSel && !hasProdSel && !svcOnly) include = true; // نمای شخص‌محورِ خالص: همهٔ اقلام
                 if (!include) return;
                 var prof;
+                // سطرِ ضایعات مبلغش از قبل در مفادِ خودِ قلم‌های جنس شمرده شده
+                // (wastageAmount)، پس این‌جا دوباره شمرده نمی‌شود.
+                if (it.isWastage) return;
                 if (isSvc) { prof = (parseFloat(it.price) || 0) * (parseFloat(it.quantity) || 0); }  // خدمات: بدونِ قیمتِ تمام‌شده → مفاد = مبلغِ خط
                 else { prof = itemMap[t.id + '|' + idx]; if (prof == null) prof = 0; }
                 _add(grossByCur, cur, prof);
@@ -19862,6 +19965,37 @@ function saveAndPrintSale() {
         const productId = productSelect.value;
         if (!productId) return;
 
+        // ── سطرِ ضایعات ────────────────────────────────────────────────────────
+        //  این سطر فقط «نمایش و مبلغ» است: جنس نیست، پس موجودی را تکان نمی‌دهد و
+        //  در مفاد هم جداگانه شمرده نمی‌شود. مصرفِ واقعیِ گدام با wastageQty و سهمِ
+        //  مبلغ با wastageAmount روی خودِ قلم‌های جنس نشسته‌اند، تا داشبورد و همهٔ
+        //  گزارش‌ها یک عدد بدهند — مثالِ شما: درآمد ۲۱۰۰ − بها ۱۶۸۰ = مفاد ۴۲۰.
+        if (typeof _wsIsRow === 'function' && _wsIsRow(row)) {
+            var _wq = parseFloat((row.querySelector('.item-quantity') || {}).value) || 0;
+            var _wp = parseFloat((row.querySelector('.item-price') || {}).value) || 0;
+            var _wtEl = row.querySelector('.item-total');
+            var _wt = (_wtEl && _wtEl.dataset && _wtEl.dataset.raw !== undefined)
+                ? (parseFloat(_wtEl.dataset.raw) || 0)
+                : (_wq * _wp);
+            if (_wq > 0 && _wp > 0) {
+                items.push({
+                    productId: 'WASTE-BILL',
+                    productName: 'ضایعات',
+                    isService: true,          // بدونِ قیمتِ تمام‌شده → تمامِ مبلغ مفاد است
+                    isWastage: true,          // نشانهٔ سطرِ ضایعات (برگشت‌ناپذیر)
+                    quantity: _wq,
+                    unit: (row.querySelector('.item-unit') || {}).textContent || '',
+                    price: _wp,
+                    discount: 0,
+                    total: _wt,
+                    wastagePct: parseFloat(row.dataset.wastagePct) || 0,
+                    unitType: 'primary',
+                    secondaryFactor: 0
+                });
+            }
+            return;
+        }
+
         let productName = 'جنس نامشخص';
         if(productSelect.options && productSelect.selectedIndex >= 0 && productSelect.options.length > 0) {
             productName = productSelect.options[productSelect.selectedIndex].text.split(' (')[0];
@@ -19884,6 +20018,15 @@ function saveAndPrintSale() {
                 productId: parseInt(productId), productName, quantity, unit, price, discount, total,
                 unitType: _unitType, secondaryFactor: _secFactor
             };
+            // مصرفِ واقعیِ گدام برای ضایعات — همان قاعدهٔ مسیرِ ذخیرهٔ عادی
+            if (typeof _wsQtyForRow === 'function') {
+                var _wsq2 = _wsQtyForRow(row);
+                if (_wsq2 > 0) {
+                    _saleItm2.wastagePct = _wsPct();
+                    _saleItm2.wastageQty = _wsq2;
+                    _saleItm2.wastageAmount = _wsAmountForRow(row);
+                }
+            }
             // قفل‌کردن قیمت خریدِ مبنای مفاد روی لحظهٔ فروش (فقط برای فروشِ غیرکسری)
             if (typeof _saleCostSnapshot === 'function') {
                 var _snapProd2 = _prodsAtSale.find(function(p){ return p.id == parseInt(productId); });
@@ -23458,11 +23601,14 @@ function _saleReturnInfo(saleId) {
             var sold = parseFloat(it.quantity) || 0;
             var ret = returnedByIdx[idx] || 0;
             var returnable = sold - ret; if (returnable < 0) returnable = 0;
+            // سطرِ ضایعات برگشت‌پذیر نیست: ماده‌اش مصرف شده و به گدام برنمی‌گردد.
+            if (it && it.isWastage) returnable = 0;
             return {
                 index: idx,
                 productId: it.productId,
                 productName: it.productName,
                 isService: !!it.isService,
+                isWastage: !!(it && it.isWastage),
                 unit: it.unit,
                 price: parseFloat(it.price) || 0,
                 discount: parseFloat(it.discount) || 0,
@@ -42993,6 +43139,9 @@ function _bleEsc(t) {
 function _bleCtx(wrapper) {
     var row = wrapper ? wrapper.closest('tr') : null;
     if (!row) return null;
+    // سطرِ ضایعات از فیصدی ساخته می‌شود و ویرایشِ دستی ندارد؛ فورمِ کوچکِ ویرایشِ
+    // قلم برایش باز نمی‌شود تا عددهایش با فیصدی ناهم‌خوان نشوند.
+    if (row.dataset && row.dataset.wastage === '1') return null;
     var isPurchase = !!row.closest('#purchase-items-body');
     // تشخیصِ «خدمت» در هر دو بل: ردیفِ بلِ فروش dataset.serviceId می‌گیرد و ردیفِ بلِ
     // خرید شناسه را با پیشوندِ svc- در فیلدِ پنهان نگه می‌دارد. هر دو حالت پذیرفته
@@ -43542,4 +43691,209 @@ if (typeof window !== 'undefined') {
     window._jsrvFillCounts = _jsrvFillCounts;
     window._jsrvReady = _jsrvReady;
     window._jsrvLocalSummary = _jsrvLocalSummary;
+}
+
+
+// ╔════════════════════════════════════════════════════════════════════════════╗
+// ║  ضایعات در بل فروش                                                         ║
+// ║  ─────────────────────────────────────────────────────────────────────────  ║
+// ║  یک فیصدی برای کلِ بل گرفته می‌شود و در انتهای سطرها یک سطرِ «ضایعات»        ║
+// ║  ساخته می‌شود:                                                              ║
+// ║    • جنس  : ضایعات                                                         ║
+// ║    • تعداد: مجموعِ تعدادِ همهٔ سطرهای جنس                                    ║
+// ║    • واحد : واحدِ سطرهای جنس (اگر یکسان باشند)                               ║
+// ║    • قیمت : ضریب = مبلغِ ضایعات ÷ مجموعِ تعداد                               ║
+// ║    • جمله : مبلغِ ضایعات = جمعِ (تعداد × قیمت)ِ هر سطر × فیصدی ÷ ۱۰۰          ║
+// ║                                                                            ║
+// ║  ⚠ قاعدهٔ ضدِ افزایشِ مرکب: فیصدی هرگز روی مقدارِ افزایش‌یافته اعمال نمی‌شود.  ║
+// ║    هر بار محاسبه از «مقدارِ اصلیِ» خودِ سطرها آغاز می‌شود، و سطرِ ضایعات پیش   ║
+// ║    از هر محاسبه کاملاً دور انداخته و از نو ساخته می‌شود. قیمتِ خریدِ عمومیِ    ║
+// ║    جنس در هیچ مسیری نوشته نمی‌شود — این بخش فقط می‌خواند.                    ║
+// ║                                                                            ║
+// ║  مصرفِ واقعیِ گدام: روی خودِ قلمِ جنس فیلدِ wastageQty می‌نشیند و موجودی و      ║
+// ║  موتورِ FIFO به اندازهٔ «تعداد + ضایعات» مصرف می‌کنند. مبلغِ ضایعات روی سطرِ   ║
+// ║  جداگانه می‌نشیند، پس نه مبلغ دوبار شمرده می‌شود و نه بها.                    ║
+// ╚════════════════════════════════════════════════════════════════════════════╝
+
+var _wsBusy = false;   // محافظ در برابر فراخوانیِ بازگشتی
+
+function billToggleWastage() {
+    var panel = document.getElementById('sales-wastage-panel');
+    if (!panel) return;
+    var other = document.getElementById('sales-discount-panel');
+    if (other) other.classList.remove('open');
+    panel.classList.toggle('open');
+}
+
+/** فیصدیِ ضایعاتِ جاریِ بل (همیشه عددِ معتبرِ نامنفی) */
+function _wsPct() {
+    var el = document.getElementById('sales-wastage-input');
+    if (!el) return 0;
+    var raw = (typeof toEnglishDigits === 'function') ? toEnglishDigits(String(el.value || '')) : String(el.value || '');
+    var v = parseFloat(raw);
+    if (!isFinite(v) || v < 0) return 0;      // ورودیِ نامعتبر/منفی → بی‌اثر
+    return v;
+}
+
+/** آیا این سطر، سطرِ ضایعات است؟ */
+function _wsIsRow(row) { return !!(row && row.dataset && row.dataset.wastage === '1'); }
+
+/** سطرهای جنس/خدمتِ عادیِ بل (بدونِ سطرِ ضایعات) */
+function _wsNormalRows() {
+    var out = [];
+    var rows = document.querySelectorAll('#sales-items-body .item-row');
+    for (var i = 0; i < rows.length; i++) if (!_wsIsRow(rows[i])) out.push(rows[i]);
+    return out;
+}
+
+/** برداشتنِ سطرِ ضایعات (اگر باشد) — همیشه پیش از ساختِ دوباره */
+function _wsDropRow() {
+    var rows = document.querySelectorAll('#sales-items-body .item-row');
+    for (var i = 0; i < rows.length; i++) if (_wsIsRow(rows[i])) rows[i].parentNode.removeChild(rows[i]);
+}
+
+/**
+ * محاسبهٔ ضایعات از روی سطرهای جنس.
+ * خروجی: { pct, qty, amount, unit, coef } یا null اگر ضایعاتی در کار نباشد.
+ *   amount = جمعِ (تعداد × قیمت)ِ هر سطرِ جنس × فیصدی ÷ ۱۰۰      ← حسابِ دقیقِ سطربه‌سطر
+ *   coef   = amount ÷ مجموعِ تعداد                               ← همان «ضریب»ِ ستونِ قیمت
+ * خدمات در ضایعات شرکت نمی‌کنند (ماده‌ای مصرف نمی‌شود).
+ */
+function _wsCompute() {
+    var pct = _wsPct();
+    if (!(pct > 0)) return null;
+    var rows = _wsNormalRows();
+    var sumQty = 0, sumValue = 0, units = {}, unit = '';
+    for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var hid = row.querySelector('.item-product');
+        var pid = hid ? String(hid.value || '') : '';
+        if (!pid) continue;
+        if (pid.indexOf('SVC-') === 0) continue;                 // خدمت → بدونِ ضایعات
+        if (row.dataset && row.dataset.serviceId) continue;
+        var q = parseFloat((row.querySelector('.item-quantity') || {}).value) || 0;
+        var p = parseFloat((row.querySelector('.item-price') || {}).value) || 0;
+        if (!(q > 0) || !(p > 0)) continue;
+        sumQty += q;
+        sumValue += q * p;
+        var u = (row.querySelector('.item-unit') || {}).textContent || '';
+        if (u) { units[u] = (units[u] || 0) + 1; if (!unit) unit = u; }
+    }
+    if (!(sumQty > 0) || !(sumValue > 0)) return null;
+    var amount = sumValue * pct / 100;
+    if (!(amount > 0)) return null;
+    // اگر واحدها یکسان نبودند، ستونِ واحد خالی می‌ماند تا عددِ گمراه‌کننده ندهد
+    if (Object.keys(units).length > 1) unit = '';
+    return { pct: pct, qty: sumQty, amount: amount, unit: unit, coef: amount / sumQty };
+}
+
+/** ساختِ سطرِ ضایعات در انتهای جدول (فقط نمایش و مبلغ — موجودی روی سطرهای جنس است) */
+function _wsBuildRow(w) {
+    var tbody = document.getElementById('sales-items-body');
+    if (!tbody) return null;
+    var tr = document.createElement('tr');
+    tr.className = 'item-row wastage-row';
+    tr.dataset.wastage = '1';
+    tr.dataset.wastagePct = String(w.pct);
+    var fmt = (typeof formatNumber === 'function') ? formatNumber : function (x) { return String(x); };
+    var r2 = function (v) { return Math.round((parseFloat(v) || 0) * 100) / 100; };
+    tr.innerHTML =
+        '<td style="text-align:center;">—</td>' +
+        '<td>' +
+            '<input type="hidden" class="item-product" value="WASTE-BILL">' +
+            '<input type="text" class="product-search-input form-control" value="ضایعات" readonly ' +
+                   'style="background:transparent;border:none;font-weight:600;">' +
+        '</td>' +
+        '<td><input type="number" class="item-quantity bill-cell-input" value="' + r2(w.qty) + '" readonly style="width:100%;"></td>' +
+        '<td><span class="unit-cell-wrap"><span class="item-unit">' + (w.unit || '') + '</span></span></td>' +
+        '<td><input type="number" class="item-price bill-cell-input" value="' + r2(w.coef) + '" readonly style="width:100%;"></td>' +
+        '<td><input type="number" class="item-discount bill-cell-input" value="0" readonly style="width:100%;"></td>' +
+        '<td><span class="item-total">' + fmt(r2(w.amount)) + '</span></td>' +
+        '<td style="text-align:center;opacity:.6;"><i class="fas fa-percent" title="سطرِ ضایعات — از فیصدی ساخته می‌شود"></i></td>';
+    var totalSpan = tr.querySelector('.item-total');
+    if (totalSpan) totalSpan.dataset.raw = r2(w.amount);
+    tbody.appendChild(tr);
+    return tr;
+}
+
+/**
+ * نقطهٔ ورودیِ اصلی: سطرِ ضایعات را از نو می‌سازد و مجموع‌ها را تازه می‌کند.
+ * هر بار از صفر محاسبه می‌شود، پس بازکردن و بستنِ چندبارهٔ پنل هیچ‌چیز را انباشته نمی‌کند.
+ */
+function _wsSync() {
+    if (_wsBusy) return;
+    _wsBusy = true;
+    try {
+        _wsDropRow();
+        var w = _wsCompute();
+        if (w) _wsBuildRow(w);
+        var lbl = document.getElementById('sales-total-wastage');
+        if (lbl) {
+            var amt = w ? Math.round(w.amount * 100) / 100 : 0;
+            lbl.dataset.raw = amt;
+            lbl.textContent = (typeof formatNumber === 'function') ? formatNumber(amt) : String(amt);
+        }
+    } catch (e) {
+        console.error('ضایعات:', e);
+    } finally {
+        _wsBusy = false;
+    }
+}
+
+function applySalesWastage() {
+    _wsSync();
+    try { if (typeof calculateSalesTotal === 'function') calculateSalesTotal(); } catch (e) {}
+}
+
+/** سهمِ مبلغِ ضایعاتِ یک سطرِ جنس = تعداد × قیمت × فیصدی ÷ ۱۰۰ */
+function _wsAmountForRow(row) {
+    var pct = _wsPct();
+    if (!(pct > 0) || _wsIsRow(row)) return 0;
+    var hid = row.querySelector('.item-product');
+    var pid = hid ? String(hid.value || '') : '';
+    if (!pid || pid.indexOf('SVC-') === 0) return 0;
+    if (row.dataset && row.dataset.serviceId) return 0;
+    var q = parseFloat((row.querySelector('.item-quantity') || {}).value) || 0;
+    var p = parseFloat((row.querySelector('.item-price') || {}).value) || 0;
+    if (!(q > 0) || !(p > 0)) return 0;
+    return q * p * pct / 100;
+}
+
+/** مقدارِ ضایعاتِ یک سطرِ جنس = تعداد × فیصدی ÷ ۱۰۰ (همیشه از مقدارِ اصلی) */
+function _wsQtyForRow(row) {
+    var pct = _wsPct();
+    if (!(pct > 0) || _wsIsRow(row)) return 0;
+    var hid = row.querySelector('.item-product');
+    var pid = hid ? String(hid.value || '') : '';
+    if (!pid || pid.indexOf('SVC-') === 0) return 0;
+    if (row.dataset && row.dataset.serviceId) return 0;
+    var q = parseFloat((row.querySelector('.item-quantity') || {}).value) || 0;
+    var p = parseFloat((row.querySelector('.item-price') || {}).value) || 0;
+    if (!(q > 0) || !(p > 0)) return 0;
+    return q * pct / 100;
+}
+
+/** پاک‌کردنِ کاملِ ضایعات (هنگام بازکردنِ فرمِ تازه) */
+function _wsReset() {
+    try {
+        var el = document.getElementById('sales-wastage-input');
+        if (el) el.value = '0';
+        var lbl = document.getElementById('sales-total-wastage');
+        if (lbl) { lbl.dataset.raw = 0; lbl.textContent = (typeof formatNumber === 'function') ? formatNumber(0) : '0'; }
+        var panel = document.getElementById('sales-wastage-panel');
+        if (panel) panel.classList.remove('open');
+        _wsDropRow();
+    } catch (e) {}
+}
+
+if (typeof window !== 'undefined') {
+    window.billToggleWastage = billToggleWastage;
+    window.applySalesWastage = applySalesWastage;
+    window._wsPct = _wsPct;
+    window._wsIsRow = _wsIsRow;
+    window._wsCompute = _wsCompute;
+    window._wsQtyForRow = _wsQtyForRow;
+    window._wsNormalRows = _wsNormalRows;
+    window._wsDropRow = _wsDropRow;
+    window._wsReset = _wsReset;
 }

@@ -1990,6 +1990,13 @@
                                             <span class="bill-disc-result">تخفیف: <strong id="sales-total-discount">۰</strong></span>
                                         </div>
                                     </div>
+                                    <div class="bill-discount-pop">
+                                        <button type="button" class="bill-pill" onclick="billToggleWastage()" title="ضایعات">ضایعات</button>
+                                        <div class="bill-discount-panel bill-discount-inline" id="sales-wastage-panel">
+                                            <input type="number" id="sales-wastage-input" class="bill-disc-field" step="0.01" value="0" min="0" oninput="applySalesWastage()" onchange="applySalesWastage()" placeholder="فیصدی ضایعات">
+                                            <span class="bill-disc-result">ضایعات: <strong id="sales-total-wastage">۰</strong></span>
+                                        </div>
+                                    </div>
                                     <button type="button" class="bill-pill" onclick="billRegisterProduct(false)" title="ثبت جنس جدید و افزودن به بل">
                                         <i class="fas fa-box-open"></i> ثبت جنس
                                     </button>
