@@ -43,7 +43,7 @@ function createWindow() {
         height: 900,
         minWidth: 900,
         minHeight: 600,
-        title: 'سیستم مدیریت فروشگاه',
+        title: 'APEX Store Manager',
         icon: path.join(__dirname, 'assets', 'icon.png'),
         webPreferences: {
             nodeIntegration: false,
@@ -55,17 +55,7 @@ function createWindow() {
         backgroundColor: '#f1f5f9',
     });
 
-    // در نسخهٔ الکترون (پروتکل file://) نباید Service Worker فعال باشد؛ SWِ باقی‌مانده از
-    // نسخهٔ وب، بارگذاریِ index.html را با ERR_FAILED می‌شکند. پیش از بارگذاری، هر SW/کشِ
-    // ثبت‌شده پاک می‌شود (localStorage و داده‌های برنامه دست‌نخورده می‌مانند).
-    var _loaded = false;
-    var _loadApp = function () { if (_loaded) return; _loaded = true; mainWindow.loadFile('index.html'); };
-    try {
-        mainWindow.webContents.session
-            .clearStorageData({ storages: ['serviceworkers', 'cachestorage'] })
-            .then(_loadApp, _loadApp);
-    } catch (e) { _loadApp(); }
-    setTimeout(_loadApp, 1500); // failsafe: اگر پاک‌سازی طول کشید، حتماً بارگذاری شود
+    mainWindow.loadFile('index.html');
 
     if (isDev) {
         mainWindow.webContents.openDevTools({ mode: 'detach' });
@@ -237,336 +227,95 @@ function shareFileViaWindowsShareUI(filePath, title, win) {
     return new Promise((resolve) => {
         try {
             if (process.platform !== 'win32') return resolve({ ok: false, diag: 'not-win32' });
-            // نکتهٔ کلیدی: GetForWindow فقط HWNDِ «همان پراسسِ فراخوان» را می‌پذیرد؛ HWNDِ پنجرهٔ
-            // Electron از یک پراسسِ PowerShellِ جدا → E_ACCESSDENIED. پس پنجرهٔ لنگر را داخلِ خودِ
-            // PowerShell می‌سازیم و پنل را روی همان باز می‌کنیم (همان روشی که در تست جواب داد).
+            const hwnd = _readHwndString(win);
+            if (!hwnd) return resolve({ ok: false, diag: 'no-hwnd' });
 
             const esc = function (s) { return String(s == null ? '' : s).replace(/'/g, "''"); };
-            const logPath = path.join(app.getPath('temp'), 'jouya-share-log-' + Date.now() + '.txt');
             // نشانگرهای مرحله‌ای (STEPn_OK) تا اگر جایی خطا داد، دقیقاً بدانیم کدام مرحله بود.
-            // Emit: مارکرها را هم به کنسول (غیرریدایرکت) و هم به فایلِ لاگ می‌نویسد تا Node آن‌ها را
-            // از فایل بخواند (خروجیِ اصلی ریدایرکت نمی‌شود تا پراسس «کنسولیِ واقعی/تعاملی» بماند و
-            // پنلِ اشتراک برنامه‌ها را برشمارد). Emit عمداً از Write-Output استفاده نمی‌کند.
-            // مسیر و عنوان را Base64 می‌کنیم تا نامِ فارسیِ فایل مستقل از encodingِ اسکریپت دقیق
-            // دیکد شود (رفعِ نامِ فایلِ به‌هم‌ریخته). LogPath اَسکی است و نیاز ندارد.
-            const b64 = function (s) { return Buffer.from(String(s == null ? '' : s), 'utf8').toString('base64'); };
-            // ابعادِ پنجرهٔ برنامه: پنجرهٔ لنگر را دقیقاً روی همان می‌سازیم تا مثلِ اپِ مرجع، لنگر
-            // «خودِ پنجرهٔ برنامه» به‌نظر برسد (نه یک پنجرهٔ اضافه) و پنل هم کامل باز شود.
-            var _wb = {};
-            try { _wb = (win && typeof win.getBounds === 'function') ? win.getBounds() : {}; } catch (e) { _wb = {}; }
-            var _wx = Math.round(_wb.x != null ? _wb.x : 120), _wy = Math.round(_wb.y != null ? _wb.y : 80);
-            var _ww = Math.round(_wb.width != null && _wb.width > 400 ? _wb.width : 1100);
-            var _wh = Math.round(_wb.height != null && _wb.height > 300 ? _wb.height : 740);
             const lines = [
-                "$FilePath = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('" + b64(filePath) + "'))",
-                "$script:shareTitle = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String('" + b64(title) + "'))",
-                "$LogPath = '" + esc(logPath) + "'",
-                "$WinX = " + _wx, "$WinY = " + _wy, "$WinW = " + _ww, "$WinH = " + _wh,
-                "function Emit($m){ try { [Console]::Out.WriteLine([string]$m) } catch {} ; try { [System.IO.File]::AppendAllText($LogPath, ([string]$m) + [Environment]::NewLine, [System.Text.Encoding]::UTF8) } catch {} }",
+                "$FilePath = '" + esc(filePath) + "'",
+                "$HwndStr = '" + esc(hwnd) + "'",
+                "$script:shareTitle = '" + esc(title) + "'",
                 "$ErrorActionPreference = 'Stop'",
                 "try {",
                 "    Add-Type -AssemblyName System.Windows.Forms | Out-Null",
-                "    Add-Type -AssemblyName System.Drawing | Out-Null",
                 "    Write-Output 'STEP1_OK winforms'",
                 "    $iface = @'",
                 "using System;",
-                "using System.Text;",
-                "using System.Diagnostics;",
-                "using System.Security.Principal;",
                 "using System.Runtime.InteropServices;",
                 '[ComImport, Guid("3A3DCD6C-3EAB-43DC-BCDE-45671CE800C8"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]',
                 "public interface IDTMInterop {",
                 "    [return: MarshalAs(UnmanagedType.IInspectable)] object GetForWindow(IntPtr hwnd, [In, MarshalAs(UnmanagedType.LPStruct)] Guid riid);",
                 "    void ShowShareUIForWindow(IntPtr hwnd);",
                 "}",
-                // کلاسِ کمکی: کستِ RCW به اینترفیسِ COM و صدا زدنِ متدها را داخلِ C# (کامپایل‌شده)
-                // انجام می‌دهد. علتِ خطای قبلی این بود که PowerShell به‌صورتِ دینامیک (IDispatch) نمی‌تواند
-                // متدهای اینترفیسِ IUnknown-only (مثل GetForWindow) را روی __ComObject پیدا کند؛ اما کستِ
-                // (IDTMInterop)factory در C# یک QueryInterfaceِ واقعی می‌زند و از vtable صدا می‌زند.
-                "public static class JouyaDtm {",
-                "    [return: MarshalAs(UnmanagedType.IInspectable)]",
-                "    public static object GetForWindow(object factory, IntPtr hwnd, Guid iid) {",
-                "        return ((IDTMInterop)factory).GetForWindow(hwnd, iid);",
-                "    }",
-                "    public static void ShowUI(object factory, IntPtr hwnd) {",
-                "        ((IDTMInterop)factory).ShowShareUIForWindow(hwnd);",
-                "    }",
-                "}",
-                // کمک‌کارِ user32 برای فورگراند کردنِ پنجرهٔ برنامه (Electron) پیش از نمایشِ پنلِ اشتراک؛
-                // پنلِ اشتراک فقط برای پنجرهٔ فعالِ فورگراند نمایش داده می‌شود.
-                "public static class Win32 {",
-                "    [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr h);",
-                "    [DllImport(\"user32.dll\")] public static extern bool ShowWindow(IntPtr h, int n);",
-                "    [DllImport(\"user32.dll\")] public static extern bool BringWindowToTop(IntPtr h);",
-                "    [DllImport(\"user32.dll\")] public static extern void SwitchToThisWindow(IntPtr h, bool alt);",
-                "    [DllImport(\"user32.dll\")] public static extern IntPtr GetForegroundWindow();",
-                "    [DllImport(\"user32.dll\")] public static extern uint GetWindowThreadProcessId(IntPtr h, out uint pid);",
-                "    [DllImport(\"kernel32.dll\")] public static extern uint GetCurrentThreadId();",
-                "    [DllImport(\"user32.dll\")] public static extern bool AttachThreadInput(uint a, uint b, bool attach);",
-                "    [DllImport(\"user32.dll\")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);",
-                "    [DllImport(\"shell32.dll\")] public static extern int SetCurrentProcessExplicitAppUserModelID([MarshalAs(UnmanagedType.LPWStr)] string appID);",
-                "    [DllImport(\"shell32.dll\")] public static extern int GetCurrentProcessExplicitAppUserModelID(out IntPtr AppID);",
-                "    [DllImport(\"kernel32.dll\")] public static extern IntPtr GetConsoleWindow();",
-                "    [DllImport(\"kernel32.dll\")] public static extern bool AllocConsole();",
-                "    [DllImport(\"user32.dll\")] public static extern bool IsWindowVisible(IntPtr h);",
-                "    [DllImport(\"user32.dll\")] public static extern bool SetWindowPos(IntPtr h, IntPtr after, int x, int y, int cx, int cy, uint flags);",
-                "    [DllImport(\"user32.dll\")] public static extern IntPtr GetProcessWindowStation();",
-                "    [DllImport(\"user32.dll\", CharSet = CharSet.Unicode)] public static extern bool GetUserObjectInformation(IntPtr hObj, int nIndex, StringBuilder pvInfo, int nLength, out int lenNeeded);",
-                // گزارشِ زمینهٔ اجراییِ پراسس برای تشخیصِ فرقِ «اجرای اپ» با «تستِ مستقل».
-                "    public static string ProcContext() {",
-                "        StringBuilder sb = new StringBuilder();",
-                "        try { IntPtr a; int hr = GetCurrentProcessExplicitAppUserModelID(out a); string s = (hr == 0 && a != IntPtr.Zero) ? Marshal.PtrToStringUni(a) : (\"(none hr=0x\" + hr.ToString(\"X\") + \")\"); sb.Append(\"AUMID=\").Append(s); } catch (Exception e) { sb.Append(\"AUMID_ERR=\").Append(e.Message); }",
-                "        try { IntPtr ws = GetProcessWindowStation(); StringBuilder n = new StringBuilder(256); int need; GetUserObjectInformation(ws, 2, n, 256, out need); sb.Append(\" | WINSTA=\").Append(n.ToString()); } catch (Exception e) { sb.Append(\" | WINSTA_ERR=\").Append(e.Message); }",
-                "        try { sb.Append(\" | CONSOLE=\").Append(GetConsoleWindow() != IntPtr.Zero ? \"yes\" : \"no\"); } catch {}",
-                "        try { sb.Append(\" | SESSION=\").Append(Process.GetCurrentProcess().SessionId); } catch {}",
-                "        try { sb.Append(\" | INTERACTIVE=\").Append(Environment.UserInteractive); } catch {}",
-                "        try { WindowsPrincipal wp = new WindowsPrincipal(WindowsIdentity.GetCurrent()); sb.Append(\" | ELEVATED=\").Append(wp.IsInRole(WindowsBuiltInRole.Administrator)); } catch (Exception e) { sb.Append(\" | ELEVATED_ERR=\").Append(e.Message); }",
-                "        return sb.ToString();",
-                "    }",
-                // فورگراندِ واقعی از یک پراسسِ پس‌زمینه: ترکیبِ ترفندِ Alt (دور زدنِ قفلِ فورگراندِ
-                // ویندوز) + AttachThreadInput (چسباندنِ نخِ ورودی به نخِ پنجرهٔ فورگراندِ فعلی) +
-                // SetForegroundWindow. بدونِ این، ShowShareUIForWindow بی‌خطا برمی‌گردد ولی پنل دیده نمی‌شود.
-                "    public static bool ForceForeground(IntPtr hwnd) {",
-                "        IntPtr fg = GetForegroundWindow();",
-                "        uint pid; uint fgt = GetWindowThreadProcessId(fg, out pid);",
-                "        uint mine = GetCurrentThreadId();",
-                "        bool attached = false;",
-                "        if (fgt != 0 && fgt != mine) { attached = AttachThreadInput(mine, fgt, true); }",
-                "        keybd_event(0x12, 0, 0, UIntPtr.Zero); keybd_event(0x12, 0, 2, UIntPtr.Zero);",
-                "        ShowWindow(hwnd, 5); BringWindowToTop(hwnd); bool ok = SetForegroundWindow(hwnd);",
-                "        if (attached) { AttachThreadInput(mine, fgt, false); }",
-                "        return ok;",
-                "    }",
-                "    public static bool IsForeground(IntPtr hwnd) { return GetForegroundWindow() == hwnd; }",
-                "}",
                 "'@",
                 "    Add-Type -TypeDefinition $iface -Language CSharp | Out-Null",
                 "    Write-Output 'STEP2_OK interop-type'",
-                "    try { Write-Output ('CTX: ' + [Win32]::ProcContext()) } catch { Write-Output ('CTX_ERR: ' + $_.Exception.Message) }",
-                "    try { $pp = (Get-CimInstance Win32_Process -Filter ('ProcessId=' + $PID)).ParentProcessId; $ppn = (Get-Process -Id $pp -ErrorAction SilentlyContinue).ProcessName; $cv = [Win32]::IsWindowVisible([Win32]::GetConsoleWindow()); Write-Output ('CTX2: PARENT=' + $ppn + '(' + $pp + ') | CONSOLE_VISIBLE=' + $cv) } catch { Write-Output ('CTX2_ERR: ' + $_.Exception.Message) }",
-                // کلیدِ حلِ مشکل: پنلِ اشتراک وقتی برنامه‌ها را برمی‌شمارد که پراسس یک کنسولِ «مرئی»
-                // داشته باشد. کنسول را به بیرونِ صفحه می‌بریم و مرئی می‌کنیم تا IsWindowVisible=True شود
-                // ولی کاربر آن را نبیند (SWP_NOACTIVATE|SWP_NOZORDER = 0x14 ، SW_SHOWNOACTIVATE = 4).
-                "    try { $cw2 = [Win32]::GetConsoleWindow(); if ($cw2 -ne [IntPtr]::Zero) { [Win32]::SetWindowPos($cw2, [IntPtr]::Zero, -32000, -32000, 100, 100, 0x14) | Out-Null; [Win32]::ShowWindow($cw2, 4) | Out-Null }; Write-Output ('CONSOLE_VISIBLE_NOW=' + [Win32]::IsWindowVisible([Win32]::GetConsoleWindow())) } catch { Write-Output ('CONVIS_ERR: ' + $_.Exception.Message) }",
                 "    [void][Windows.ApplicationModel.DataTransfer.DataTransferManager, Windows.ApplicationModel.DataTransfer, ContentType=WindowsRuntime]",
-                // نکته: DataTransferManagerInterop یک نوعِ WinRTِ قابل‌پروجکت نیست (اینترفیسِ COM است
-                // که خودمان با IDTMInterop در C# تعریف کرده‌ایم)؛ پس نباید به‌عنوان WinRT type بار شود،
-                // وگرنه «Unable to find type» می‌دهد و کلِ اشتراک به کلیپ‌بورد برمی‌گردد. این خط حذف شد.
+                "    [void][Windows.ApplicationModel.DataTransfer.DataTransferManagerInterop, Windows.ApplicationModel.DataTransfer, ContentType=WindowsRuntime]",
                 "    [void][Windows.Storage.StorageFile, Windows.Storage, ContentType=WindowsRuntime]",
                 "    [void][Windows.Foundation.AsyncStatus, Windows.Foundation, ContentType=WindowsRuntime]",
                 "    Write-Output 'STEP3_OK winrt-projections'",
-                // در Windows PowerShell 5.1 نمی‌توان WinRT IAsyncOperation را با .Status/.GetResults
-                // مستقیم خواند؛ باید با AsTask() به Taskِ دات‌نت تبدیل و await شود (روشِ استاندارد).
-                "    Add-Type -AssemblyName System.Runtime.WindowsRuntime | Out-Null",
-                "    $asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]",
-                "    function Await($op, $t) { $m = $asTaskGeneric.MakeGenericMethod($t); $task = $m.Invoke($null, @($op)); $task.Wait(-1) | Out-Null; return $task.Result }",
-                // پنجرهٔ لنگرِ هم‌پراسس (لازمهٔ GetForWindow). کوچک، وسطِ صفحه، همیشه‌رو تا فورگراند باشد.
-                // فرمِ لنگرِ مرئی (لازمهٔ نمایشِ پنلِ اشتراک): پنجرهٔ عادیِ کوچک که پنل روی آن لنگر
-                // می‌اندازد. نامرئی/۱×۱ باعث می‌شود پنل اصلاً باز نشود، پس مرئی و کوچک نگهش می‌داریم؛
-                // پس از انتخابِ مخاطب هم خودکار بسته می‌شود.
-                // پنجرهٔ لنگر: «بزرگ» (تا پنلِ اشتراک کامل و بازشده باز شود) ولی «نامرئی» با Opacity=0
-                // و بدونِ نمایش در تسک‌بار. سبکِ کادر پیش‌فرض می‌ماند (تغییرِ سبک پنل را می‌شکند). چون
-                // Opacity روی IsWindowVisible و اندازه/مکان اثری ندارد، پنجره همچنان «مرئی و فورگراند و
-                // بزرگ» محسوب می‌شود و پنل کامل باز می‌شود، ولی کاربر هیچ پنجره‌ای نمی‌بیند.
-                // ساختارِ کارکردی (کادرِ پیش‌فرض، بزرگ، مرئی) که پنل را کامل باز می‌کند؛ فقط رنگش را
-                // مثلِ پنلِ اشتراک (خاکستریِ تیره) می‌کنیم تا یکدست به نظر برسد. با کلیک روی سطحِ آن
-                // (یعنی «کلیک روی جای دیگرِ صفحه» بیرونِ پنل) هر دو بسته می‌شوند.
-                "    $script:form = New-Object System.Windows.Forms.Form",
-                "    $script:form.Text = ' '",
-                "    $script:form.StartPosition = 'CenterScreen'; $script:form.TopMost = $true",
-                "    $script:form.Width = 560; $script:form.Height = 760",
-                "    $script:form.BackColor = [System.Drawing.Color]::FromArgb(32,32,32)",
-                "    $lbl = New-Object System.Windows.Forms.Label; $lbl.Dock = 'Fill'; $lbl.BackColor = [System.Drawing.Color]::FromArgb(32,32,32); $script:form.Controls.Add($lbl)",
-                "    $script:form.Show(); $script:form.Activate(); [System.Windows.Forms.Application]::DoEvents()",
-                "    $hwnd = $script:form.Handle",
-                "    try { [Win32]::ForceForeground($hwnd) | Out-Null } catch {}",
+                "    $hwnd = [IntPtr][int64]$HwndStr",
                 "    $factory = [System.Runtime.InteropServices.WindowsRuntime.WindowsRuntimeMarshal]::GetActivationFactory([Windows.ApplicationModel.DataTransfer.DataTransferManager])",
-                "    Write-Output 'STEP4_OK factory'",
+                "    $pUnk = [System.Runtime.InteropServices.Marshal]::GetIUnknownForObject($factory)",
+                "    $interop = [System.Runtime.InteropServices.Marshal]::GetTypedObjectForIUnknown($pUnk, [IDTMInterop])",
+                "    [void][System.Runtime.InteropServices.Marshal]::Release($pUnk)",
+                "    Write-Output 'STEP4_OK interop-qi'",
                 "    $iid = [Guid]'a5caee9b-8708-49d1-8d36-67d25a8da00c'",
-                // کستِ اینترفیس داخلِ C# (نه PowerShell) → GetForWindow واقعاً از vtable صدا می‌شود و
-                // خروجی (IInspectable) به‌طورِ خودکار به DataTransferManagerِ پروجکت‌شده تبدیل می‌شود،
-                // پس $dtm.add_DataRequested بدونِ مشکل کار می‌کند.
-                "    $dtm = [JouyaDtm]::GetForWindow($factory, $hwnd, $iid)",
+                "    $dtm = $interop.GetForWindow($hwnd, $iid)",
                 "    Write-Output 'STEP5_OK dtm-for-window'",
-                "    $script:shareFile = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($FilePath)) ([Windows.Storage.StorageFile])",
-                "    if (-not $script:shareFile) { throw 'storagefile-null' }",
-                "    try { Write-Output ('FILE_NAME: ' + $script:shareFile.Name) } catch {}",
+                "    $op = [Windows.Storage.StorageFile]::GetFileFromPathAsync($FilePath)",
+                "    $deadline = [DateTime]::UtcNow.AddSeconds(6)",
+                "    while (($op.Status -eq [Windows.Foundation.AsyncStatus]::Started) -and ([DateTime]::UtcNow -lt $deadline)) { Start-Sleep -Milliseconds 20 }",
+                "    if ($op.Status -ne [Windows.Foundation.AsyncStatus]::Completed) { throw ('file-async-' + $op.Status) }",
+                "    $script:shareFile = $op.GetResults()",
                 "    Write-Output 'STEP6_OK storagefile'",
                 // هندلرِ رویداد: PowerShell این scriptblock را خودش به دلیگیتِ TypedEventHandlerِ رویداد",
                 // تبدیل می‌کند. از متغیرهای script-scope استفاده می‌شود تا closure روی فایل/عنوان مطمئن باشد.",
-                // هندلرِ رویداد با Deferral: تحویلِ فایل به هدف (واتساپ) ممکن است چند لحظه پس از
-                // انتخابِ کاربر طول بکشد؛ با GetDeferral تا لحظهٔ Complete، بستهٔ داده باز و فایل
-                // برای هدف در دسترس می‌ماند — پس واتساپ خودِ فایل را می‌گیرد (بدونِ Ctrl+V).
-                "    $null = $dtm.add_DataRequested({",
+                "    $dtm.add_DataRequested({",
                 "        param($s, $e)",
-                "        $def = $null",
                 "        try {",
                 "            $req = $e.Request",
-                "            $def = $req.GetDeferral()",
                 "            $req.Data.Properties.Title = $script:shareTitle",
                 "            $lst = New-Object 'System.Collections.Generic.List[Windows.Storage.IStorageItem]'",
                 "            $lst.Add($script:shareFile)",
                 "            $req.Data.SetStorageItems($lst)",
                 "        } catch { }",
-                "        finally { if ($def) { try { $def.Complete() } catch {} } }",
                 "    })",
-                // وقتی کاربر هدف (واتساپ) را انتخاب کرد، علامت می‌گذاریم تا کمی بعد پنجرهٔ لنگر بسته شود.
-                "    $script:chosen = $false",
-                "    try { $null = $dtm.add_TargetApplicationChosen({ param($s, $e) $script:chosen = $true; try { Write-Output ('TARGET_CHOSEN: ' + $e.ApplicationName) } catch {} }) } catch {}",
                 "    Write-Output 'STEP7_OK handler'",
-                // پنجرهٔ لنگر را واقعاً فورگراند کن و وضعیت را گزارش بده تا در لاگ ببینیم موفق بوده یا نه.
-                "    $fgok = $false",
-                "    try { $fgok = [Win32]::ForceForeground($hwnd) } catch {}",
-                "    Start-Sleep -Milliseconds 150",
-                "    [System.Windows.Forms.Application]::DoEvents()",
-                "    $fgmatch = $false; try { $fgmatch = [Win32]::IsForeground($hwnd) } catch {}",
-                "    Write-Output ('FG_OK: ' + $fgok + ' | FG_MATCH: ' + $fgmatch)",
-                "    Start-Sleep -Milliseconds 150",
-                "    [JouyaDtm]::ShowUI($factory, $hwnd)",
+                "    $interop.ShowShareUIForWindow($hwnd)",
                 "    Write-Output 'SHARE_OK'",
-                // هَندلِ پنجرهٔ خودِ پنلِ اشتراک را می‌گیریم تا وقتی بسته شد (چه با انتخابِ مخاطب، چه با
-                // کلیک روی جای دیگرِ صفحه)، پنجرهٔ لنگر هم بسته شود.
-                "    Start-Sleep -Milliseconds 500; [System.Windows.Forms.Application]::DoEvents()",
-                "    $panelHwnd = [Win32]::GetForegroundWindow(); if ($panelHwnd -eq $hwnd) { $panelHwnd = [IntPtr]::Zero }",
-                // پراسس باید تا زمانی که کاربر واتساپ و سپس مخاطب را انتخاب و ارسال کند زنده و در
-                // حالِ پمپِ پیام بماند؛ وگرنه شیءِ StorageFile از بین می‌رود و انتقالِ فایل شکست
-                // می‌خورد. تا ۱۸۰ ثانیه پمپ می‌کنیم (Node به‌محضِ SHARE_OK بی‌درنگ پاسخ می‌دهد و
-                // این پراسس را در پس‌زمینه زنده می‌گذارد).
                 "    $sw = [System.Diagnostics.Stopwatch]::StartNew()",
-                "    $chosenAt = $null",
-                "    $panelWasUp = $false; $panelGoneAt = $null",
-                "    while ($sw.Elapsed.TotalSeconds -lt 90.0) {",
-                "        [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 50",
-                "        if ($script:form.IsDisposed) { break }",   // کلیک روی سطحِ لنگر → لغو → بستنِ فوری
-                // پنل که بسته شد (انتخابِ مخاطب یا کلیکِ بیرون)، «مهلتِ انتقالِ فایل» می‌دهیم و بعد
-                // پنجرهٔ لنگر را می‌بندیم؛ وگرنه اگر فوری ببندیم، شیءِ فایل پیش از خواندنِ واتساپ از بین
-                // می‌رود و واتساپ هنگ می‌کند/فایل نمی‌گیرد.
-                "        if ($panelHwnd -ne [IntPtr]::Zero) {",
-                "            if ([Win32]::IsWindowVisible($panelHwnd)) { $panelWasUp = $true; $panelGoneAt = $null }",
-                "            elseif ($panelWasUp) {",
-                // پنل بسته شد → فوراً پنجرهٔ لنگر را نامرئی و پشتِ صفحه کن تا جلوی واتساپ (انتخابِ مخاطب)
-                // را نگیرد؛ ولی پراسس چند ثانیه زنده بماند تا انتقالِ فایل به واتساپ کامل شود، سپس بستن.
-                "                if (-not $panelGoneAt) { $panelGoneAt = [DateTime]::UtcNow; try { $script:form.TopMost = $false } catch {}; try { $script:form.Opacity = 0 } catch {}; try { [Win32]::ShowWindow($hwnd, 0) | Out-Null } catch {} }",
-                "                elseif ((([DateTime]::UtcNow - $panelGoneAt)).TotalSeconds -gt 5) { break }",
-                "            }",
-                "        }",
-                "    }",
-                "    try { $script:form.Close(); $script:form.Dispose() } catch {}",
+                "    while ($sw.Elapsed.TotalSeconds -lt 3.0) { [System.Windows.Forms.Application]::DoEvents(); Start-Sleep -Milliseconds 40 }",
                 "} catch {",
                 "    Write-Output ('SHARE_ERR: ' + $_.Exception.GetType().Name + ' | ' + $_.Exception.Message)",
-                "    try { if ($script:form) { $script:form.Close(); $script:form.Dispose() } } catch {}",
                 "}"
             ];
-            // همهٔ مارکرهای Write-Output را به Emit تبدیل کن تا هم به کنسول (غیرریدایرکت) و هم
-            // به فایلِ لاگ نوشته شوند. (خطِ تعریفِ Emit خودش Write-Output ندارد، پس بازگشتی نمی‌شود.)
-            var psLines = lines.map(function (l) { return l.replace(/Write-Output /g, 'Emit '); });
-
             const psPath = path.join(app.getPath('temp'), 'jouya-share-' + Date.now() + '.ps1');
-            fs.writeFileSync(psPath, '﻿' + psLines.join('\r\n'), 'utf8');
+            fs.writeFileSync(psPath, '\uFEFF' + lines.join('\r\n'), 'utf8');
 
-            // اجرا از طریقِ WScript با پنجرهٔ پنهان (0): PowerShell یک «کنسولِ واقعیِ پنهان و بدونِ
-            // ریدایرکتِ خروجی» می‌گیرد — دقیقاً مثلِ وقتی کاربر خودش اجرا می‌کند — پس ویندوز پراسس را
-            // «کنسولیِ تعاملیِ واقعی» می‌بیند و پنلِ اشتراک برنامه‌های هدف را برمی‌شمارد. Node خروجی را
-            // از فایلِ لاگ می‌خواند (نه pipe) تا هیچ ریدایرکتی روی پراسس نباشد.
-            const vbsPath = path.join(app.getPath('temp'), 'jouya-share-' + Date.now() + '.vbs');
-            const psCmd = 'powershell -NoProfile -STA -ExecutionPolicy Bypass -File ""' + psPath + '""';
-            const vbs = 'CreateObject("WScript.Shell").Run "' + psCmd + '", 0, False';
-            fs.writeFileSync(vbsPath, vbs, 'utf8');
-
-            const { spawn } = require('child_process');
+            const { execFile } = require('child_process');
             let settled = false;
             const finish = function (ok, diag) {
                 if (settled) return; settled = true;
-                resolve({ ok: ok, diag: String(diag || '').slice(0, 1500) });
+                try { fs.unlinkSync(psPath); } catch (e) {}
+                resolve({ ok: ok, diag: String(diag || '').slice(0, 900) });
             };
-            const cleanupTmp = function () {
-                setTimeout(function () {
-                    try { fs.unlinkSync(psPath); } catch (e) {}
-                    try { fs.unlinkSync(vbsPath); } catch (e) {}
-                }, 5000);
-            };
-
-            try {
-                var launcher = spawn('wscript.exe', [vbsPath], { windowsHide: true });
-                launcher.on('error', function (e) {
-                    if (!settled) { finish(false, 'wscript-err:' + (e && e.message ? e.message : String(e))); cleanupTmp(); }
-                });
-            } catch (spawnErr) {
-                return resolve({ ok: false, diag: 'spawn-ex:' + (spawnErr && spawnErr.message ? spawnErr.message : String(spawnErr)) });
-            }
-
-            // خواندنِ مارکرها از فایلِ لاگ (polling). به‌محضِ SHARE_OK → موفق؛ SHARE_ERR → ناموفق.
-            var started = Date.now();
-            var poll = setInterval(function () {
-                var content = '';
-                try { content = fs.readFileSync(logPath, 'utf8'); } catch (e) {}
-                if (!settled && content.indexOf('SHARE_OK') !== -1) {
-                    clearInterval(poll); finish(true, content.trim()); cleanupTmp();
-                } else if (!settled && /SHARE_ERR/.test(content)) {
-                    clearInterval(poll); finish(false, content.trim()); cleanupTmp();
-                } else if (!settled && (Date.now() - started) > 30000) {
-                    clearInterval(poll); finish(false, 'timeout-no-share\n' + content.trim()); cleanupTmp();
+            execFile(
+                'powershell',
+                ['-NoProfile', '-NonInteractive', '-STA', '-ExecutionPolicy', 'Bypass', '-File', psPath],
+                { windowsHide: true, timeout: 12000 },
+                function (err, stdout, stderr) {
+                    var out = String(stdout || '');
+                    var diag = out.trim()
+                        + (stderr ? ('\n[stderr] ' + String(stderr).trim()) : '')
+                        + (err ? ('\n[err] ' + (err.message || err)) : '');
+                    finish(out.indexOf('SHARE_OK') !== -1, diag);
                 }
-            }, 300);
+            );
         } catch (e) { resolve({ ok: false, diag: 'ex:' + (e && e.message ? e.message : String(e)) }); }
     });
-}
-
-// ══════════════════════════════════════════════════════════════════════════
-// ترجمه‌آواییِ فارسی → لاتینِ خوانا برای نامِ فایلِ اشتراک‌گذاری.
-// چرا؟ واتساپ‌دسکتاپ نامِ فایلِ غیرلاتین را که از «پنلِ اشتراکِ ویندوز» می‌آید
-// به‌صورتِ خراب (mojibake؛ مثلِ Ú¯Ø²Ø§Ø±Ø´) نشان می‌دهد؛ چون بایت‌های UTF-8 را
-// اشتباهی با CP1252/Latin-1 می‌خواند و در آن جدول اصلاً حرفِ فارسی وجود ندارد.
-// پس هیچ نام‌گذاریِ فارسی از این مسیر برای گیرنده خوانا نمی‌شود. راهِ تضمینی و
-// همه‌جا-خوانا، نوشتنِ همان محتوا با حروفِ لاتین است (مثلِ Gozaresh-Moamelat-Ahmadullah).
-function _persianToLatin(str) {
-    if (!str) return '';
-    str = String(str);
-    // ۱) واژه‌های پرکاربردِ برنامه → معادلِ خوانا (کیفیتِ خواناییِ بهتر از تک‌حرف)
-    var words = {
-        'گزارش': 'Gozaresh', 'معاملات': 'Moamelat', 'معامله': 'Moamele',
-        'پرداختی': 'Pardakhti', 'پرداخت': 'Pardakht', 'دریافتی': 'Daryafti', 'دریافت': 'Daryaft',
-        'رسید': 'Resid', 'بل': 'Bill', 'فروش': 'Forosh', 'خرید': 'Kharid',
-        'فاکتور': 'Factor', 'پیش‌فاکتور': 'PishFactor', 'صورتحساب': 'Surathesab',
-        'صورت': 'Surat', 'حساب': 'Hesab', 'اجناس': 'Ajnas', 'جنس': 'Jens',
-        'انبار': 'Anbar', 'گدام': 'Godam', 'انتقال': 'Enteqal', 'شخص': 'Shakhs',
-        'اشخاص': 'Ashkhas', 'مصرف': 'Masraf', 'مصارف': 'Masaref', 'مصارفات': 'Masarefat',
-        'کمیشن': 'Commission', 'حواله': 'Hawala', 'برگشتی': 'Bargashti', 'برگشت': 'Bargasht',
-        'مشتری': 'Moshtari', 'قیمت': 'Qeymat', 'روزانه': 'Roozane', 'کارمند': 'Karmand',
-        'کارمندان': 'Karmandan', 'صندوق': 'Sandoq', 'بانک': 'Bank', 'میان': 'Mian',
-        // نام‌های پرکاربرد (اشخاص) — چون مصوتِ کوتاه در فارسی نوشته نمی‌شود، این معادل‌ها
-        // خواناییِ نامِ گیرنده را به‌مراتب بهتر می‌کنند. ترتیب: طولانی‌تر/خاص‌تر ابتدا.
-        'عبدالله': 'Abdullah', 'عبدال': 'Abdul', 'احمد': 'Ahmad', 'محمدی': 'Mohammadi',
-        'محمود': 'Mahmood', 'محمد': 'Mohammad', 'الله': 'Ullah', 'کریمی': 'Karimi',
-        'کریم': 'Karim', 'رحیمی': 'Rahimi', 'رحیم': 'Rahim', 'حسینی': 'Hoseini',
-        'حسین': 'Hosein', 'حسن': 'Hasan', 'زلمی': 'Zalmai', 'خان': 'Khan',
-        'الدین': 'uddin', 'نور': 'Noor', 'گل': 'Gul', 'شاه': 'Shah'
-    };
-    Object.keys(words).forEach(function (w) {
-        if (str.indexOf(w) !== -1) str = str.split(w).join(' ' + words[w] + ' ');
-    });
-    // ۲) نگاشتِ تک‌حرفی برای بقیه (به‌ویژه نامِ اشخاص)
-    var map = {
-        'آ': 'a', 'ا': 'a', 'أ': 'a', 'إ': 'e', 'ء': '', 'ئ': 'y', 'ؤ': 'o',
-        'ب': 'b', 'پ': 'p', 'ت': 't', 'ث': 's', 'ج': 'j', 'چ': 'ch', 'ح': 'h', 'خ': 'kh',
-        'د': 'd', 'ذ': 'z', 'ر': 'r', 'ز': 'z', 'ژ': 'zh', 'س': 's', 'ش': 'sh', 'ص': 's',
-        'ض': 'z', 'ط': 't', 'ظ': 'z', 'ع': 'a', 'غ': 'gh', 'ف': 'f', 'ق': 'q',
-        'ک': 'k', 'ك': 'k', 'گ': 'g', 'ل': 'l', 'م': 'm', 'ن': 'n', 'و': 'o',
-        'ه': 'h', 'ة': 'h', 'ی': 'i', 'ي': 'i', 'ى': 'a',
-        'ً': '', 'ٌ': '', 'ٍ': '', 'َ': 'a', 'ُ': 'o', 'ِ': 'e', 'ّ': '', 'ْ': '', 'ٰ': 'a', 'ٓ': '',
-        '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4', '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
-        '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4', '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
-    };
-    var out = '';
-    for (var i = 0; i < str.length; i++) {
-        var ch = str[i];
-        if (Object.prototype.hasOwnProperty.call(map, ch)) out += map[ch];
-        else if (/[A-Za-z0-9]/.test(ch)) out += ch;
-        else out += ' ';
-    }
-    out = out.replace(/\s+/g, ' ').trim().replace(/\s/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '');
-    out = out.split('-').map(function (p) { return p ? p.charAt(0).toUpperCase() + p.slice(1) : p; }).join('-');
-    return out;
 }
 
 ipcMain.handle('share-pdf-whatsapp', async (event, payload) => {
@@ -592,38 +341,15 @@ ipcMain.handle('share-pdf-whatsapp', async (event, payload) => {
         try { pdfWin.destroy(); } catch (e) {}
         pdfWin = null;
 
-        // ۲) ذخیرهٔ فایل با نامِ امن در پوشهٔ temp (NFC تا کاراکترهای فارسیِ ترکیبی درست ذخیره شوند)
-        // نوعِ سند (پیشوندِ انگلیسیِ ثابت) از روی متنِ فارسیِ نام
-        var _fn = String(fileName || '');
-        var _pfx = 'Report';
-        if (/بل\s*فروش/.test(_fn)) _pfx = 'SalesInvoice';
-        else if (/بل\s*خرید/.test(_fn)) _pfx = 'PurchaseInvoice';
-        else if (/پرداخت/.test(_fn)) _pfx = 'PaymentReceipt';
-        else if (/دریافت/.test(_fn)) _pfx = 'ReceiptVoucher';
-        else if (/رسید/.test(_fn)) _pfx = 'Receipt';
-        else if (/گزارش/.test(_fn)) _pfx = 'Report';
-        else _pfx = 'Jouya';
-        // نامِ فایلِ دسکتاپ = «لاتینِ خوانا» (ترجمه‌آوایی + پیشوندِ نوعِ سند).
-        // چرا فارسی نمی‌گذاریم؟ «واتساپِ دسکتاپ» بایت‌های UTF-8 نام را با Latin-1 می‌خواند و نام
-        // فارسی را خراب (mojibake مثلِ Ú¯Ø²Ø§Ø±Ø´) نشان می‌دهد؛ این باگِ خودِ واتساپِ دسکتاپ است و
-        // با هیچ کدگذاری‌ای قابلِ رفع نیست. پس روی دسکتاپ نام را لاتینِ خوانا می‌کنیم تا اصلاً
-        // mojibake دیده نشود. راهِ نامِ کاملاً فارسیِ سالم، ارسال از «نسخهٔ موبایل» است (پیاده شده).
-        var _latin = '';
-        try { _latin = _persianToLatin(_fn); } catch (e) { _latin = ''; }
-        if (_latin && _latin.toLowerCase().indexOf(_pfx.toLowerCase() + '-') === 0) _latin = _latin.slice(_pfx.length + 1);
-        let safeName = (_pfx + (_latin ? '-' + _latin : ''))
+        // ۲) ذخیرهٔ فایل با نامِ امن در پوشهٔ temp
+        let safeName = String(fileName || 'report')
             .replace(/[\\/:*?"<>|]+/g, '_')
             .replace(/\s+/g, ' ')
             .trim()
-            .slice(0, 110);
-        try { safeName = safeName.normalize('NFC'); } catch (e) {}
-        if (!safeName) safeName = 'Report';
+            .slice(0, 90);
+        if (!safeName) safeName = 'report';
         if (!/\.pdf$/i.test(safeName)) safeName += '.pdf';
-        // هر اشتراک در یک «پوشهٔ یکتا» تا: (۱) نامِ فارسیِ فایل تمیز و بدونِ timestamp بماند،
-        // (۲) اشتراکِ دوبارهٔ همان گزارش با فایلِ قبلی (که هنوز باز است) تداخل/قفل نکند و خطا ندهد.
-        const shareDir = path.join(app.getPath('temp'), 'jouya-share-' + Date.now() + '-' + Math.floor(Math.random() * 1e6));
-        try { fs.mkdirSync(shareDir, { recursive: true }); } catch (e) {}
-        const outPath = path.join(shareDir, safeName);
+        const outPath = path.join(app.getPath('temp'), safeName);
         fs.writeFileSync(outPath, pdfBuffer);
 
         // ۳) روشِ درست و «بدونِ کلیپ‌بورد»: پنلِ اشتراکِ ویندوز را با HWNDِ پنجرهٔ برنامه باز
@@ -631,15 +357,13 @@ ipcMain.handle('share-pdf-whatsapp', async (event, payload) => {
         let sharedViaPanel = false;
         let shareDiag = '';
         try {
-            // پنجره‌ای که کاربر می‌بیند (پیش‌نمایش) را مرجع بگیر تا پنلِ اشتراک جلوی همان باز شود.
-            const shareWin = BrowserWindow.getFocusedWindow() || BrowserWindow.fromWebContents(event.sender) || mainWindow;
-            try { shareWin.show(); shareWin.focus(); } catch (e) {}
+            const shareWin = BrowserWindow.fromWebContents(event.sender) || mainWindow;
             const sres = await shareFileViaWindowsShareUI(outPath, String(fileName || 'گزارش'), shareWin);
             sharedViaPanel = !!(sres && sres.ok);
             shareDiag = (sres && sres.diag) || '';
         } catch (e) { sharedViaPanel = false; shareDiag = 'call-ex:' + (e && e.message ? e.message : String(e)); }
         if (sharedViaPanel) {
-            return { ok: true, method: 'share', clip: false, opened: true, path: outPath, shareDiag: shareDiag };
+            return { ok: true, method: 'share', clip: false, opened: true, path: outPath };
         }
 
         // ۴) fallbackِ امن — فقط اگر پنلِ اشتراک در دسترس نبود: همان روشِ قبلیِ کلیپ‌بورد + بازکردنِ

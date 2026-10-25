@@ -645,7 +645,8 @@
             <div class="auth-card">
                 <div class="auth-header">
                     <div class="auth-logo"><i class="fas fa-store-alt"></i></div>
-                    <h1 class="auth-title">سیستم مدیریت فروشگاه</h1>
+                    <h1 class="auth-title">APEX Store Manager</h1>
+                    <p style="margin:4px 0 0;font-size:.86rem;color:#64748b;font-weight:600;">سیستم مدیریت فروشگاه</p>
                 </div>
 
                 <div class="auth-tabs">
@@ -833,7 +834,7 @@
                 </div>
 
                 <div class="auth-footer">
-                    <p>© ۲۰۲۶ سیستم مدیریت فروشگاه — نسخه حرفه‌ای</p>
+                    <p>© ۲۰۲۶ APEX Store Manager — نسخه حرفه‌ای</p>
                 </div>
             </div>
 

@@ -1487,6 +1487,33 @@ function _computeFifoProfitMaps() {
             });
             invBaseTotal += _invDelta;
         } catch (e) { /* هم‌ترازی انجام نشد — مقادیرِ خام دست‌نخورده می‌مانند */ }
+
+        // ════════════════════════════════════════════════════════════════════
+        //  مفادِ اقلامِ «خدمت»
+        //  ──────────────────────────────────────────────────────────────────
+        //  خدمت موجودی و سریِ خرید ندارد، پس در موتورِ FIFO بالا اصلاً وارد
+        //  نمی‌شود و هیچ خطی از آن منطق این‌جا تغییر نمی‌کند. مفادش جداگانه و
+        //  سرراست حساب می‌شود: (قیمت − مبلغ تمام‌شده) × تعداد − تخفیف، و در
+        //  همان نقشه‌هایی می‌نشیند که بقیهٔ برنامه می‌خوانند. نتیجه: داشبورد،
+        //  مفادِ هر بل و هر دو شاخهٔ گزارش یک عدد می‌دهند.
+        // ════════════════════════════════════════════════════════════════════
+        try {
+            txs.forEach(function (tx) {
+                if (!tx || tx.type !== 'فروش' || !Array.isArray(tx.items)) return;
+                tx.items.forEach(function (it, idx) {
+                    if (!it || !it.isService || it.isWastage) return;
+                    var pr = _svcItemProfit(it);
+                    if (!pr) return;
+                    var _k = tx.id + '|' + idx;
+                    itemMap[_k] = _round((itemMap[_k] || 0) + pr);
+                    saleMap[tx.id] = _round((saleMap[tx.id] || 0) + pr);
+                    var _pb = _toBaseAt(pr, tx);
+                    itemMapBase[_k] = _round((itemMapBase[_k] || 0) + _pb.v);
+                    saleMapBase[tx.id] = _round((saleMapBase[tx.id] || 0) + _pb.v);
+                    if (_pb.est) estimatedSales[tx.id] = true;
+                });
+            });
+        } catch (e) { console.warn('service profit:', e); }
     } catch (err) { console.error('fifo profit maps:', err); }
     return {
         saleMap: saleMap, itemMap: itemMap,
@@ -3982,6 +4009,19 @@ function saveSale() {
                     // گزارش‌ها یک عدد بدهند (جمعِ سهم‌ها = مبلغِ سطرِ ضایعات).
                     _saleItm.wastageAmount = _wsAmountForRow(row);
                 }
+            }
+            // ── عکسِ «مبلغ تمام‌شده»ی خدمت روی همین قلمِ بل ──────────────────
+            //  تا اگر بعداً مبلغ تمام‌شدهٔ خودِ خدمت در فهرستِ خدمات عوض شود،
+            //  مفادِ بل‌های گذشته تکان نخورد. بل‌های قدیمی که این فیلد را ندارند
+            //  از خودِ رکوردِ خدمت خوانده می‌شوند (سازگارِ عقب‌رو).
+            if (isService) {
+                try {
+                    var _sid = String(productId).indexOf('SVC-') === 0 ? String(productId).slice(4) : String(productId);
+                    var _slist = (typeof _svcRead === 'function') ? (_svcRead() || []) : [];
+                    var _srec = _slist.find(function (x) { return x && String(x.id) === _sid; });
+                    var _scost = _srec ? (parseFloat(_srec.cost) || 0) : 0;
+                    if (_scost >= 0) _saleItm.serviceCost = _scost;
+                } catch (e) {}
             }
             // قفل‌کردن قیمت خریدِ مبنای مفاد روی لحظهٔ فروش (فقط برای فروشِ غیرکسری)
             if (!isService && typeof _saleCostSnapshot === 'function') {
@@ -12887,7 +12927,7 @@ if (typeof window !== 'undefined') window.__jouyaShowDiagOnScreen = __jouyaShowD
 function __jouyaDiagReport(reason) {
     var txt = '';
     try {
-        txt = 'حسابدار — گزارشِ تشخیصیِ «ارسال به واتساپ»\n'
+        txt = 'APEX Store Manager — گزارشِ تشخیصیِ «ارسال به واتساپ»\n'
             + '=================================================\n'
             + 'زمان: ' + (new Date()).toString() + '\n'
             + 'نتیجه: ناموفق — ' + String(reason || '?') + '\n\n'
@@ -18039,12 +18079,18 @@ function _rpBuildReportAOA(kind) {
                 var when = (t.date || (t.createdAt || '').split('T')[0] || '');
                 var buyer = t.customerName || t.personName || '';
                 (Array.isArray(t.items) ? t.items : []).forEach(function (it, idx) {
-                    if (!it || it.isService) return;
+                    if (!it) return;
+                    // سطرِ ضایعات مبلغش روی قلمِ جنس شمرده شده؛ سطرِ جدا نمی‌گیرد.
+                    if (it.isWastage) return;
                     var q = parseFloat(it.quantity) || 0; var pr = parseFloat(it.price) || 0;
                     var _k = t.id + '|' + idx;
                     var prof = itemMap[_k]; if (prof == null) prof = 0;
                     prof += (parseFloat(_waived[_k]) || 0);
-                    aoa.push([it.productName || '', q, it.unit || '', cur, R(pr), R(prof), buyer, when, it.notes || t.notes || '']);
+                    // خدمات هم سطرِ خودشان را می‌گیرند: حالا مفاد دارند
+                    // ((قیمت − مبلغ تمام‌شده) × تعداد)، پس اگر نیایند جمعِ سطرها
+                    // با مجموعِ گزارش نمی‌خواند.
+                    var _nm = it.productName || it.name || (it.isService ? 'خدمت' : '');
+                    aoa.push([_nm, q, it.unit || '', cur, R(pr), R(prof), buyer, when, it.notes || t.notes || '']);
                 });
             });
         } else if (kind === 'pr_fx') {
@@ -19358,8 +19404,10 @@ function _rpProfitAggregate(fromDate, toDate) {
                 // سطرِ ضایعات مبلغش از قبل در مفادِ خودِ قلم‌های جنس شمرده شده
                 // (wastageAmount)، پس این‌جا دوباره شمرده نمی‌شود.
                 if (it.isWastage) return;
-                if (isSvc) { prof = (parseFloat(it.price) || 0) * (parseFloat(it.quantity) || 0); }  // خدمات: بدونِ قیمتِ تمام‌شده → مفاد = مبلغِ خط
-                else { prof = itemMap[t.id + '|' + idx]; if (prof == null) prof = 0; }
+                // خدمت هم مثلِ جنس از همان نقشهٔ مرکزی خوانده می‌شود: مفادش
+                // (قیمت − مبلغ تمام‌شده) × تعداد − تخفیف است و پیش از این در
+                // همان نقشه نشسته. پس این شاخه و داشبورد یک عدد می‌دهند.
+                prof = itemMap[t.id + '|' + idx]; if (prof == null) prof = 0;
                 _add(grossByCur, cur, prof);
                 var b = toBase(prof, cur); grossBase += b;
             });
@@ -28236,7 +28284,10 @@ function applySettingsToUI(settings, changed) {
         const prev = document.getElementById('preview-store-name');
         if (prev) prev.textContent = val;
         // عنوان مرورگر
-        document.title = val || 'فروشگاه من';
+        // اگر کاربر هنوز نامِ فروشگاهش را نگذاشته، عنوانِ پنجره نامِ خودِ برنامه
+        // می‌شود (نه یک نامِ فروشگاهِ ساختگی). به‌محضِ گذاشتنِ نامِ فروشگاه،
+        // همان نام می‌نشیند — رفتارِ قبلی دست‌نخورده است.
+        document.title = val || 'APEX Store Manager';
     }
     // --- شماره تلفن ---
     if (!changed || changed.storePhone !== undefined) {
@@ -42458,7 +42509,7 @@ function __hbAndroidOpenInstallPermSettings() {
             if (typeof ndUpdSetStatus === 'function') {
                 ndUpdSetStatus('این نسخه نمی‌تواند صفحهٔ تنظیمات را خودش باز کند. ' +
                     'لطفاً دستی این مسیر را بروید:' +
-                    '<br><small>تنظیمات ← برنامه‌ها ← حسابدار ← نصب برنامه‌های ناشناس (Install unknown apps) ← اجازه بده</small>' +
+                    '<br><small>تنظیمات ← برنامه‌ها ← APEX Store Manager ← نصب برنامه‌های ناشناس (Install unknown apps) ← اجازه بده</small>' +
                     '<br><small>سپس به همین صفحه برگردید و «باز کردن نصب‌کننده» را بزنید.</small>', 'warn');
             }
         } catch (e) {}
@@ -42562,7 +42613,7 @@ function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
                 closeOv();
                 ndUpdSetStatus('بروزرسانی دانلود شد و نصب‌کننده باز شد. روی «نصب» بزنید؛ ' +
                     'روی نسخهٔ فعلی نصب می‌شود و اطلاعاتِ شما دست‌نخورده می‌ماند.' +
-                    '<br><small>اگر اندروید اجازه خواست، «نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید ' +
+                    '<br><small>اگر اندروید اجازه خواست، «نصب برنامه‌های ناشناس» را برای APEX Store Manager روشن کنید ' +
                     'و بعد دکمهٔ «باز کردن نصب‌کننده» را بزنید.</small>' +
                     '<br><button type="button" class="btn-primary" style="margin-top:8px" ' +
                     'onclick="__hbRetryOpenApk()">باز کردن نصب‌کننده</button>', 'ok');
@@ -42577,7 +42628,7 @@ function __hbAndroidNativeUpdate(url, fileName, setPct, note, closeOv, onFail) {
             ndUpdSetStatus('فایلِ بروزرسانی کاملاً داخلِ برنامه دانلود شد و روی گوشی آماده است، ' +
                 'اما اندروید اجازهٔ بازکردنِ نصب‌کننده را نداد.' +
                 '<br><small>' + ((openErr && openErr.message) || '') + '</small>' +
-                '<br><small>یک‌بار اجازهٔ «نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید؛ ' +
+                '<br><small>یک‌بار اجازهٔ «نصب برنامه‌های ناشناس» را برای APEX Store Manager روشن کنید؛ ' +
                 'بعد از آن بروزرسانی همیشه داخلِ خودِ برنامه تمام می‌شود.</small>' +
                 '<br><button type="button" class="btn-primary" style="margin-top:8px" ' +
                 'onclick="__hbAndroidOpenInstallPermSettings()">روشن کردن اجازهٔ نصب</button>' +
@@ -42627,7 +42678,7 @@ function __hbRetryOpenApk() {
     })()).then(function (opened) {
         if (opened) ndUpdSetStatus('نصب‌کننده باز شد — روی «نصب» بزنید.', 'ok');
         else ndUpdSetStatus('نصب‌کننده باز نشد. فایل همچنان روی گوشی آماده است — دانلودِ دوباره لازم نیست.' +
-            '<br><small>اجازهٔ «نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید و دوباره تلاش کنید.</small>' +
+            '<br><small>اجازهٔ «نصب برنامه‌های ناشناس» را برای APEX Store Manager روشن کنید و دوباره تلاش کنید.</small>' +
             '<br><button type="button" class="btn-primary" style="margin-top:8px" ' +
             'onclick="__hbAndroidOpenInstallPermSettings()">روشن کردن اجازهٔ نصب</button>' +
             '<br><button type="button" class="btn-primary" style="margin-top:8px" ' +
@@ -42637,7 +42688,7 @@ function __hbRetryOpenApk() {
     }).catch(function (e) {
         try { __hbIlog('تلاشِ دوباره', 'خطا', e); __hbShowInstDiag(); } catch (e2) {}
         ndUpdSetStatus('نصب‌کننده باز نشد: ' + ((e && e.message) || '') +
-            '<br><small>«نصب برنامه‌های ناشناس» را برای حسابدار روشن کنید و دوباره تلاش کنید.</small>', 'warn');
+            '<br><small>«نصب برنامه‌های ناشناس» را برای APEX Store Manager روشن کنید و دوباره تلاش کنید.</small>', 'warn');
     });
 }
 if (typeof window !== 'undefined') {
@@ -42673,7 +42724,7 @@ function ndUpdDiag() {
     var L = [];
     var log = function (k, v) { L.push(k + (v !== undefined ? (': ' + v) : '')); };
     var repo = (typeof ndUpdGetRepo === 'function') ? ndUpdGetRepo() : '?';
-    log('حسابدار — گزارشِ تشخیصیِ بروزرسانی');
+    log('APEX Store Manager — گزارشِ تشخیصیِ بروزرسانی');
     log('=================================================');
     try { log('زمان', (new Date()).toString()); } catch (e) {}
     try { log('runtime', window.__JOUYA_RUNTIME || '(نامشخص)'); } catch (e) {}
@@ -43981,4 +44032,56 @@ function _cbtxTypeIcon(type) {
 if (typeof window !== 'undefined') {
     window._cbtxSalesCardHtml = _cbtxSalesCardHtml;
     window._cbtxTypeIcon = _cbtxTypeIcon;
+}
+
+
+// ════════════════════════════════════════════════════════════════════════════
+//  مفادِ خدمت = (قیمت − مبلغ تمام‌شده) × تعداد − تخفیف
+//  ──────────────────────────────────────────────────────────────────────────
+//  تا پیش از این، خدمت در دو جا دو رفتارِ متفاوت داشت: در داشبورد و مفادِ هر بل
+//  اصلاً شمرده نمی‌شد، و در گزارشِ فیلترشده «تمامِ مبلغِ فروش» مفاد شمرده می‌شد.
+//  حالا هر دو جا یک قاعده دارند و «مبلغ تمام‌شده»ی خودِ خدمت از مفاد کسر می‌شود.
+//  اگر مبلغ تمام‌شده صفر باشد، تمامِ مبلغِ قیمت مفاد است — همان خواستهٔ شما.
+//
+//  ترتیبِ یافتنِ «مبلغ تمام‌شده»ی یک قلمِ خدمت در بل:
+//    ۱) lineCost        — اگر کاربر در همان بل برای همین خط مبلغ گذاشته باشد
+//    ۲) serviceCost     — عکسِ لحظهٔ ثبتِ بل (از این پس روی هر بلِ تازه می‌نشیند)
+//    ۳) cost/costPrice  — اگر روی خودِ قلم ذخیره شده باشد
+//    ۴) مبلغ تمام‌شدهٔ خودِ خدمت در فهرستِ خدمات — برای بل‌های قدیمی
+//  هیچ‌کدام نبود ⇒ صفر، یعنی رفتارِ «تمامِ مبلغ مفاد است».
+// ════════════════════════════════════════════════════════════════════════════
+function _svcUnitCost(it) {
+    if (!it) return 0;
+    var pick = function (v) { var n = parseFloat(v); return (isFinite(n) && n >= 0) ? n : null; };
+    var c = pick(it.lineCost);
+    if (c === null) c = pick(it.serviceCost);
+    if (c === null) c = pick(it.cost);
+    if (c === null) c = pick(it.costPrice);
+    if (c !== null) return c;
+    // بل‌های قدیمی: از خودِ رکوردِ خدمت خوانده می‌شود
+    try {
+        var sid = String(it.productId == null ? '' : it.productId);
+        if (sid.indexOf('SVC-') === 0) sid = sid.slice(4);
+        if (!sid) return 0;
+        var list = (typeof _svcRead === 'function') ? (_svcRead() || []) : [];
+        var s = list.find(function (x) { return x && String(x.id) === sid; });
+        var sc = s ? pick(s.cost) : null;
+        return (sc === null) ? 0 : sc;
+    } catch (e) { return 0; }
+}
+
+/** مفادِ یک قلمِ خدمت، به ارزِ همان سند. */
+function _svcItemProfit(it) {
+    if (!it || !it.isService) return 0;
+    if (it.isWastage) return 0;                 // سطرِ ضایعات خدمت نیست
+    var q = parseFloat(it.quantity) || 0;
+    var p = parseFloat(it.price) || 0;
+    var d = parseFloat(it.discount) || 0;
+    var c = _svcUnitCost(it);
+    return (p - c) * q - d;
+}
+
+if (typeof window !== 'undefined') {
+    window._svcUnitCost = _svcUnitCost;
+    window._svcItemProfit = _svcItemProfit;
 }

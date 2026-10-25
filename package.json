@@ -1,5 +1,5 @@
 {
-  "name": "Hesabdar-management",
+  "name": "apex-store-manager",
   "version": "1.0.7",
   "description": "Store Management System",
   "main": "main.js",
@@ -13,7 +13,7 @@
   },
   "build": {
     "appId": "com.jouya.store",
-    "productName": "حسابدار",
+    "productName": "APEX Store Manager",
     "directories": {
       "output": "dist",
       "buildResources": "build"
@@ -57,8 +57,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "shortcutName": "حسابدار ",
-      "uninstallDisplayName": "حذف سیستم مدیریت فروشگاه حسابدار"
+      "shortcutName": "APEX Store Manager",
+      "uninstallDisplayName": "حذف APEX Store Manager"
     }
   },
   "devDependencies": {
