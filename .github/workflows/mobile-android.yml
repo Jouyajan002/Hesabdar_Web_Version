@@ -144,10 +144,10 @@ jobs:
           set -e
           cat > package.json <<'JSON'
           {
-            "name": "hesabdar-mobile",
+            "name": "apex-store-manager-mobile",
             "version": "1.0.0",
             "private": true,
-            "description": "حسابدار — بستهٔ موبایل (Capacitor)"
+            "description": "APEX Store Manager — بستهٔ موبایل (Capacitor)"
           }
           JSON
           npm install --no-audit --no-fund \
@@ -161,7 +161,7 @@ jobs:
           cat > capacitor.config.json <<JSON
           {
             "appId": "com.hesabdar.app",
-            "appName": "حسابدار",
+            "appName": "APEX Store Manager",
             "webDir": "www",
             "android": { "allowMixedContent": true }
           }
@@ -241,7 +241,7 @@ jobs:
           # ── اجازهٔ نصبِ بروزرسانی از داخلِ خودِ برنامه ──────────────────────────
           #  بدونِ این اجازه، اندروید بازکردنِ نصب‌کنندهٔ بسته را از داخلِ برنامه مسدود
           #  می‌کند و بروزرسانیِ درون‌برنامه‌ای کار نمی‌کند. (کاربر در اولین بار یک‌بار
-          #  «نصب برنامه‌های ناشناس» را برای حسابدار تأیید می‌کند.)
+          #  «نصب برنامه‌های ناشناس» را برای APEX Store Manager تأیید می‌کند.)
           if ! grep -q 'REQUEST_INSTALL_PACKAGES' "$MF"; then
             sed -i 's|<application |<uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <application |' "$MF"
           fi
@@ -388,7 +388,7 @@ jobs:
         run: |
           set -e
           SRC="android/app/build/outputs/apk/debug/app-debug.apk"
-          DST="hesabdar-${{ steps.ver.outputs.vname }}.apk"
+          DST="APEX-Store-Manager-${{ steps.ver.outputs.vname }}.apk"
           cp "$SRC" "$DST"
           echo "apk=$DST" >> "$GITHUB_OUTPUT"
           ls -la "$DST"
@@ -396,7 +396,7 @@ jobs:
       - name: بارگذاریِ APK (آرتیفکت)
         uses: actions/upload-artifact@v4
         with:
-          name: hesabdar-android-apk
+          name: apex-store-manager-android-apk
           if-no-files-found: error
           path: ${{ steps.out.outputs.apk }}
 
