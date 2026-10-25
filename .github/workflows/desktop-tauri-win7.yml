@@ -211,7 +211,7 @@ jobs:
       - name: بارگذاریِ نصب‌کننده (آرتیفکت)
         uses: actions/upload-artifact@v4
         with:
-          name: hesabdar-windows7-setup
+          name: apex-store-manager-windows7-setup
           if-no-files-found: error
           path: |
             src-tauri/target/${{ env.WIN7_TARGET }}/release/bundle/nsis/*.exe
