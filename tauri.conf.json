@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "حسابدار",
+  "productName": "APEX Store Manager",
   "mainBinaryName": "hesabdar",
   "version": "0.0.0",
   "identifier": "com.hesabdar.desktop",
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "حسابدار",
+        "title": "APEX Store Manager",
         "width": 1280,
         "height": 840,
         "minWidth": 1000,
@@ -47,10 +47,10 @@
     ],
     "resources": [],
     "externalBin": [],
-    "copyright": "حسابدار",
+    "copyright": "APEX Store Manager",
     "category": "Business",
-    "shortDescription": "حسابدار — سیستم مدیریت فروشگاه",
-    "longDescription": "سیستم مدیریت فروشگاه و حسابداری — نسخهٔ دسکتاپ، کاملاً آفلاین.",
+    "shortDescription": "APEX Store Manager — سیستم مدیریت فروشگاه",
+    "longDescription": "APEX Store Manager — سیستم مدیریت فروشگاه و حسابداری، نسخهٔ دسکتاپ، کاملاً آفلاین.",
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper",
