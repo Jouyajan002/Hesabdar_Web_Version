@@ -11886,6 +11886,22 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
 
     // ---- داده‌های معامله ----
     var items = transaction.items || [];
+    // ── سطرِ ضایعات در چاپِ بل ──────────────────────────────────────────────────
+    //  سطرِ ضایعات در جدولِ اقلام چاپ نمی‌شود؛ به‌جایش دو سطر در بخشِ مجموع‌ها
+    //  («مجموع ضایعات» = ضریب ، «مجموع مبلغ ضایعات» = مبلغ) با همان استایل می‌آید.
+    //  همهٔ محاسبه‌های پایین (تخفیف، مجموع، پرداختی، باقیمانده) دست‌نخورده‌اند و
+    //  از همان itemsِ کاملِ معامله گرفته می‌شوند؛ تنها «جمع مبلغ»ِ نمایشی سهمِ
+    //  ضایعات را کم می‌کند و همان سهم در سطرِ «مجموع مبلغ ضایعات» می‌نشیند، پس
+    //  هیچ مبلغی دوبار شمرده نمی‌شود:  جمع مبلغ + مبلغ ضایعات − تخفیف = مجموع.
+    var _wsPrintRows = items.filter(function (it) { return !!(it && it.isWastage); });
+    var _printItems = _wsPrintRows.length
+        ? items.filter(function (it) { return !(it && it.isWastage); })
+        : items;
+    var _wsPrintAmount = _wsPrintRows.reduce(function (s, it) {
+        return s + ((parseFloat(it.quantity) || 0) * (parseFloat(it.price) || 0));
+    }, 0);
+    var _wsPrintQty = _wsPrintRows.reduce(function (s, it) { return s + (parseFloat(it.quantity) || 0); }, 0);
+    var _wsPrintCoef = (_wsPrintQty > 0) ? (_wsPrintAmount / _wsPrintQty) : 0;
     var _subTotal = items.reduce(function (s, it) { return s + ((parseFloat(it.quantity) || 0) * (parseFloat(it.price) || 0)); }, 0);
     var _itemDiscount = items.reduce(function (s, it) { return s + (parseFloat(it.discount) || 0); }, 0);
     var _txDiscount = parseFloat(transaction.totalDiscount != null ? transaction.totalDiscount : (transaction.discount || 0)) || 0;
@@ -11940,13 +11956,13 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
         } catch (e) {}
         return '';
     }
-    var _itemDetailArr = (items || []).map(_itemDetailText);
+    var _itemDetailArr = (_printItems || []).map(_itemDetailText);
     var hasDetails = _itemDetailArr.some(function (d) { return !!d; });
 
     // ---- ردیف‌های اقلام ----
     var rowsHtml = '';
     var rowCount = 0;
-    items.forEach(function (item, i) {
+    _printItems.forEach(function (item, i) {
         var qty = parseFloat(item.quantity) || 0;
         var price = parseFloat(item.price) || 0;
         var disc = parseFloat(item.discount) || 0;
@@ -12104,7 +12120,11 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
                 '<div class="sig-line">مهر و امضاء</div>' +
             '</div>' +
             '<div class="totals">' +
-                '<div class="tot-row"><span class="t-lbl">جمع مبلغ</span><span class="t-val">' + fn(_subTotal) + '</span></div>' +
+                '<div class="tot-row"><span class="t-lbl">جمع مبلغ</span><span class="t-val">' + fn(_subTotal - _wsPrintAmount) + '</span></div>' +
+                (_wsPrintAmount > 0 ? (
+                    '<div class="tot-row"><span class="t-lbl">مجموع ضایعات</span><span class="t-val">' + fn(_wsPrintCoef) + '</span></div>' +
+                    '<div class="tot-row"><span class="t-lbl">مجموع مبلغ ضایعات</span><span class="t-val">' + fn(_wsPrintAmount) + '</span></div>'
+                ) : '') +
                 '<div class="tot-row"><span class="t-lbl">تخفیف</span><span class="t-val">' + fn(_totalDiscount) + '</span></div>' +
                 '<div class="tot-row hl"><span class="t-lbl">مجموع</span><span class="t-val">' + fn(_grandTotal) + '</span></div>' +
                 '<div class="tot-row"><span class="t-lbl">پرداختی</span><span class="t-val">' + fn(_paid) + '</span></div>' +
@@ -12939,7 +12959,7 @@ function __jouyaDiagReport(reason) {
 
     try { console.error('[jouya-share] گزارشِ تشخیصی:\n' + txt); } catch (e) {}
 
-    var fname = 'hesabdar-share-diagnostic';
+    var fname = 'apex-store-manager-share-diagnostic';
     try { fname += '-' + (new Date()).toISOString().replace(/[:.]/g, '-').slice(0, 19); } catch (e) {}
     fname += '.txt';
 
@@ -41876,7 +41896,7 @@ function ndUpdRunWebAndroidInstall(url) {
 
     var fileName = '';
     try { fileName = decodeURIComponent(String(url).split('?')[0].split('/').pop() || ''); } catch (e) { fileName = ''; }
-    if (!fileName) fileName = isAndroid ? 'hesabdar-update.apk' : 'hesabdar-setup.exe';
+    if (!fileName) fileName = isAndroid ? 'apex-store-manager-update.apk' : 'apex-store-manager-setup.exe';
 
     var blobToBase64 = function (blob) {
         return new Promise(function (resolve, reject) {
@@ -42736,7 +42756,7 @@ function ndUpdDiag() {
 
     var save = function () {
         var txt = L.join('\n') + '\n';
-        var fname = 'hesabdar-update-diagnostic';
+        var fname = 'apex-store-manager-update-diagnostic';
         try { fname += '-' + (new Date()).toISOString().replace(/[:.]/g, '-').slice(0, 19); } catch (e) {}
         fname += '.txt';
         try { console.log(txt); } catch (e) {}
