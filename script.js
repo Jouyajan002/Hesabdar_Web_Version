@@ -4980,6 +4980,83 @@ registerDataRebuilder({
 });
 
 // ════════════════════════════════════════════════════════════════════════
+//  اصلاحِ خودکارِ مبلغِ ضایعات در بل‌های فروشِ قدیمی  (sale_wastage_exact_fix)
+//  ──────────────────────────────────────────────────────────────────────
+//  بل‌هایی که پیش از اصلاحِ «ضریبِ گردشده» ثبت شده‌اند، مبلغِ سطرِ ضایعات را از
+//  «مجموعِ تعداد × ضریبِ گردشده به دو رقم» گرفته‌اند — مثلاً BL-0011:
+//  ۲۴ × ۲٫۱۴ = ۵۱٫۳۶ به‌جای ۵۱٫۲۴. این Rebuilder همان اثری را دارد که باز کردن و
+//  ذخیرهٔ دوبارهٔ بل دارد، و فقط همان:
+//    • مبلغِ دقیق = جمعِ سهمِ ضایعاتِ سطربه‌سطر (wastageAmount) که هنگامِ ثبت روی
+//      خودِ اقلامِ جنس نشسته است — دادهٔ خام؛ هیچ عددی از نو حدس زده نمی‌شود.
+//    • قیمتِ سطرِ ضایعات = مبلغِ دقیق ÷ تعداد ، جملهٔ آن = مبلغِ دقیق.
+//    • subTotal ، totalAmount و remaining هرکدام دقیقاً به اندازهٔ همان اختلاف اصلاح
+//      می‌شوند. تخفیف، نقدِ دریافتی، صندوق، تعدادها، گدام و مفاد دست نمی‌خورند.
+//    • status با همان قاعدهٔ saveSale (remaining > 0 → «باقی‌مانده»)، فقط وقتی
+//      وضعیتِ فعلی یکی از همین دو مقدار باشد.
+//  بلِ کاملاً پرداخت‌شده هم اصلاح می‌شود و مشتری به اندازهٔ اختلاف طلبکار می‌ماند
+//  (تصمیمِ صاحبِ برنامه). حسابِ مشتری، گزارش‌ها و داشبورد از خودِ بل‌ها ساخته
+//  می‌شوند، پس در همان لحظه هماهنگ می‌شوند.
+//  idempotent: بلِ اصلاح‌شده و هر بلِ ثبت‌شده با کدِ فعلی اختلافی ندارد و رد می‌شود.
+//  هیچ زمانِ دستگاهی در رکورد نوشته نمی‌شود تا اگر دو دستگاه همین بل را اصلاح کنند،
+//  رکوردِ هر دو یکسان باشد و همگام‌سازی تعارضی نبیند.
+// ════════════════════════════════════════════════════════════════════════
+function _wsfxRound(v) { return Math.round((parseFloat(v) || 0) * 1e6) / 1e6; }
+
+function _wsfxPlan(t) {
+    if (!t || (t.type !== 'فروش' && t.type !== 'پیش‌فاکتور') || !Array.isArray(t.items)) return null;
+    var wRows = t.items.filter(function (it) { return !!(it && it.isWastage); });
+    if (wRows.length !== 1) return null;                 // ساختارِ ناشناخته → دست نزن
+    var w = wRows[0];
+    var wq = parseFloat(w.quantity) || 0;
+    if (!(wq > 0)) return null;
+    var exact = 0, hasLine = false;
+    t.items.forEach(function (it) {
+        if (!it || it.isWastage) return;
+        var a = parseFloat(it.wastageAmount);
+        if (isFinite(a) && a > 0) { exact += a; hasLine = true; }
+    });
+    if (!hasLine || !(exact > 0)) return null;           // دادهٔ خام نیست → حدس نزن
+    if (t.totalAmount == null || !isFinite(parseFloat(t.totalAmount))) return null;
+    var current = wq * (parseFloat(w.price) || 0);
+    var delta = current - exact;
+    // آستانه فقط برای کنارگذاشتنِ نویزِ ممیزِ شناور است؛ کوچک‌ترین اختلافِ واقعی هم اصلاح می‌شود.
+    if (!(Math.abs(delta) >= 0.0001)) return null;
+    return { w: w, wq: wq, exact: exact, delta: delta };
+}
+
+registerDataRebuilder({
+    name: 'sale_wastage_exact_fix',
+    description: 'اصلاحِ مبلغِ سطرِ ضایعات در بل‌های فروشِ قدیمی (ضریبِ گردشده) به جمعِ دقیقِ سهمِ سطربه‌سطر',
+    canRebuild: function () {
+        return _engRaw('transactions').some(function (t) { return !!_wsfxPlan(t); });
+    },
+    rebuild: function () {
+        var txs = _engRaw('transactions');
+        var fixed = 0;
+        txs.forEach(function (t) {
+            var p = _wsfxPlan(t);
+            if (!p) return;
+            var oldTotal = parseFloat(t.totalAmount) || 0;
+            p.w.price = p.exact / p.wq;
+            p.w.total = p.exact;
+            if (t.subTotal != null) t.subTotal = _wsfxRound((parseFloat(t.subTotal) || 0) - p.delta);
+            t.totalAmount = _wsfxRound(oldTotal - p.delta);
+            if (t.remaining != null) {
+                t.remaining = _wsfxRound((parseFloat(t.remaining) || 0) - p.delta);
+                if (t.status === 'باقی‌مانده' || t.status === 'تسویه‌شده') {
+                    t.status = (t.remaining > 0) ? 'باقی‌مانده' : 'تسویه‌شده';
+                }
+            }
+            // ردِ اصلاح (بدونِ زمانِ دستگاه): مجموعِ پیش و پس از اصلاح
+            t.wastageFix = { from: _wsfxRound(oldTotal), to: t.totalAmount };
+            fixed++;
+        });
+        if (fixed > 0) localStorage.setItem('transactions', JSON.stringify(txs));
+        return { changed: fixed > 0, count: fixed };
+    }
+});
+
+// ════════════════════════════════════════════════════════════════════════
 //  ارکستریتورِ بازسازیِ کامل  (Single Entry Point)
 //  ترتیبِ وابستگی مهم است:
 //    person_previous_account_cleanup → batch_initial_cost → stock → purchase_price
@@ -4989,7 +5066,7 @@ registerDataRebuilder({
 //  این تابع روی «هر» بارگذاری/وارد/بازیابی صدا زده می‌شود و ungated است؛ هر Rebuilder
 //  خودش با canRebuild تصمیم می‌گیرد که آیا دادهٔ خامِ کافی دارد یا نه.
 // ════════════════════════════════════════════════════════════════════════
-var REBUILD_PIPELINE = ['expense_categories_backfill', 'person_transfer_direction_fix', 'person_previous_account_cleanup', 'stock', 'purchase_price', 'cashbox_balance', 'sale_profit'];
+var REBUILD_PIPELINE = ['expense_categories_backfill', 'person_transfer_direction_fix', 'sale_wastage_exact_fix', 'person_previous_account_cleanup', 'stock', 'purchase_price', 'cashbox_balance', 'sale_profit'];
 
 function rebuildAllDerivedData() {
     var summary = {};
@@ -11909,20 +11986,16 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
     var _printItems = _wsPrintRows.length
         ? items.filter(function (it) { return !(it && it.isWastage); })
         : items;
-    // جمعِ سهمِ ضایعاتِ سطربه‌سطر (دقیق)
-    var _wsPrintAmount = _printItems.reduce(function (s, it) {
-        var a = parseFloat(it && it.wastageAmount);
-        return s + ((isFinite(a) && a > 0) ? a : 0);
-    }, 0);
-    // بل‌هایی که سهمِ سطربه‌سطر را ندارند: از خودِ سطرِ ضایعاتِ ذخیره‌شده خوانده شود
-    if (!(_wsPrintAmount > 0) && _wsPrintRows.length) {
-        _wsPrintAmount = _wsPrintRows.reduce(function (s, it) {
-            var t = parseFloat(it && it.total);
-            if (isFinite(t) && t > 0) return s + t;
-            return s + ((parseFloat(it.quantity) || 0) * (parseFloat(it.price) || 0));
-        }, 0);
-    }
     var _subTotal = items.reduce(function (s, it) { return s + ((parseFloat(it.quantity) || 0) * (parseFloat(it.price) || 0)); }, 0);
+    // «جمع مبلغ»ِ چاپی مستقیماً از جمعِ همان سطرهایی ساخته می‌شود که روی بل چاپ
+    // شده‌اند، تا همیشه با جمعِ ستونِ «مبلغ کل» یکی باشد (نه از تفاضل).
+    // «مجموع ضایعات» = سهمی از جمعِ ذخیره‌شدهٔ بل که مالِ سطرِ ضایعات است؛ پس ستونِ
+    // مجموع‌ها همیشه دقیقاً به «مجموع»ِ ذخیره‌شده می‌رسد. برای بل‌های ثبت‌شده با کدِ
+    // فعلی این عدد عیناً همان جمعِ ۷٪ِ سطربه‌سطر است. بلِ بدونِ ضایعات دست‌نخورده.
+    var _printGoodsSum = _wsPrintRows.length
+        ? _printItems.reduce(function (s, it) { return s + ((parseFloat(it.quantity) || 0) * (parseFloat(it.price) || 0)); }, 0)
+        : _subTotal;
+    var _wsPrintAmount = _wsPrintRows.length ? (_subTotal - _printGoodsSum) : 0;
     var _itemDiscount = items.reduce(function (s, it) { return s + (parseFloat(it.discount) || 0); }, 0);
     var _txDiscount = parseFloat(transaction.totalDiscount != null ? transaction.totalDiscount : (transaction.discount || 0)) || 0;
     // تخفیف را از تفاوت جمعِ اقلام و مبلغِ نهایی هم استخراج کن (پوششِ تخفیفِ کلیِ بل)
@@ -12140,7 +12213,7 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
                 '<div class="sig-line">مهر و امضاء</div>' +
             '</div>' +
             '<div class="totals">' +
-                '<div class="tot-row"><span class="t-lbl">جمع مبلغ</span><span class="t-val">' + fn(_subTotal - _wsPrintAmount) + '</span></div>' +
+                '<div class="tot-row"><span class="t-lbl">جمع مبلغ</span><span class="t-val">' + fn(_printGoodsSum) + '</span></div>' +
                 (_wsPrintAmount > 0
                     ? ('<div class="tot-row"><span class="t-lbl">مجموع ضایعات</span><span class="t-val">' + fn(_wsPrintAmount) + '</span></div>')
                     : '') +
