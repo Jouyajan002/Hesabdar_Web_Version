@@ -3944,10 +3944,18 @@ function saveSale() {
         if (typeof _wsIsRow === 'function' && _wsIsRow(row)) {
             var _wq = parseFloat((row.querySelector('.item-quantity') || {}).value) || 0;
             var _wp = parseFloat((row.querySelector('.item-price') || {}).value) || 0;
+            // مبلغِ دقیقِ ضایعات از dataset خوانده می‌شود، نه از «ضریب»ِ ستونِ قیمت:
+            // ضریب برای نمایش به دو رقمِ اعشار گرد شده و ضربِ دوبارهٔ آن در تعدادِ
+            // بزرگ خطا می‌سازد (مثلاً ۱۰٬۰۰۰ فت → تا ۵۰ افغانی اختلاف).
             var _wtEl = row.querySelector('.item-total');
-            var _wt = (_wtEl && _wtEl.dataset && _wtEl.dataset.raw !== undefined)
-                ? (parseFloat(_wtEl.dataset.raw) || 0)
-                : (_wq * _wp);
+            var _wt = (row.dataset && row.dataset.wastageAmount !== undefined && isFinite(parseFloat(row.dataset.wastageAmount)))
+                ? (parseFloat(row.dataset.wastageAmount) || 0)
+                : ((_wtEl && _wtEl.dataset && _wtEl.dataset.raw !== undefined)
+                    ? (parseFloat(_wtEl.dataset.raw) || 0)
+                    : (_wq * _wp));
+            // قیمتِ ذخیره‌شده دقیقاً طوری حساب می‌شود که «تعداد × قیمت = مبلغ» باشد،
+            // چون جمعِ بل (subTotal) همه‌جا از تعداد×قیمت گرفته می‌شود.
+            var _wpExact = (_wq > 0) ? (_wt / _wq) : _wp;
             if (_wq > 0 && _wp > 0) {
                 items.push({
                     productId: 'WASTE-BILL',
@@ -3956,7 +3964,7 @@ function saveSale() {
                     isWastage: true,          // نشانهٔ سطرِ ضایعات (برگشت‌ناپذیر)
                     quantity: _wq,
                     unit: (row.querySelector('.item-unit') || {}).textContent || '',
-                    price: _wp,
+                    price: _wpExact,
                     discount: 0,
                     total: _wt,
                     wastagePct: parseFloat(row.dataset.wastagePct) || 0,
@@ -9012,7 +9020,8 @@ function calculateSalesTotal() {
             ? parseFloat(totalSpan.dataset.raw) || 0
             : Math.max(0, qty * price - discount);
 
-        subtotal      += qty * price;   // پیش از تخفیف
+        // برای سطرهای عادی همان qty*price؛ فقط سطرِ ضایعات مبلغِ دقیقِ خود را می‌دهد.
+        subtotal      += (typeof _wsRowAmount === 'function') ? _wsRowAmount(row, qty, price) : (qty * price);
         totalDiscount += discount;
     });
 
@@ -11887,21 +11896,32 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
     // ---- داده‌های معامله ----
     var items = transaction.items || [];
     // ── سطرِ ضایعات در چاپِ بل ──────────────────────────────────────────────────
-    //  سطرِ ضایعات در جدولِ اقلام چاپ نمی‌شود؛ به‌جایش دو سطر در بخشِ مجموع‌ها
-    //  («مجموع ضایعات» = ضریب ، «مجموع مبلغ ضایعات» = مبلغ) با همان استایل می‌آید.
-    //  همهٔ محاسبه‌های پایین (تخفیف، مجموع، پرداختی، باقیمانده) دست‌نخورده‌اند و
-    //  از همان itemsِ کاملِ معامله گرفته می‌شوند؛ تنها «جمع مبلغ»ِ نمایشی سهمِ
-    //  ضایعات را کم می‌کند و همان سهم در سطرِ «مجموع مبلغ ضایعات» می‌نشیند، پس
-    //  هیچ مبلغی دوبار شمرده نمی‌شود:  جمع مبلغ + مبلغ ضایعات − تخفیف = مجموع.
+    //  سطرِ ضایعات در جدولِ اقلام چاپ نمی‌شود؛ به‌جایش یک سطر به نامِ «مجموع ضایعات»
+    //  در بخشِ مجموع‌ها با همان استایل می‌آید که فقط «پول»ِ ضایعات را نشان می‌دهد.
+    //  مبلغ از جمعِ سهمِ فیصدیِ تک‌تکِ سطرهای جنس گرفته می‌شود (wastageAmount که
+    //  هنگامِ ثبتِ بل روی خودِ قلم نشسته) — یعنی همان «۷٪ِ هر سطر، جمع‌شده» — نه از
+    //  ضریبِ گردشده، تا در تعدادهای بزرگ هیچ اعشاری گم نشود.
+    //  همهٔ محاسبه‌های پایین (تخفیف، مجموع، پرداختی، باقیمانده) دست‌نخورده‌اند و از
+    //  همان itemsِ کاملِ معامله گرفته می‌شوند؛ تنها «جمع مبلغ»ِ نمایشی همین سهم را کم
+    //  می‌کند و همان سهم در سطرِ «مجموع ضایعات» می‌نشیند، پس هیچ مبلغی دوبار شمرده
+    //  نمی‌شود:  جمع مبلغ + مجموع ضایعات − تخفیف = مجموع.
     var _wsPrintRows = items.filter(function (it) { return !!(it && it.isWastage); });
     var _printItems = _wsPrintRows.length
         ? items.filter(function (it) { return !(it && it.isWastage); })
         : items;
-    var _wsPrintAmount = _wsPrintRows.reduce(function (s, it) {
-        return s + ((parseFloat(it.quantity) || 0) * (parseFloat(it.price) || 0));
+    // جمعِ سهمِ ضایعاتِ سطربه‌سطر (دقیق)
+    var _wsPrintAmount = _printItems.reduce(function (s, it) {
+        var a = parseFloat(it && it.wastageAmount);
+        return s + ((isFinite(a) && a > 0) ? a : 0);
     }, 0);
-    var _wsPrintQty = _wsPrintRows.reduce(function (s, it) { return s + (parseFloat(it.quantity) || 0); }, 0);
-    var _wsPrintCoef = (_wsPrintQty > 0) ? (_wsPrintAmount / _wsPrintQty) : 0;
+    // بل‌هایی که سهمِ سطربه‌سطر را ندارند: از خودِ سطرِ ضایعاتِ ذخیره‌شده خوانده شود
+    if (!(_wsPrintAmount > 0) && _wsPrintRows.length) {
+        _wsPrintAmount = _wsPrintRows.reduce(function (s, it) {
+            var t = parseFloat(it && it.total);
+            if (isFinite(t) && t > 0) return s + t;
+            return s + ((parseFloat(it.quantity) || 0) * (parseFloat(it.price) || 0));
+        }, 0);
+    }
     var _subTotal = items.reduce(function (s, it) { return s + ((parseFloat(it.quantity) || 0) * (parseFloat(it.price) || 0)); }, 0);
     var _itemDiscount = items.reduce(function (s, it) { return s + (parseFloat(it.discount) || 0); }, 0);
     var _txDiscount = parseFloat(transaction.totalDiscount != null ? transaction.totalDiscount : (transaction.discount || 0)) || 0;
@@ -12121,10 +12141,9 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
             '</div>' +
             '<div class="totals">' +
                 '<div class="tot-row"><span class="t-lbl">جمع مبلغ</span><span class="t-val">' + fn(_subTotal - _wsPrintAmount) + '</span></div>' +
-                (_wsPrintAmount > 0 ? (
-                    '<div class="tot-row"><span class="t-lbl">مجموع ضایعات</span><span class="t-val">' + fn(_wsPrintCoef) + '</span></div>' +
-                    '<div class="tot-row"><span class="t-lbl">مجموع مبلغ ضایعات</span><span class="t-val">' + fn(_wsPrintAmount) + '</span></div>'
-                ) : '') +
+                (_wsPrintAmount > 0
+                    ? ('<div class="tot-row"><span class="t-lbl">مجموع ضایعات</span><span class="t-val">' + fn(_wsPrintAmount) + '</span></div>')
+                    : '') +
                 '<div class="tot-row"><span class="t-lbl">تخفیف</span><span class="t-val">' + fn(_totalDiscount) + '</span></div>' +
                 '<div class="tot-row hl"><span class="t-lbl">مجموع</span><span class="t-val">' + fn(_grandTotal) + '</span></div>' +
                 '<div class="tot-row"><span class="t-lbl">پرداختی</span><span class="t-val">' + fn(_paid) + '</span></div>' +
@@ -20072,10 +20091,18 @@ function saveAndPrintSale() {
         if (typeof _wsIsRow === 'function' && _wsIsRow(row)) {
             var _wq = parseFloat((row.querySelector('.item-quantity') || {}).value) || 0;
             var _wp = parseFloat((row.querySelector('.item-price') || {}).value) || 0;
+            // مبلغِ دقیقِ ضایعات از dataset خوانده می‌شود، نه از «ضریب»ِ ستونِ قیمت:
+            // ضریب برای نمایش به دو رقمِ اعشار گرد شده و ضربِ دوبارهٔ آن در تعدادِ
+            // بزرگ خطا می‌سازد (مثلاً ۱۰٬۰۰۰ فت → تا ۵۰ افغانی اختلاف).
             var _wtEl = row.querySelector('.item-total');
-            var _wt = (_wtEl && _wtEl.dataset && _wtEl.dataset.raw !== undefined)
-                ? (parseFloat(_wtEl.dataset.raw) || 0)
-                : (_wq * _wp);
+            var _wt = (row.dataset && row.dataset.wastageAmount !== undefined && isFinite(parseFloat(row.dataset.wastageAmount)))
+                ? (parseFloat(row.dataset.wastageAmount) || 0)
+                : ((_wtEl && _wtEl.dataset && _wtEl.dataset.raw !== undefined)
+                    ? (parseFloat(_wtEl.dataset.raw) || 0)
+                    : (_wq * _wp));
+            // قیمتِ ذخیره‌شده دقیقاً طوری حساب می‌شود که «تعداد × قیمت = مبلغ» باشد،
+            // چون جمعِ بل (subTotal) همه‌جا از تعداد×قیمت گرفته می‌شود.
+            var _wpExact = (_wq > 0) ? (_wt / _wq) : _wp;
             if (_wq > 0 && _wp > 0) {
                 items.push({
                     productId: 'WASTE-BILL',
@@ -20084,7 +20111,7 @@ function saveAndPrintSale() {
                     isWastage: true,          // نشانهٔ سطرِ ضایعات (برگشت‌ناپذیر)
                     quantity: _wq,
                     unit: (row.querySelector('.item-unit') || {}).textContent || '',
-                    price: _wp,
+                    price: _wpExact,
                     discount: 0,
                     total: _wt,
                     wastagePct: parseFloat(row.dataset.wastagePct) || 0,
@@ -43838,6 +43865,22 @@ function _wsPct() {
 }
 
 /** آیا این سطر، سطرِ ضایعات است؟ */
+/**
+ * مبلغِ یک سطر برای جمعِ بل.
+ * برای سطرهای عادی دقیقاً همان «تعداد × قیمت»ِ همیشگی برمی‌گردد (بدونِ هیچ تغییر).
+ * فقط برای سطرِ ضایعات مبلغِ دقیقِ ذخیره‌شده را می‌دهد، چون ستونِ قیمتِ آن سطر
+ * «ضریب»ِ گردشده به دو رقمِ اعشار است و ضربِ دوبارهٔ آن در تعدادِ بزرگ خطا می‌سازد.
+ */
+function _wsRowAmount(row, qty, price) {
+    try {
+        if (row && row.dataset && row.dataset.wastage === '1' && row.dataset.wastageAmount !== undefined) {
+            var a = parseFloat(row.dataset.wastageAmount);
+            if (isFinite(a) && a >= 0) return a;
+        }
+    } catch (e) {}
+    return qty * price;
+}
+
 function _wsIsRow(row) { return !!(row && row.dataset && row.dataset.wastage === '1'); }
 
 /** سطرهای جنس/خدمتِ عادیِ بل (بدونِ سطرِ ضایعات) */
@@ -43914,6 +43957,10 @@ function _wsBuildRow(w) {
         '<td style="text-align:center;opacity:.6;"><i class="fas fa-percent" title="سطرِ ضایعات — از فیصدی ساخته می‌شود"></i></td>';
     var totalSpan = tr.querySelector('.item-total');
     if (totalSpan) totalSpan.dataset.raw = r2(w.amount);
+    // مبلغِ دقیق و گردنشده: ستونِ «قیمت» فقط ضریبِ گردشده را برای خواندنِ کاربر
+    // نشان می‌دهد، ولی همهٔ جمع‌زدن‌های پولی باید از همین عدد بخوانند تا با
+    // بزرگ‌شدنِ تعداد، خطای گردکردنِ ضریب در جمعِ بل ضرب نشود.
+    tr.dataset.wastageAmount = String(w.amount);
     tbody.appendChild(tr);
     return tr;
 }
