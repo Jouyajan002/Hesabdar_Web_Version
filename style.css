@@ -10471,3 +10471,128 @@ html, body { overflow-anchor: none; }
     overflow: visible !important; border: none !important; background: transparent !important;
     box-shadow: none !important; border-radius: 0 !important; padding: 0 !important; width: 100% !important;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   APEX — افزوده‌های رابطِ کاربری (عرضِ منعطفِ ستون‌ها، + − × ، کپی/چسباندنِ اجناس،
+   ریفریشِ سراسری، پشتیبان‌گیری، میان‌برِ مشخصاتِ جنس، تیکِ بیلانس)
+   در هر سه نسخه (وب، اندروید، نصبی) یکسان است؛ تفاوتِ موبایل فقط در اندازه‌هاست.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* فلش‌های بالا/پایینِ داخلِ فیلدهای عددی در سراسرِ برنامه برداشته شد
+   (افزایش/کاهشِ تعداد حالا با دکمه‌های + و − در ستونِ «...» انجام می‌شود). */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; appearance: textfield; }
+
+/* ── جدولِ اقلام: عرضِ هر ستون را اسکریپت از روی «عنوان» و «طولانی‌ترین محتوا» تعیین
+      می‌کند؛ بقیهٔ فضا همیشه به ستونِ نامِ جنس می‌رسد. ── */
+.bill-flex-table { table-layout: fixed !important; width: 100% !important; }
+.bill-items-box .bill-flex-table thead th { white-space: nowrap; padding-left: 8px; padding-right: 8px; }
+.bill-items-box .bill-flex-table thead th:nth-child(2) { white-space: normal; }
+.bill-items-box .bill-flex-table tbody td { padding-left: 6px; padding-right: 6px; }
+.bill-flex-table tbody td input:not([type="hidden"]) { min-width: 0; max-width: 100%; box-sizing: border-box; }
+.bill-flex-table tfoot td { white-space: nowrap; }
+
+/* ── ستونِ «...»: افزایش / کاهش / حذف ── */
+.bill-items-box table thead th.bill-acts-th { letter-spacing: 2px; padding-left: 4px; padding-right: 4px; }
+.bill-items-box table tbody td.bill-acts-cell { text-align: center; white-space: nowrap; padding-left: 4px; padding-right: 4px; }
+.bill-acts { display: inline-flex; align-items: center; gap: 5px; direction: rtl; }
+.bill-act-btn {
+    flex: 0 0 auto; width: 22px; height: 22px; padding: 0; margin: 0;
+    border: 0; border-radius: 50%; background: transparent; color: #64748b;
+    display: inline-flex; align-items: center; justify-content: center;
+    cursor: pointer; transition: color .15s ease, background-color .15s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.bill-act-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; display: block; }
+.bill-act-btn:hover { color: var(--bill-navy, #1e3a5f); background: rgba(30, 58, 95, .07); }
+.bill-act-btn.bill-act-del:hover { color: #dc2626; background: rgba(220, 38, 38, .07); }
+.bill-act-btn:active { transform: scale(.92); }
+.bill-act-btn:focus-visible { outline: 2px solid var(--bill-navy, #1e3a5f); outline-offset: 1px; }
+body.dark-mode .bill-act-btn { color: #94a3b8; }
+body.dark-mode .bill-act-btn:hover { color: #e2e8f0; background: rgba(226, 232, 240, .08); }
+body.dark-mode .bill-act-btn.bill-act-del:hover { color: #f87171; }
+
+/* ── سرِ «اجناس و خدمات»: دکمهٔ ⋮ (کپی / چسباندنِ اجناس) ── */
+.bill-items-box .bill-items-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bill-items-head .bill-items-head-title { min-width: 0; }
+.bill-head-menu-btn {
+    flex: 0 0 auto; width: 28px; height: 28px; padding: 0; margin: -4px 0;
+    border: 0; border-radius: 8px; background: transparent; color: inherit; opacity: .9;
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+.bill-head-menu-btn svg { width: 18px; height: 18px; fill: currentColor; display: block; }
+.bill-head-menu-btn:hover, .bill-head-menu-btn[aria-expanded="true"] { background: rgba(255, 255, 255, .14); opacity: 1; }
+
+/* منوی کوچکِ کپی/چسباندن — هم‌سبکِ منوهای عملیاتِ برنامه */
+.apex-pop-menu {
+    position: fixed; z-index: 10050; direction: rtl; min-width: 196px;
+    display: flex; flex-direction: column; gap: 2px; padding: 6px;
+    background: #fff; border: 1px solid #cbd5e1; border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, .16);
+    font-family: inherit;
+}
+.apex-pop-menu button {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    padding: 9px 10px; border: 0; border-radius: 8px; background: transparent;
+    font-family: inherit; font-size: 13px; font-weight: 500; color: #1e293b; text-align: right; cursor: pointer;
+}
+.apex-pop-menu button i { width: 18px; text-align: center; color: var(--bill-navy, #1e3a5f); }
+.apex-pop-menu button:hover:not(:disabled) { background: #f1f5f9; }
+.apex-pop-menu button:disabled { opacity: .45; cursor: default; }
+body.dark-mode .apex-pop-menu { background: #1e293b; border-color: #334155; }
+body.dark-mode .apex-pop-menu button { color: #e2e8f0; }
+body.dark-mode .apex-pop-menu button i { color: #93c5fd; }
+body.dark-mode .apex-pop-menu button:hover:not(:disabled) { background: #334155; }
+
+/* ── داشبورد: ریفریشِ سراسری کنارِ جستجو (بی‌نام، بی‌پس‌زمینه) ── */
+.nd-search-row { display: flex; align-items: center; gap: 6px; width: 100%; }
+.nd-search-row > .nd-search-wrap { flex: 1 1 auto; min-width: 0; }
+.nd-refresh-btn {
+    flex: 0 0 auto; width: 30px; height: 30px; padding: 0; margin: 0;
+    border: 0; border-radius: 50%; background: transparent !important; box-shadow: none !important;
+    color: #64748b; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+    -webkit-tap-highlight-color: transparent; transition: color .15s ease;
+}
+.nd-refresh-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; display: block; }
+.nd-refresh-btn:hover { color: var(--bill-navy, #1e3a5f); }
+.nd-refresh-btn.is-spinning svg { animation: apexSpin .75s linear infinite; }
+@keyframes apexSpin { to { transform: rotate(360deg); } }
+body.dark-mode .nd-refresh-btn { color: #94a3b8; }
+body.dark-mode .nd-refresh-btn:hover { color: #e2e8f0; }
+
+/* ── فرمِ ویرایشِ جنس در بل: میان‌برِ «مشخصات جنس» در انتهای فیلدِ نام ── */
+.apex-ble-namewrap { position: relative; display: block; }
+.apex-ble-namewrap > input { padding-left: 42px !important; }
+.apex-ble-pdlink {
+    position: absolute; left: 6px; top: 50%; transform: translateY(-50%);
+    width: 30px; height: 30px; padding: 0; border: 0; border-radius: 8px; background: transparent;
+    color: var(--bill-navy, #1e3a5f); font-size: 15px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center;
+}
+.apex-ble-pdlink svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; display: block; }
+.apex-ble-pdlink:hover { background: rgba(30, 58, 95, .08); }
+body.dark-mode .apex-ble-pdlink { color: #93c5fd; }
+
+/* ── فرم‌های دریافتی/پرداختی: تیکِ سبز = پرکردن با بیلانسِ شخص ── */
+.bill-inline-iconbtn.apex-fillbal { cursor: pointer; }
+.bill-inline-iconbtn.apex-fillbal:hover { filter: brightness(1.08); transform: scale(1.06); }
+.bill-inline-iconbtn.apex-fillbal:active { transform: scale(.94); }
+
+/* ── پنجرهٔ پشتیبان‌گیریِ هدر: گزینه‌های ایمیل و گوگل‌درایو در بالای پنجره ── */
+.nd-modal-body .apex-bk-card { margin-bottom: 14px; }
+.apex-bk-card .aubc-option-btn[disabled] { opacity: .55; cursor: default; }
+
+/* ── موبایل: کوچک‌ترین فضا، بدونِ به‌هم‌ریختنِ چیدمان ── */
+@media (max-width: 768px) {
+    .bill-items-box .bill-flex-table thead th { padding-left: 5px; padding-right: 5px; font-size: .78rem; }
+    .bill-items-box .bill-flex-table tbody td { padding-left: 4px; padding-right: 4px; }
+    .bill-items-box .bill-flex-table .bill-cell-input,
+    .bill-items-box .bill-flex-table tbody input[type="number"] { padding-left: 4px; padding-right: 4px; }
+    .bill-acts { gap: 3px; }
+    .bill-act-btn { width: 20px; height: 20px; }
+    .bill-act-btn svg { width: 16px; height: 16px; }
+    .nd-refresh-btn { width: 28px; height: 28px; }
+    .nd-refresh-btn svg { width: 17px; height: 17px; }
+}

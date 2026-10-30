@@ -782,6 +782,8 @@ function initApp() {
     updatePageTitle('داشبورد');
     initDatePickers();
     setupEventListeners();
+    // افزوده‌های رابطِ کاربری (عرضِ منعطفِ ستون‌ها، + − × ، کپی/چسباندنِ اجناس، شکلِ ارقام، …)
+    try { if (typeof _apexUiInit === 'function') _apexUiInit(); } catch (e) { console.error('apex ui init:', e); }
     // پرکردنِ همهٔ انتخابگرهای ارز با ارزهای تعریف‌شدهٔ سیستم (پویا؛ بدونِ AFN/USD هاردکد)
     try { if (typeof _populateAllCurrencySelects === 'function') _populateAllCurrencySelects(); } catch(e) {}
     showSection('dashboard');
@@ -6507,7 +6509,6 @@ function _renderDaySummaryBody(title) {
         { label: 'دریافتی',       val: (d.receivedDisplay != null ? d.receivedDisplay : d.received), icon: 'fa-hand-holding-usd', color: '#10b981' },
         { label: 'پرداختی',       val: (d.paidDisplay != null ? d.paidDisplay : d.paid),             icon: 'fa-money-check-alt',  color: '#6366f1' },
         { label: 'برگشت از فروش', val: d.retSale,     icon: 'fa-rotate-left',      color: '#f59e0b' },
-        { label: 'فروش خالص',     val: (d.sales - d.retSale), icon: 'fa-equals',    color: '#22c55e' },
         { label: 'برگشت ازخرید',  val: d.retPurchase, icon: 'fa-rotate-right',     color: '#ef4444' },
         { label: 'مصارفات',       val: d.expenses,    icon: 'fa-receipt',          color: '#ec4899' },
         { label: 'فاید امروز',    val: d.profit,      icon: 'fa-chart-simple',     color: (d.profit >= 0 ? '#22c55e' : '#ef4444') },
@@ -13687,6 +13688,7 @@ if (typeof window !== 'undefined') window.__jouyaMaybeMobilePreview = __jouyaMay
 
 function __openPrintPreview(rawHtml, opts) {
     opts = opts || {};
+    try { if (typeof _apexDigitHtml === 'function') rawHtml = _apexDigitHtml(rawHtml); } catch (e) {}
     var title = opts.title || '';
     if (!title) {
         var _m = String(rawHtml).match(/<title>([\s\S]*?)<\/title>/i);
@@ -15014,7 +15016,7 @@ function generatePersonReport(personId) {
         catch (e) { alert('پنجره گزارش مسدود شد. لطفاً pop-up را مجاز کنید.'); }
         return;
     }
-    w.document.write(finalHtml);
+    w.document.write((typeof _apexDigitHtml === 'function') ? _apexDigitHtml(finalHtml) : finalHtml);
     w.document.close();
     w.focus();
 }
@@ -15502,7 +15504,7 @@ function generateCashboxReport(cashboxId) {
         catch (e) { alert('پنجره گزارش مسدود شد. لطفاً pop-up را مجاز کنید.'); }
         return;
     }
-    w.document.write(finalHtml);
+    w.document.write((typeof _apexDigitHtml === 'function') ? _apexDigitHtml(finalHtml) : finalHtml);
     w.document.close();
     w.focus();
 }
@@ -18316,7 +18318,7 @@ function _rpPersonsPdf(kind) {
         if (typeof __openPrintPreview === 'function') {
             __openPrintPreview(html, { title: title, text: title, assets: true, topBar: true, pdfName: title });
         } else {
-            var w = window.open('', '_blank', 'width=950,height=900'); if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+            var w = window.open('', '_blank', 'width=950,height=900'); if (w) { w.document.open(); w.document.write((typeof _apexDigitHtml === 'function') ? _apexDigitHtml(html) : html); w.document.close(); }
         }
     } catch (e) {
         console.error('_rpPersonsPdf:', e);
@@ -20681,7 +20683,7 @@ function formatCurrency(amount, currencyCode) {
             </html>
         `;
     
-        printWindow.document.write(invoiceHTML);
+        printWindow.document.write((typeof _apexDigitHtml === 'function') ? _apexDigitHtml(invoiceHTML) : invoiceHTML);
         printWindow.document.close();
         
 function saveAndPrint() {
@@ -24722,7 +24724,7 @@ function printSaleReturnBill(tx) {
             __openPrintPreview(invoiceHTML, { title: title, text: title, assets: true, topBar: true, billShare: true, pdfName: title });
         } else {
             var w = window.open('', '_blank', 'width=950,height=900');
-            if (w) { w.document.open(); w.document.write(invoiceHTML); w.document.close(); }
+            if (w) { w.document.open(); w.document.write((typeof _apexDigitHtml === 'function') ? _apexDigitHtml(invoiceHTML) : invoiceHTML); w.document.close(); }
         }
     } catch (e) { console.error('printSaleReturnBill:', e); }
 }
@@ -27904,11 +27906,11 @@ function ssbLoadSubContent(key) {
                 </p>
                 <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border-color,#cbd5e1);border-radius:8px;margin-bottom:8px;cursor:pointer;">
                     <input type="radio" name="ssb-numsys-radio" value="fa" id="ssb-numsys-fa">
-                    <span><strong>فارسی</strong> — مثال: ۰ ۱ ۲ ۳ ۴ ۵ ۶ ۷ ۸ ۹</span>
+                    <span><strong>فارسی</strong> — مثال: <span class="apex-digits-raw">۰ ۱ ۲ ۳ ۴ ۵ ۶ ۷ ۸ ۹</span></span>
                 </label>
                 <label style="display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border-color,#cbd5e1);border-radius:8px;margin-bottom:12px;cursor:pointer;">
                     <input type="radio" name="ssb-numsys-radio" value="en" id="ssb-numsys-en">
-                    <span><strong>انگلیسی</strong> — مثال: 0 1 2 3 4 5 6 7 8 9</span>
+                    <span><strong>انگلیسی</strong> — مثال: <span class="apex-digits-raw">0 1 2 3 4 5 6 7 8 9</span></span>
                 </label>
                 <button class="ssb-btn ssb-btn-primary" onclick="ssbSaveNumSys()">
                     <i class="fas fa-save"></i> ذخیره و اعمال
@@ -28248,7 +28250,7 @@ function ssbPopulateForm(key) {
                 var _bf = document.getElementById('ssb-bill-barcode-file'); if (_bf) _bf.value = '';
             } catch (_) {}
         } else if (key === 'numsys') {
-            const sys = (typeof getNumberSystem === 'function') ? getNumberSystem() : 'fa';
+            const sys = (typeof _apexDigitMode === 'function') ? _apexDigitMode() : ((typeof getNumberSystem === 'function') ? getNumberSystem() : 'fa');
             const radioFa = document.getElementById('ssb-numsys-fa');
             const radioEn = document.getElementById('ssb-numsys-en');
             if (radioFa) radioFa.checked = (sys === 'fa');
@@ -33566,9 +33568,11 @@ function getNumberSystem() {
  */
 function setNumberSystem(sys) {
     try {
-        // فقط انگلیسی پشتیبانی می‌شود
-        localStorage.setItem('numberSystem', 'en');
+        // داده و محاسبات همیشه با ارقامِ انگلیسی می‌مانند (getNumberSystem → 'en')؛
+        // انتخابِ کاربر فقط «شکلِ نمایشِ» ارقام را در سراسرِ برنامه تعیین می‌کند.
+        localStorage.setItem('numberSystem', (sys === 'fa') ? 'fa' : 'en');
         applyNumberSystemToDocument();
+        if (typeof _apexDigitApply === 'function') _apexDigitApply();
     } catch(e) { console.error('setNumberSystem error:', e); }
 }
 
@@ -41412,6 +41416,9 @@ function ndCloseSearchOnOutside(e) {
 
 // ── آیکنِ پشتیبان‌گیری هدر: مستقیم پنجرهٔ پشتیبان/گوگل‌درایو، بدونِ بازکردنِ سایدبار ──
 function ndOpenBackupQuick() {
+    // پنجرهٔ واحدِ پشتیبان‌گیری: «پشتیبان ایمیل» + «Google Drive» + پشتیبان/بازیابیِ محلی
+    // (بخشِ پشتیبان‌گیریِ سایدبار پنهان شد و همهٔ گزینه‌هایش اینجا در دسترس است).
+    if (typeof ndOpenBackupModal === 'function') { ndOpenBackupModal(); return; }
     // ۱) اگر ماژولِ گوگل‌درایو در دسترس باشد، مستقیم همان باز می‌شود
     var cands = ['openDriveBackup', 'DriveBackup', 'driveBackup', 'GoogleDriveBackup', 'gdriveBackup', 'openGoogleDrive'];
     for (var i = 0; i < cands.length; i++) {
@@ -41446,6 +41453,7 @@ function ndOpenBackupModal() {
         '</div>';
     ov.addEventListener('click', function (e) { if (e.target === ov) ndCloseBackupModal(); });
     document.body.appendChild(ov);
+    try { if (typeof _apexBackupOptionsCard === 'function') _apexBackupOptionsCard(ov); } catch (e) {}
     try { if (typeof ssbPopulateForm === 'function') ssbPopulateForm('backup'); } catch (e) {}
     try { if (typeof ssbRenderBackupList === 'function') ssbRenderBackupList(); } catch (e) {}
 }
@@ -43528,6 +43536,7 @@ function openBillLineEdit(wrapper) {
     overlay.addEventListener('click', function (e) { if (e.target === overlay) _bleClose(); });
     document.body.appendChild(overlay);
     overlay._bleWrapper = wrapper;
+    try { if (typeof _apexBleDetailLink === 'function') _apexBleDetailLink(overlay, c); } catch (e) {}
 
     // تقویمِ شمسی روی فیلدهای تاریخ — همان ابزارِ موجود
     ['ble-expiry', 'ble-from', 'ble-to'].forEach(function (id) {
@@ -44224,4 +44233,715 @@ function _svcItemProfit(it) {
 if (typeof window !== 'undefined') {
     window._svcUnitCost = _svcUnitCost;
     window._svcItemProfit = _svcItemProfit;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  APEX — افزوده‌های رابطِ کاربری
+//  ─────────────────────────────────────────────────────────────────────────────
+//  ⚠ همهٔ این بلوک «تعریفِ تابع» است: در این فایل یک خطای عمدیِ سطحِ بالا (settingsForm)
+//    هست و هر جملهٔ اجراییِ پس از آن اجرا نمی‌شود؛ تعریف‌های function به‌خاطرِ hoisting در
+//    دسترس‌اند. راه‌اندازی فقط از initApp → _apexUiInit انجام می‌گیرد.
+//  هیچ‌کدام از این توابع منطقِ محاسبه، ذخیره یا داده را تغییر نمی‌دهند؛ فقط از مسیرهای
+//  موجودِ برنامه استفاده می‌کنند (همان توابعی که کاربر با دست صدا می‌زند).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function _apexUiInit() {
+    if (window.__apexUiInited) return;
+    window.__apexUiInited = true;
+    try { _apexDigitApply(); } catch (e) { console.error('apex digits:', e); }
+    try { _braInstall(); } catch (e) { console.error('apex row actions:', e); }
+    try { _apexPdReturnInstall(); } catch (e) { console.error('apex pd return:', e); }
+    try {
+        var _rz = 0;
+        window.addEventListener('resize', function () {
+            clearTimeout(_rz); _rz = setTimeout(_bfcFitAll, 120);
+        });
+    } catch (e) {}
+}
+
+// ───────────────────────── جدولِ اقلام: پیکربندی ─────────────────────────
+function _braCfg() {
+    return [
+        { tbody: 'sales-items-body',    table: 'sales-items-table',    qty: '.item-quantity',          rm: 'removeItem' },
+        { tbody: 'purchase-items-body', table: 'purchase-items-table', qty: '.purchase-item-quantity', rm: 'removePurchaseItem' },
+        { tbody: 'sr-items-body',       table: 'sr-items-table',       qty: '.sr-qty',                 rm: 'srRemoveRow' },
+        { tbody: 'pr-items-body',       table: 'pr-items-table',       qty: '.pr-qty',                 rm: 'prRemoveRow' }
+    ];
+}
+function _braCfgFor(el) {
+    var tb = el && el.closest ? el.closest('tbody') : null;
+    var id = tb ? tb.id : '';
+    var all = _braCfg();
+    for (var i = 0; i < all.length; i++) if (all[i].tbody === id) return all[i];
+    return null;
+}
+
+/** نصبِ تزئین‌کنندهٔ ردیف‌ها روی هر چهار جدول.
+ *  ردیف‌ها در چند جای برنامه ساخته می‌شوند (افزودنِ جنس، خدمت، ویرایشِ بل، برگشت‌ها،
+ *  ضایعات…)؛ به‌جای دستکاریِ تک‌تکِ آن سازنده‌ها، هر ردیفِ تازه همین‌جا یکسان مرتب می‌شود. */
+function _braInstall() {
+    var cfgs = _braCfg();
+    cfgs.forEach(function (cfg) {
+        var tb = document.getElementById(cfg.tbody);
+        var tbl = document.getElementById(cfg.table);
+        if (!tb || !tbl) return;
+        tbl.classList.add('bill-flex-table');
+        var run = function () {
+            for (var i = 0; i < tb.children.length; i++) _braDecorateRow(tb.children[i], cfg);
+            _bfcSchedule(cfg.table);
+        };
+        run();
+        try { new MutationObserver(run).observe(tb, { childList: true, subtree: true }); } catch (e) {}
+        try { if (tbl.tFoot) new MutationObserver(function () { _bfcSchedule(cfg.table); }).observe(tbl.tFoot, { childList: true, subtree: true, characterData: true }); } catch (e) {}
+    });
+    // تایپِ کاربر مقدارِ input را عوض می‌کند بی‌آنکه DOM تغییر کند → این‌جا عرض دوباره سنجیده می‌شود
+    document.addEventListener('input', function (e) {
+        var t = e.target;
+        if (!t || !t.closest) return;
+        var tbl = t.closest('table.bill-flex-table');
+        if (tbl && tbl.id) _bfcSchedule(tbl.id);
+    }, true);
+    try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(_bfcFitAll); } catch (e) {}
+}
+
+function _braButtonsHtml() {
+    var c = '<circle cx="12" cy="12" r="9"/>';
+    return '<span class="bill-acts">' +
+        '<button type="button" class="bill-act-btn bill-act-plus" title="افزایشِ تعداد" aria-label="افزایشِ تعداد" onclick="apexRowStep(this,1)">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true">' + c + '<path d="M12 8v8M8 12h8"/></svg></button>' +
+        '<button type="button" class="bill-act-btn bill-act-minus" title="کاهشِ تعداد" aria-label="کاهشِ تعداد" onclick="apexRowStep(this,-1)">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true">' + c + '<path d="M8 12h8"/></svg></button>' +
+        '<button type="button" class="bill-act-btn bill-act-del" title="حذف" aria-label="حذف" onclick="apexRowRemove(this)">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true">' + c + '<path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6"/></svg></button>' +
+    '</span>';
+}
+
+/** یک ردیف: دکمهٔ حذفِ قدیمی (سطلِ آشغال) برداشته می‌شود و ستونِ «...» اضافه می‌گردد. */
+function _braDecorateRow(tr, cfg) {
+    if (!tr || tr.nodeName !== 'TR') return;
+    var olds = tr.querySelectorAll('button.btn-danger');
+    for (var i = 0; i < olds.length; i++) {
+        var oc = olds[i].getAttribute('onclick') || '';
+        var m = oc.match(/^\s*([A-Za-z_$][\w$]*)\s*\(\s*this\s*\)/);
+        if (m && /remove/i.test(m[1])) {
+            tr.dataset.apexRm = m[1];          // همان تابعِ حذفِ خودِ این ردیف
+            olds[i].parentNode.removeChild(olds[i]);
+        }
+    }
+    for (var k = 0; k < tr.children.length; k++) {
+        if (tr.children[k].classList && tr.children[k].classList.contains('bill-acts-cell')) return;
+    }
+    var td = document.createElement('td');
+    td.className = 'bill-acts-cell';
+    // سطرِ ضایعات از فیصدی ساخته می‌شود؛ افزایش/کاهش/حذفِ دستی برایش معنا ندارد
+    if (!(tr.dataset && tr.dataset.wastage === '1')) td.innerHTML = _braButtonsHtml();
+    tr.appendChild(td);
+}
+
+/** + / − : تعداد یک واحد بالا/پایین می‌رود، دقیقاً مثلِ تایپِ کاربر (همان رویدادها). */
+function apexRowStep(btn, delta) {
+    var tr = btn && btn.closest ? btn.closest('tr') : null;
+    if (!tr) return;
+    var cfg = _braCfgFor(tr);
+    var q = tr.querySelector(cfg ? cfg.qty : '.item-quantity, .purchase-item-quantity, .sr-qty, .pr-qty');
+    if (!q || q.readOnly || q.disabled) return;
+    var raw = (typeof toEnglishDigits === 'function') ? toEnglishDigits(q.value) : q.value;
+    var cur = parseFloat(String(raw).replace(/,/g, ''));
+    if (!isFinite(cur)) cur = 0;
+    var next = cur + delta;
+    if (delta < 0 && !(next > 0)) return;          // تعداد هرگز صفر یا منفی نمی‌شود
+    next = Math.round(next * 1e6) / 1e6;
+    q.value = String(next);
+    q.dispatchEvent(new Event('input', { bubbles: true }));
+    q.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+/** × : عیناً همان تابعِ حذفی که دکمهٔ حذفِ قبلی صدا می‌زد. */
+function apexRowRemove(btn) {
+    var tr = btn && btn.closest ? btn.closest('tr') : null;
+    if (!tr) return;
+    var cfg = _braCfgFor(tr);
+    var fn = (tr.dataset && tr.dataset.apexRm) || (cfg ? cfg.rm : '');
+    if (fn && typeof window[fn] === 'function') window[fn](btn);
+    var tid = cfg ? cfg.table : '';
+    if (tid) _bfcSchedule(tid);
+}
+
+// ───────────────────────── عرضِ منعطفِ ستون‌ها ─────────────────────────
+function _bfcSchedule(tableId) {
+    var st = window.__bfcState || (window.__bfcState = { pend: {}, t: 0 });
+    st.pend[tableId] = true;
+    if (st.t) return;
+    var go = function () {
+        st.t = 0;
+        var ids = Object.keys(st.pend); st.pend = {};
+        ids.forEach(function (id) { try { _bfcFit(document.getElementById(id)); } catch (e) {} });
+    };
+    st.t = (typeof requestAnimationFrame === 'function') ? requestAnimationFrame(go) : setTimeout(go, 16);
+}
+function _bfcFitAll() {
+    _braCfg().forEach(function (c) { try { _bfcFit(document.getElementById(c.table)); } catch (e) {} });
+}
+function _bfcCtx() {
+    if (!window.__bfcCanvas) window.__bfcCanvas = document.createElement('canvas');
+    return window.__bfcCanvas.getContext('2d');
+}
+function _bfcTextW(ctx, el, text) {
+    if (!text) return 0;
+    var cs = getComputedStyle(el);
+    ctx.font = (cs.fontStyle || 'normal') + ' ' + (cs.fontWeight || '400') + ' ' + (cs.fontSize || '14px') + ' ' + (cs.fontFamily || 'sans-serif');
+    return ctx.measureText(text).width;
+}
+function _bfcBoxX(el) {
+    var cs = getComputedStyle(el);
+    return (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0) +
+           (parseFloat(cs.borderLeftWidth) || 0) + (parseFloat(cs.borderRightWidth) || 0);
+}
+function _bfcCellW(ctx, cell) {
+    var pad = _bfcBoxX(cell);
+    var acts = cell.querySelector('.bill-acts');
+    if (acts) return pad + acts.scrollWidth;
+    var sw = cell.querySelector('.unit-switch-btn');
+    var swW = (sw && sw.style.display !== 'none' && sw.offsetWidth) ? (sw.offsetWidth + 4) : 0;
+    var inp = cell.querySelector('input:not([type="hidden"]), select');
+    if (inp) {
+        var txt = (inp.tagName === 'SELECT')
+            ? (((inp.options || [])[inp.selectedIndex] || {}).text || '')
+            : (inp.value || inp.placeholder || '');
+        return pad + _bfcTextW(ctx, inp, txt) + _bfcBoxX(inp) + swW;
+    }
+    var t = (cell.textContent || '').replace(/\s+/g, ' ').trim();
+    var host = cell.querySelector('span') || cell;
+    return pad + _bfcTextW(ctx, host, t) + swW;
+}
+/** عرضِ هر ستون = بیشینهٔ (عنوان، محتوای سطرها، پاورقی) + فاصلهٔ منظم؛ ستونِ نام = بقیهٔ فضا. */
+function _bfcFit(table) {
+    if (!table || !table.tHead || !table.tHead.rows.length) return;
+    var ths = table.tHead.rows[0].cells;
+    var cols = table.querySelectorAll('colgroup > col');
+    var n = ths.length;
+    if (!n || cols.length < n) return;
+    var mob = (window.innerWidth || 1024) <= 768;
+    var NAME = 1;
+    var ctx = _bfcCtx();
+    var rows = table.tBodies.length ? table.tBodies[0].rows : [];
+    var foot = (table.tFoot && table.tFoot.rows.length) ? table.tFoot.rows[0] : null;
+    var gap = mob ? 6 : 10;
+    var total = 0;
+    for (var c = 0; c < n; c++) {
+        if (c === NAME) continue;
+        var th = ths[c];
+        var w = _bfcTextW(ctx, th, (th.textContent || '').trim()) + _bfcBoxX(th);
+        for (var r = 0; r < rows.length; r++) {
+            var cell = rows[r].cells[c];
+            if (!cell) continue;
+            var cw = _bfcCellW(ctx, cell);
+            if (cw > w) w = cw;
+        }
+        if (foot && foot.cells[c]) { var fw = _bfcCellW(ctx, foot.cells[c]); if (fw > w) w = fw; }
+        w = Math.ceil(w + gap);
+        var min = (c === 0) ? (mob ? 28 : 40) : (mob ? 38 : 50);
+        var max = mob ? 170 : 260;
+        if (w < min) w = min;
+        if (w > max) w = max;
+        cols[c].style.width = w + 'px';
+        total += w;
+    }
+    cols[NAME].style.width = '';
+    // مرورگر min-width را روی جدولِ table-layout:fixed نادیده می‌گیرد؛ پس خودِ عرض:
+    // دست‌کم تمامِ کانتینر، و اگر جا کم بود به‌قدرِ ستون‌ها + کمینهٔ ستونِ نام (با اسکرولِ افقیِ موجود)
+    var need = total + (mob ? 150 : 200);
+    table.style.minWidth = need + 'px';
+    table.style.setProperty('width', 'max(100%, ' + need + 'px)', 'important');
+    if (!table.style.width) {   // WebViewهای خیلی قدیمی که max() را نمی‌شناسند
+        var cw = (table.parentElement && table.parentElement.clientWidth) || 0;
+        table.style.setProperty('width', Math.max(cw, need) + 'px', 'important');
+    }
+}
+
+// ───────────────────────── کپی / چسباندنِ اجناسِ بل ─────────────────────────
+function _bclipRows(kind) {
+    var tb = document.getElementById(kind === 'purchase' ? 'purchase-items-body' : 'sales-items-body');
+    var out = [];
+    if (!tb) return out;
+    var hidSel = (kind === 'purchase') ? '.purchase-item-product' : '.item-product';
+    var qtySel = (kind === 'purchase') ? '.purchase-item-quantity' : '.item-quantity';
+    for (var i = 0; i < tb.children.length; i++) {
+        var tr = tb.children[i];
+        if (!tr || tr.nodeName !== 'TR') continue;
+        if (tr.dataset && tr.dataset.wastage === '1') continue;          // سطرِ ضایعات کپی نمی‌شود
+        var hid = tr.querySelector(hidSel);
+        var v = hid ? String(hid.value || '').trim() : '';
+        if (!v || v === 'WASTE-BILL') continue;
+        var qEl = tr.querySelector(qtySel);
+        var raw = qEl ? ((typeof toEnglishDigits === 'function') ? toEnglishDigits(qEl.value) : qEl.value) : '1';
+        var qty = parseFloat(String(raw).replace(/,/g, ''));
+        if (!(qty > 0)) qty = 1;
+        var nameEl = tr.querySelector('.product-search-input');
+        var item = { qty: qty, unitType: (tr.dataset && tr.dataset.unitType) || 'primary', name: nameEl ? nameEl.value : '' };
+        var svc = (tr.dataset && tr.dataset.serviceId) ? tr.dataset.serviceId : null;
+        if (!svc && /^svc-/i.test(v)) svc = v.replace(/^svc-/i, '');
+        if (svc) item.svc = svc; else item.pid = v;
+        out.push(item);
+    }
+    return out;
+}
+function apexBillItemsMenu(ev, kind) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    var btn = ev && ev.currentTarget ? ev.currentTarget : null;
+    var old = document.getElementById('apex-bill-menu');
+    if (old) {
+        var same = old.dataset.kind === kind;
+        _apexCloseBillMenu();
+        if (same) return;
+    }
+    var clip = window.__apexBillClip;
+    var n = (clip && clip.items) ? clip.items.length : 0;
+    var have = _bclipRows(kind).length;
+    var fmt = (typeof formatNumber === 'function') ? formatNumber : String;
+    var m = document.createElement('div');
+    m.id = 'apex-bill-menu';
+    m.className = 'apex-pop-menu';
+    m.dataset.kind = kind;
+    m.setAttribute('role', 'menu');
+    m.innerHTML =
+        '<button type="button" role="menuitem" data-act="copy"' + (have ? '' : ' disabled') + '>' +
+            '<i class="fas fa-copy"></i><span>کپیِ اجناسِ این بل' + (have ? ' (' + fmt(have) + ')' : '') + '</span></button>' +
+        '<button type="button" role="menuitem" data-act="paste"' + (n ? '' : ' disabled') + '>' +
+            '<i class="fas fa-paste"></i><span>چسباندنِ اجناس' + (n ? ' (' + fmt(n) + ')' : '') + '</span></button>';
+    m.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var b = e.target.closest ? e.target.closest('button[data-act]') : null;
+        if (!b || b.disabled) return;
+        var act = b.getAttribute('data-act');
+        _apexCloseBillMenu();
+        if (act === 'copy') apexBillCopy(kind); else apexBillPaste(kind);
+    });
+    document.body.appendChild(m);
+    if (btn) {
+        btn.setAttribute('aria-expanded', 'true');
+        m._btn = btn;
+        var r = btn.getBoundingClientRect();
+        var mw = m.offsetWidth, mh = m.offsetHeight;
+        var vw = window.innerWidth || document.documentElement.clientWidth;
+        var vh = window.innerHeight || document.documentElement.clientHeight;
+        var left = Math.min(Math.max(8, r.left), vw - mw - 8);     // از لبهٔ دکمه به داخل باز می‌شود
+        var top = r.bottom + 6;
+        if (top + mh > vh - 8) top = Math.max(8, r.top - mh - 6);
+        m.style.left = left + 'px';
+        m.style.top = top + 'px';
+    }
+    setTimeout(function () {
+        var close = function (e) {
+            if (m.contains(e.target)) return;
+            _apexCloseBillMenu();
+            document.removeEventListener('click', close, true);
+        };
+        m._close = close;
+        document.addEventListener('click', close, true);
+    }, 0);
+}
+function _apexCloseBillMenu() {
+    var m = document.getElementById('apex-bill-menu');
+    if (!m) return;
+    if (m._btn) m._btn.setAttribute('aria-expanded', 'false');
+    if (m._close) document.removeEventListener('click', m._close, true);
+    m.parentNode.removeChild(m);
+}
+function apexBillCopy(kind) {
+    var items = _bclipRows(kind);
+    if (!items.length) { if (typeof showToast === 'function') showToast('جنسی برای کپی در این بل نیست', 'warning'); return; }
+    window.__apexBillClip = { from: kind, items: items };
+    var fmt = (typeof formatNumber === 'function') ? formatNumber : String;
+    if (typeof showToast === 'function') showToast(fmt(items.length) + ' قلم کپی شد — در بل فروش یا خرید «چسباندنِ اجناس» را بزنید', 'success');
+}
+/** چسباندن: هر قلم از همان مسیرِ انتخابِ دستیِ جنس عبور می‌کند (قیمت، واحد، موجودی و
+ *  هشدارها مطابقِ همین فرم)؛ فقط «جنس، تعداد و نوعِ واحد» از کپی می‌آید. */
+function apexBillPaste(kind) {
+    var clip = window.__apexBillClip;
+    if (!clip || !clip.items || !clip.items.length) return;
+    var isP = (kind === 'purchase');
+    var tb = document.getElementById(isP ? 'purchase-items-body' : 'sales-items-body');
+    if (!tb || typeof selectProductFromDropdown !== 'function') return;
+    var prods = [];
+    try { prods = (db.getProducts ? db.getProducts() : []) || []; } catch (e) {}
+    var hidSel = isP ? '.purchase-item-product' : '.item-product';
+    var qtySel = isP ? '.purchase-item-quantity' : '.item-quantity';
+    var items = clip.items.slice();
+    var done = 0, missing = [];
+    var setQty = function (tr, qty) {
+        var q = tr ? tr.querySelector(qtySel) : null;
+        if (!q) return;
+        q.value = String(qty);
+        q.dispatchEvent(new Event('input', { bubbles: true }));
+        q.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    // آخرین سطرِ «غیرِ ضایعات» (سطرِ ضایعات همیشه آخرِ جدول است و جنس نیست)
+    var lastItemRow = function () {
+        for (var i = tb.children.length - 1; i >= 0; i--) {
+            var r = tb.children[i];
+            if (r && r.nodeName === 'TR' && !(r.dataset && r.dataset.wastage === '1')) return r;
+        }
+        return null;
+    };
+    var emptyRow = function () {
+        var last = lastItemRow();
+        var h = last ? last.querySelector(hidSel) : null;
+        if (last && h && !h.value) return last;
+        var nr = isP ? (typeof addPurchaseItem === 'function' ? addPurchaseItem() : null)
+                     : (typeof addSalesItem === 'function' ? addSalesItem() : null);
+        return nr || null;
+    };
+    var step = function () {
+        if (!items.length) { finish(); return; }
+        var it = items.shift();
+        try {
+            if (it.svc) {
+                var svcs = []; try { svcs = JSON.parse(localStorage.getItem('services') || '[]'); } catch (e) {}
+                if (!svcs.some(function (s) { return String(s.id) === String(it.svc); })) { missing.push(it.name || 'خدمت'); }
+                else if (isP && typeof addServiceToPurchase === 'function') {
+                    var r0 = emptyRow();
+                    addServiceToPurchase(it.svc);
+                    setQty(r0, it.qty); done++;
+                } else if (!isP && typeof addServiceToSale === 'function') {
+                    addServiceToSale(it.svc);
+                    var svRows = tb.querySelectorAll('tr[data-service-id="' + String(it.svc).replace(/"/g, '') + '"]');
+                    setQty(svRows[svRows.length - 1], it.qty); done++;
+                }
+            } else {
+                var prod = prods.find(function (p) { return String(p.id) === String(it.pid); });
+                if (!prod) { missing.push(it.name || 'جنس'); }
+                else {
+                    var row = emptyRow();
+                    var inp = row ? row.querySelector('.product-search-input') : null;
+                    if (inp) {
+                        selectProductFromDropdown(inp, prod.id, isP);
+                        if (it.unitType === 'secondary' && prod.hasSecondaryUnit && typeof switchItemUnit === 'function') {
+                            try { switchItemUnit(row, isP, 'secondary'); } catch (e) {}
+                        }
+                        setQty(row, it.qty); done++;
+                    }
+                }
+            }
+        } catch (e) { console.error('paste item:', e); }
+        // فرمِ خرید سطرِ خالیِ بعدی را با setTimeout می‌سازد؛ صبر تا آن هم ساخته شود
+        setTimeout(step, isP ? 15 : 0);
+    };
+    var finish = function () {
+        // مثلِ افزودنِ دستی، یک سطرِ خالی برای جستجوی جنسِ بعدی آخرِ جدول بماند
+        try {
+            var lr = lastItemRow(), lh = lr ? lr.querySelector(hidSel) : null;
+            if (!lr || (lh && lh.value)) {
+                if (isP) { if (typeof addPurchaseItem === 'function') addPurchaseItem(); }
+                else if (typeof addSalesItem === 'function') addSalesItem();
+            }
+        } catch (e) {}
+        try { if (isP) { if (typeof calculatePurchaseTotal === 'function') calculatePurchaseTotal(); }
+              else { if (typeof calculateSalesTotal === 'function') calculateSalesTotal(); } } catch (e) {}
+        try { var ae = document.activeElement; if (ae && ae.blur && tb.contains(ae)) ae.blur(); } catch (e) {}
+        var fmt = (typeof formatNumber === 'function') ? formatNumber : String;
+        var msg = fmt(done) + ' قلم چسبانده شد';
+        if (missing.length) msg += ' — ' + fmt(missing.length) + ' قلم در گدام پیدا نشد: ' + missing.slice(0, 3).join('، ') + (missing.length > 3 ? '…' : '');
+        if (typeof showToast === 'function') showToast(msg, missing.length ? 'warning' : 'success');
+        _bfcFitAll();
+    };
+    step();
+}
+
+// ───────────────────────── ریفریشِ سراسری ─────────────────────────
+function apexRefreshAll(btn) {
+    if (btn && btn.classList) {
+        if (btn.classList.contains('is-spinning')) return;
+        btn.classList.add('is-spinning');
+    }
+    setTimeout(function () {
+        var call = function (fn, arg) { try { if (typeof window[fn] === 'function') { if (arguments.length > 1) window[fn](arg); else window[fn](); } } catch (e) { console.warn('refresh ' + fn, e); } };
+        // ۱) بازسازیِ کاملِ همهٔ محاسباتِ مشتق‌شده از دادهٔ خام (موجودی، قیمتِ خرید، حساب‌ها، مفاد، …)
+        call('rebuildAllDerivedData');
+        try { if (window.db && db.updateLowStockCount) db.updateLowStockCount(); } catch (e) {}
+        // ۲) تازه‌سازیِ همهٔ نماها
+        call('refreshAllAppData');
+        ['_renderDashboardStoreInfo', 'loadDashboard', 'renderDashboardCharts', 'updateDashboardStats',
+         'refreshQuickLists', 'loadRecentActivity', 'updateSidebarBadges'].forEach(function (f) { call(f); });
+        try {
+            var act = document.querySelector('.section.active');
+            var sid = act ? act.id : '';
+            var map = {
+                'sales-list': 'loadSalesList', 'purchases-list': 'loadPurchasesList', 'receipts-list': 'loadReceiptsList',
+                'payments-list': 'loadPaymentsList', 'transactions-list': 'loadTransactionsList', 'products-list': 'loadProductsList',
+                'persons-list': 'loadPersonsList', 'cash-boxes': 'loadCashboxes', 'expenses': 'loadExpensesList',
+                'services-list': 'loadServicesList', 'sales-returns-list': 'loadSalesReturnsList',
+                'purchase-returns-list': 'loadPurchaseReturnsList', 'changelog-list': 'loadChangelogList',
+                'return-transactions': 'loadReturns', 'employee-management': 'loadEmployeesList'
+            };
+            if (map[sid]) call(map[sid]);
+            else if (sid === 'product-detail' && window._currentProductDetailId != null) call('_renderProductDetail', window._currentProductDetailId);
+            else if (sid === 'product-inout-list' && window._currentInoutProductId != null) call('showProductInOutList', window._currentInoutProductId);
+        } catch (e) {}
+        call('applyNumberSystemToDocument');
+        call('_apexDigitApply');
+        _bfcFitAll();
+        try { window.dispatchEvent(new CustomEvent('jouya-data-change', { detail: { reason: 'manual-refresh', allReasons: ['manual-refresh'] } })); } catch (e) {}
+        // ۳) آخرین تغییراتِ دستگاه‌های دیگر از سرور (اگر حسابِ ابری فعال و آنلاین باشد؛ وگرنه بی‌اثر)
+        try { if (window.JouyaSync && typeof JouyaSync.pushNow === 'function') JouyaSync.pushNow(); } catch (e) {}
+        try { if (window.JouyaSync && typeof JouyaSync.pullNow === 'function') JouyaSync.pullNow(); } catch (e) {}
+        setTimeout(function () {
+            if (btn && btn.classList) btn.classList.remove('is-spinning');
+            if (typeof showToast === 'function') showToast('همهٔ بخش‌ها و محاسبات تازه شد', 'success');
+        }, 450);
+    }, 30);
+}
+
+// ───────────────────────── پنجرهٔ پشتیبان‌گیری (هدر) ─────────────────────────
+function _apexFmtWhen(v) {
+    if (!v) return 'هنوز پشتیبانی نشده';
+    try {
+        var d = new Date(v);
+        if (isNaN(d.getTime())) return String(v);
+        var hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+        // همان قالبِ کارتِ پشتیبانِ سایدبار (drive-backup.js): «روز ماه سال - ساعت:دقیقه»
+        if (typeof window.gregorianToJalali === 'function') {
+            var j = window.gregorianToJalali(d.getFullYear(), d.getMonth() + 1, d.getDate());
+            var mn = window.dariMonthNames || ['حمل','ثور','جوزا','سرطان','اسد','سنبله','میزان','عقرب','قوس','جدی','دلو','حوت'];
+            return j[2] + ' ' + (mn[j[1] - 1] || '') + ' ' + j[0] + ' - ' + hm;
+        }
+        if (typeof PersianDate === 'function') return new PersianDate(d).format('YYYY/MM/DD') + ' - ' + hm;
+        return d.toLocaleDateString('en-CA') + ' - ' + hm;
+    } catch (e) { return String(v); }
+}
+function _apexBackupOptionsCard(ov) {
+    var body = ov ? ov.querySelector('.nd-modal-body') : null;
+    if (!body || body.querySelector('.apex-bk-card')) return;
+    var acc = null;
+    try { acc = (window.AuthDB && typeof AuthDB.getAccount === 'function') ? AuthDB.getAccount() : null; } catch (e) {}
+    var email = (acc && acc.email) ? String(acc.email) : '';
+    var canEmail = !!(email && window.AuthUI && typeof AuthUI.openBackupModal === 'function');
+    var canDrive = !!(window.DriveBackup && typeof DriveBackup.openModal === 'function');
+    var esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); };
+    var lastE = '', lastD = '';
+    try { lastE = localStorage.getItem('jouya_last_email_backup') || ''; lastD = localStorage.getItem('jouya_last_gdrive_backup') || ''; } catch (e) {}
+    var drive = '<svg width="20" height="20" viewBox="0 0 87.3 78" xmlns="http://www.w3.org/2000/svg">' +
+        '<path d="m6.6 66.85 3.85 6.65c.8 1.4 1.95 2.5 3.3 3.3l13.75-23.8h-27.5c0 1.55.4 3.1 1.2 4.5z" fill="#0066da"/>' +
+        '<path d="m43.65 25-13.75-23.8c-1.35.8-2.5 1.9-3.3 3.3l-25.4 44a9.06 9.06 0 0 0 -1.2 4.5h27.5z" fill="#00ac47"/>' +
+        '<path d="m73.55 76.8c1.35-.8 2.5-1.9 3.3-3.3l1.6-2.75 7.65-13.25c.8-1.4 1.2-2.95 1.2-4.5h-27.502l5.852 11.5z" fill="#ea4335"/>' +
+        '<path d="m43.65 25 13.75-23.8c-1.35-.8-2.9-1.2-4.5-1.2h-18.5c-1.6 0-3.15.45-4.5 1.2z" fill="#00832d"/>' +
+        '<path d="m59.8 53h-32.3l-13.75 23.8c1.35.8 2.9 1.2 4.5 1.2h50.8c1.6 0 3.15-.45 4.5-1.2z" fill="#2684fc"/>' +
+        '<path d="m73.4 26.5-12.7-22c-.8-1.4-1.95-2.5-3.3-3.3l-13.75 23.8 16.15 28h27.45c0-1.55-.4-3.1-1.2-4.5z" fill="#ffba00"/></svg>';
+    var card = document.createElement('div');
+    card.className = 'auth-unified-backup-card apex-bk-card';
+    card.innerHTML =
+        '<div class="aubc-header">' +
+            '<div class="aubc-icon"><i class="fas fa-cloud-upload-alt"></i></div>' +
+            '<div class="aubc-titles"><div class="aubc-title">پشتیبان‌گیریِ آنلاین</div>' +
+                (email ? '<div class="aubc-subtitle"><i class="fas fa-envelope"></i> ' + esc(email) + '</div>' : '') +
+            '</div>' +
+        '</div>' +
+        '<div class="aubc-options">' +
+            '<button type="button" class="aubc-option-btn" data-bk="email"' + (canEmail ? '' : ' disabled') + '>' +
+                '<div class="aubc-opt-icon aubc-icon-email"><i class="fas fa-envelope"></i></div>' +
+                '<div class="aubc-opt-texts"><div class="aubc-opt-title">پشتیبان ایمیل</div>' +
+                    '<div class="aubc-opt-meta">' + (canEmail ? ('آخرین: ' + esc(_apexFmtWhen(lastE))) : 'ابتدا با ایمیل وارد حسابِ برنامه شوید') + '</div></div>' +
+                '<i class="fas fa-chevron-left aubc-arrow"></i>' +
+            '</button>' +
+            '<button type="button" class="aubc-option-btn" data-bk="drive"' + (canDrive ? '' : ' disabled') + '>' +
+                '<div class="aubc-opt-icon aubc-icon-drive">' + drive + '</div>' +
+                '<div class="aubc-opt-texts"><div class="aubc-opt-title">Google Drive</div>' +
+                    '<div class="aubc-opt-meta">آخرین: ' + esc(_apexFmtWhen(lastD)) + '</div></div>' +
+                '<i class="fas fa-chevron-left aubc-arrow"></i>' +
+            '</button>' +
+        '</div>';
+    card.addEventListener('click', function (e) {
+        var b = e.target.closest ? e.target.closest('button[data-bk]') : null;
+        if (!b || b.disabled) return;
+        var which = b.getAttribute('data-bk');
+        if (typeof ndCloseBackupModal === 'function') ndCloseBackupModal();
+        try {
+            if (which === 'email') window.AuthUI.openBackupModal();
+            else window.DriveBackup.openModal();
+        } catch (err) { console.error('backup open:', err); }
+    });
+    body.insertBefore(card, body.firstChild);
+    // متنِ پیش‌فرضِ «این بخش در دست ساخت است» (این بخش در سایدبار محتوای محلی نداشت) نمایش داده نشود
+    Array.prototype.forEach.call(body.querySelectorAll('.ssb-card'), function (c) {
+        if (/در دست ساخت/.test(c.textContent || '')) c.parentNode.removeChild(c);
+    });
+}
+
+// ─────────────── فرمِ ویرایشِ جنس در بل → «مشخصات جنس» و برگشت ───────────────
+function _apexBleDetailLink(overlay, c) {
+    if (!overlay || !c || c.isService || !c.row) return;
+    var hid = c.row.querySelector(c.isPurchase ? '.purchase-item-product' : '.item-product');
+    var pid = hid ? String(hid.value || '').trim() : '';
+    if (!pid || /^svc-/i.test(pid) || pid === 'WASTE-BILL') return;
+    var exists = false;
+    try { exists = (db.getProducts() || []).some(function (p) { return String(p.id) === pid; }); } catch (e) {}
+    if (!exists) return;
+    var nameIn = overlay.querySelector('#ble-name');
+    if (!nameIn || !nameIn.parentNode) return;
+    var wrap = document.createElement('span');
+    wrap.className = 'apex-ble-namewrap';
+    nameIn.parentNode.insertBefore(wrap, nameIn);
+    wrap.appendChild(nameIn);
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'apex-ble-pdlink';
+    b.title = 'مشخصات جنس';
+    b.setAttribute('aria-label', 'مشخصات جنس');
+    b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4.5" width="14" height="16.5" rx="2"/>' +
+                  '<path d="M9.5 3h5a1 1 0 0 1 1 1v1.5h-7V4a1 1 0 0 1 1-1z"/><path d="M8.5 11h7M8.5 14.5h7M8.5 18h4"/></svg>';
+    b.addEventListener('click', function (e) {
+        e.preventDefault(); e.stopPropagation();
+        var vals = {};
+        Array.prototype.forEach.call(overlay.querySelectorAll('input[id^="ble-"], textarea[id^="ble-"]'), function (el) { vals[el.id] = el.value; });
+        window.__apexPdReturn = { row: c.row, isPurchase: !!c.isPurchase, section: c.isPurchase ? 'purchase-form' : 'sales-form', pid: pid, vals: vals };
+        if (typeof _bleClose === 'function') _bleClose();
+        if (typeof showProductDetail === 'function') showProductDetail(pid);
+    });
+    wrap.appendChild(b);
+}
+/** دکمهٔ برگشتِ «مشخصات جنس» (و برگشتِ سخت‌افزاریِ اندروید که همین دکمه را کلیک می‌کند)
+ *  وقتی از فرمِ ویرایشِ جنس در بل آمده‌ایم، کاربر را به همان بل و همان فرمِ ویرایش برمی‌گرداند. */
+function _apexPdReturnInstall() {
+    document.addEventListener('click', function (e) {
+        var ctx = window.__apexPdReturn;
+        if (!ctx) return;
+        var btn = (e.target && e.target.closest) ? e.target.closest('#product-detail .btn-back-header') : null;
+        if (!btn) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        window.__apexPdReturn = null;
+        _apexBleReturn(ctx);
+    }, true);
+    // اگر کاربر از «مشخصات جنس» به جای دیگری رفت، مسیرِ برگشت به بل کنار گذاشته شود
+    var orig = window.showSection;
+    if (typeof orig === 'function' && !orig._apexPd) {
+        var wrapped = function (sid) {
+            if (window.__apexPdReturn && sid !== 'product-detail' && sid !== 'product-form' && sid !== 'product-inout-list') {
+                window.__apexPdReturn = null;
+            }
+            return orig.apply(this, arguments);
+        };
+        wrapped._apexPd = true;
+        window.showSection = wrapped;
+    }
+}
+function _apexBleReturn(ctx) {
+    // بدونِ ریستِ بل (همان سازوکارِ برگشت از انتخاب‌گرِ جنس)
+    window._returningFromProductPicker = ctx.section;
+    try { showSection(ctx.section); } finally { window._returningFromProductPicker = null; }
+    if (!ctx.row || !ctx.row.isConnected) return;
+    var wrapper = ctx.row.querySelector('.product-search-wrapper');
+    if (!wrapper || typeof openBillLineEdit !== 'function') return;
+    openBillLineEdit(wrapper);
+    try {
+        Object.keys(ctx.vals || {}).forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) el.value = ctx.vals[id];
+        });
+        if (typeof _bleSyncPct === 'function') _bleSyncPct();
+    } catch (e) {}
+}
+
+// ─────────────── فرم‌های دریافتی/پرداختی: تیکِ سبز = بیلانسِ شخص ───────────────
+function apexFillPersonBalance(kind) {
+    var isR = (kind === 'receipt');
+    var pid = (document.getElementById(isR ? 'receive-from' : 'pay-to') || {}).value;
+    if (!pid) { if (typeof showToast === 'function') showToast(isR ? 'ابتدا پرداخت‌کننده را انتخاب کنید' : 'ابتدا دریافت‌کننده را انتخاب کنید', 'warning'); return; }
+    var person = null;
+    try { person = (db.getPersons() || []).find(function (p) { return String(p.id) === String(pid); }); } catch (e) {}
+    if (!person) return;
+    var cur = (document.getElementById(isR ? 'receipt-currency' : 'payment-currency') || {}).value || ((typeof _baseCur === 'function') ? _baseCur() : 'AFN');
+    var bal = 0;
+    try { var B = _computePersonBalance(person); bal = parseFloat((B.balances || {})[cur]) || 0; } catch (e) {}
+    // در ویرایشِ همین سند، اثرِ خودِ آن به بیلانس برگردانده می‌شود (وگرنه دوبار کم می‌شد)
+    try {
+        var form = document.getElementById(isR ? 'receiptForm' : 'paymentForm');
+        var eid = form && form.dataset ? form.dataset.editId : '';
+        if (eid) {
+            var t = (db.getTransactions() || []).find(function (x) { return String(x.id) === String(eid); });
+            if (t && String(t.personId) === String(pid) && (t.currency || cur) === cur) {
+                var a = parseFloat(t.amount) || 0;
+                bal += isR ? a : -a;
+            }
+        }
+    } catch (e) {}
+    // دریافتی: آنچه شخص به ما بدهکار است (+) ؛ پرداختی: آنچه ما به شخص بدهکاریم (−)
+    var amt = isR ? bal : -bal;
+    amt = (typeof CurrencySystem !== 'undefined' && CurrencySystem.round) ? CurrencySystem.round(amt) : Math.round(amt * 100) / 100;
+    if (!(amt > 0)) {
+        if (typeof showToast === 'function') showToast(isR ? 'این شخص به این ارز باقی‌داری ندارد' : 'به این شخص به این ارز چیزی بدهکار نیستید', 'info');
+        return;
+    }
+    var inp = document.getElementById(isR ? 'receipt-amount' : 'payment-amount');
+    if (!inp) return;
+    inp.value = String(amt);
+    inp.dispatchEvent(new Event('input', { bubbles: true }));
+    inp.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+// ───────────────────────── شکلِ ارقام (سیستمِ اعداد) ─────────────────────────
+//  داده و محاسبات همیشه با ارقامِ انگلیسی می‌مانند؛ فقط «شکلِ» رقم با یک فونتِ کوچکِ
+//  «فقط رقم» (برگرفته از Vazirmatn، مجوزِ SIL OFL 1.1) عوض می‌شود: در حالتِ فارسی هر
+//  رقمی (0-9، ۰-۹، ٠-٩) با شکلِ فارسی و در حالتِ انگلیسی با شکلِ انگلیسی کشیده می‌شود.
+function _apexDigitMode() {
+    try { return (localStorage.getItem('numberSystem') === 'fa') ? 'fa' : 'en'; } catch (e) { return 'en'; }
+}
+function _apexDigitCss(mode) {
+    var b64 = _apexDigitFontData(mode === 'fa' ? 'fa' : 'en');
+    var fams = ['Vazirmatn', 'Tahoma', 'Segoe UI', 'Arial', 'Helvetica', 'Times New Roman', 'Courier New', 'B Nazanin', 'Nazanin'];
+    var range = 'U+0030-0039, U+0660-0669, U+06F0-06F9';
+    var css = '';
+    for (var i = 0; i < fams.length; i++) {
+        css += "@font-face{font-family:'" + fams[i] + "';src:url(data:font/woff2;base64," + b64 + ") format('woff2');" +
+               'font-weight:100 900;font-style:normal;font-display:block;unicode-range:' + range + ';}';
+    }
+    // نمونه‌های دو گزینه در تنظیماتِ «سیستم اعداد» شکلِ واقعیِ خود را نشان می‌دهند
+    css += '.apex-digits-raw{font-family:sans-serif !important;}';
+    return css;
+}
+function _apexDigitApply() {
+    var mode = _apexDigitMode();
+    var st = document.getElementById('apex-digit-faces');
+    if (!st) {
+        st = document.createElement('style');
+        st.id = 'apex-digit-faces';
+        (document.head || document.documentElement).appendChild(st);
+    } else if (st.parentNode && st !== st.parentNode.lastElementChild && st.parentNode === document.head) {
+        document.head.appendChild(st);            // همیشه آخرین تعریف بماند تا بر فونت‌های قبلی برتری داشته باشد
+    }
+    if (st.getAttribute('data-mode') !== mode) {
+        st.textContent = _apexDigitCss(mode);
+        st.setAttribute('data-mode', mode);
+    }
+    document.documentElement.setAttribute('data-apex-digits', mode);
+    var redraw = function () {
+        try {
+            if (window.Chart && Chart.instances) {
+                Object.keys(Chart.instances).forEach(function (k) { try { Chart.instances[k].update('none'); } catch (e) {} });
+            }
+        } catch (e) {}
+        _bfcFitAll();
+    };
+    try {
+        if (document.fonts && document.fonts.load) document.fonts.load("16px 'Vazirmatn'", '0123456789').then(redraw, redraw);
+        else setTimeout(redraw, 60);
+    } catch (e) { setTimeout(redraw, 60); }
+}
+/** برای سندهای چاپی/گزارش (پنجره یا iframeِ جدا): همان فونتِ رقم، در انتهای <head>. */
+function _apexDigitHtml(html) {
+    html = String(html == null ? '' : html);
+    if (html.indexOf('id="apex-digit-faces"') !== -1) return html;
+    var tag = '<style id="apex-digit-faces">' + _apexDigitCss(_apexDigitMode()) + '</style>';
+    var i = html.search(/<\/head>/i);
+    if (i !== -1) return html.slice(0, i) + tag + html.slice(i);
+    var j = html.search(/<body[\s>]/i);
+    if (j !== -1) return html.slice(0, j) + tag + html.slice(j);
+    return tag + html;
+}
+
+function _apexDigitFontData(kind) {
+    // فونتِ «فقط رقم» (woff2، متغیر ۱۰۰ تا ۹۰۰) — برگرفته از Vazirmatn 33.0.3 (SIL OFL 1.1)
+    if (kind === 'fa') return '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';
+    return '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';
 }

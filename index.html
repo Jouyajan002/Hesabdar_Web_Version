@@ -229,7 +229,7 @@
                 <span class="ssb-item-label">اطلاعات فروشگاه</span>
                 <i class="fas fa-chevron-left ssb-arrow"></i>
             </li>
-            <li onclick="ssbOpenSub('backup')">
+            <li onclick="ssbOpenSub('backup')" class="ssb-item-backup" style="display:none" hidden>
                 <span class="ssb-item-icon"><i class="fas fa-database"></i></span>
                 <span class="ssb-item-label">پشتیبان‌گیری</span>
                 <i class="fas fa-chevron-left ssb-arrow"></i>
@@ -647,6 +647,10 @@
                                 <!-- جستجوی سراسری روی تمام بخش‌ها -->
                                 <div class="nd-search">
                                     <div class="nd-search-hint">APEX Store Manager — آسان، سریع و خیال راحت برای شماست.</div>
+                                    <div class="nd-search-row">
+                                    <button type="button" class="nd-refresh-btn" id="nd-refresh-btn" onclick="apexRefreshAll(this)" title="تازه‌سازیِ همهٔ بخش‌ها و محاسبات" aria-label="تازه‌سازی">
+                                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66"/><path d="M20 4v7h-7"/></svg>
+                                    </button>
                                     <div class="nd-search-wrap product-search-wrapper">
                                         <input type="text" id="nd-global-search" class="nd-search-input"
                                                placeholder="جستجو روی تمام بخش ها" autocomplete="off"
@@ -655,6 +659,7 @@
                                                onfocus="ndGlobalSearch(this, event)">
                                         <span class="nd-search-icon"><i class="fas fa-magnifying-glass"></i></span>
                                         <div class="nd-search-results product-search-results" id="nd-global-search-results"></div>
+                                    </div>
                                     </div>
                                 </div>
                             </div>
@@ -1903,7 +1908,7 @@
 
                                 <!-- جدول اجناس و خدمات -->
                                 <div class="bill-items-box">
-                                    <div class="bill-items-head">اجناس و خدمات</div>
+                                    <div class="bill-items-head"><span class="bill-items-head-title">اجناس و خدمات</span><button type="button" class="bill-head-menu-btn" onclick="apexBillItemsMenu(event,'sale')" title="کپی / چسباندنِ اجناس" aria-label="کپی / چسباندنِ اجناس"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button></div>
                                     <div class="table-container bill-table-scroll">
                                         <table id="sales-items-table">
                                             <colgroup>
@@ -1915,6 +1920,7 @@
                                                 <col style="width:11%;">
                                                 <col style="width:14%;">
                                                 <col style="width:46px;">
+                                                <col class="bill-acts-col" style="width:76px;">
                                             </colgroup>
                                             <thead>
                                                 <tr>
@@ -1926,6 +1932,7 @@
                                                     <th>تخفیف</th>
                                                     <th>جمله</th>
                                                     <th>جزئیات</th>
+                                                    <th class="bill-acts-th" title="افزایش / کاهش / حذف">...</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="sales-items-body">
@@ -1963,6 +1970,7 @@
                                                     <td></td>
                                                     <td></td>
                                                     <td><span id="sales-subtotal">۰</span></td>
+                                                    <td></td>
                                                     <td></td>
                                                 </tr>
                                             </tfoot>
@@ -2137,6 +2145,7 @@
                                                 <col style="width:10%;">
                                                 <col style="width:13%;">
                                                 <col style="width:46px;">
+                                                <col class="bill-acts-col" style="width:76px;">
                                             </colgroup>
                                             <thead>
                                                 <tr>
@@ -2149,6 +2158,7 @@
                                                     <th>قابل برگشت</th>
                                                     <th>جمله</th>
                                                     <th>جزئیات</th>
+                                                    <th class="bill-acts-th" title="افزایش / کاهش / حذف">...</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="sr-items-body"></tbody>
@@ -2158,7 +2168,7 @@
                                                     <td style="text-align:left;">مجموعه</td>
                                                     <td></td><td></td><td></td><td></td><td></td>
                                                     <td><span id="sr-subtotal">۰</span></td>
-                                                    <td></td>
+                                                    <td></td><td></td>
                                                 </tr>
                                             </tfoot>
                                         </table>
@@ -2269,12 +2279,12 @@
                                             <colgroup>
                                                 <col style="width:42px;"><col style="width:26%;"><col style="width:10%;">
                                                 <col style="width:8%;"><col style="width:12%;"><col style="width:11%;">
-                                                <col style="width:10%;"><col style="width:13%;"><col style="width:46px;">
+                                                <col style="width:10%;"><col style="width:13%;"><col style="width:46px;"><col class="bill-acts-col" style="width:76px;">
                                             </colgroup>
                                             <thead>
                                                 <tr>
                                                     <th>شماره</th><th>جستجوی اجناس و خدمات</th><th>تعداد</th><th>واحد</th>
-                                                    <th>قیمت</th><th>تخفیف</th><th>قابل برگشت</th><th>جمله</th><th>جزئیات</th>
+                                                    <th>قیمت</th><th>تخفیف</th><th>قابل برگشت</th><th>جمله</th><th>جزئیات</th><th class="bill-acts-th" title="افزایش / کاهش / حذف">...</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="pr-items-body"></tbody>
@@ -2282,7 +2292,7 @@
                                                 <tr class="bill-subtotal-row">
                                                     <td>....</td><td style="text-align:left;">مجموعه</td>
                                                     <td></td><td></td><td></td><td></td><td></td>
-                                                    <td><span id="pr-subtotal">۰</span></td><td></td>
+                                                    <td><span id="pr-subtotal">۰</span></td><td></td><td></td>
                                                 </tr>
                                             </tfoot>
                                         </table>
@@ -2390,7 +2400,7 @@
 
                                 <!-- جدول اجناس و خدمات -->
                                 <div class="bill-items-box">
-                                    <div class="bill-items-head">اجناس و خدمات</div>
+                                    <div class="bill-items-head"><span class="bill-items-head-title">اجناس و خدمات</span><button type="button" class="bill-head-menu-btn" onclick="apexBillItemsMenu(event,'purchase')" title="کپی / چسباندنِ اجناس" aria-label="کپی / چسباندنِ اجناس"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="12" cy="19" r="1.7"/></svg></button></div>
                                     <div class="table-container bill-table-scroll">
                                         <table id="purchase-items-table">
                                             <colgroup>
@@ -2402,6 +2412,7 @@
                                                 <col style="width:11%;">
                                                 <col style="width:14%;">
                                                 <col style="width:46px;">
+                                                <col class="bill-acts-col" style="width:76px;">
                                             </colgroup>
                                             <thead>
                                                 <tr>
@@ -2413,6 +2424,7 @@
                                                     <th>تخفیف</th>
                                                     <th>جمله</th>
                                                     <th>جزئیات</th>
+                                                    <th class="bill-acts-th" title="افزایش / کاهش / حذف">...</th>
                                                 </tr>
                                             </thead>
                                             <tbody id="purchase-items-body">
@@ -2446,6 +2458,7 @@
                                                     <td></td>
                                                     <td></td>
                                                     <td><span id="purchase-subtotal">۰</span></td>
+                                                    <td></td>
                                                     <td></td>
                                                 </tr>
                                             </tfoot>
@@ -2633,7 +2646,7 @@
                                                 <i class="fas fa-money-bill-wave bill-field-icon"></i>
                                                 <input type="number" id="receipt-amount" class="bill-inline-input" step="0.01" placeholder="دریافتی" required>
                                                 <span class="bill-inline-icons">
-                                                    <span class="bill-inline-iconbtn is-active" title="دریافتی"><i class="fas fa-check"></i></span>
+                                                    <span class="bill-inline-iconbtn is-active apex-fillbal" role="button" tabindex="0" title="پرکردن با باقیِ حسابِ پرداخت‌کننده" onclick="apexFillPersonBalance('receipt')"><i class="fas fa-check"></i></span>
                                                 </span>
                                             </div>
                                             <label class="bill-notrack" title="فقط مانده حساب شخص تعدیل می‌شود و از هیچ حساب/صندوقی کم نمی‌شود">
@@ -2777,7 +2790,7 @@
                                                 <i class="fas fa-money-check-alt bill-field-icon"></i>
                                                 <input type="number" id="payment-amount" class="bill-inline-input" step="0.01" placeholder="پرداختی" required>
                                                 <span class="bill-inline-icons">
-                                                    <span class="bill-inline-iconbtn is-active" title="پرداختی"><i class="fas fa-check"></i></span>
+                                                    <span class="bill-inline-iconbtn is-active apex-fillbal" role="button" tabindex="0" title="پرکردن با طلبِ دریافت‌کننده" onclick="apexFillPersonBalance('payment')"><i class="fas fa-check"></i></span>
                                                 </span>
                                             </div>
                                             <label class="bill-notrack" title="فقط مانده حساب شخص تعدیل می‌شود و از هیچ حساب/صندوقی کم نمی‌شود">
