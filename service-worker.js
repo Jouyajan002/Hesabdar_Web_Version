@@ -1,5 +1,5 @@
 /* ============================================================================
- *  حسابدار — Service Worker (نسخهٔ وب نصب‌شونده / آفلاین)
+ *  APEX Store Manager — Service Worker (نسخهٔ وب نصب‌شونده / آفلاین)
  *  هدف: نسخهٔ وب دقیقاً مثل نسخهٔ الکترون به‌صورت کامل آفلاین کار کند.
  *  استراتژی:
  *   • درخواست‌های هم‌مبدأ (same-origin) GET: stale-while-revalidate
@@ -12,7 +12,9 @@
 
 // با افزودنِ jouya-store.js یک فایلِ تازه به برنامه اضافه شده است؛ بالا بردنِ این شماره
 // باعث می‌شود نسخهٔ وب/PWA در همان نخستین باز شدن، index.htmlِ تازه را بگیرد نه نسخهٔ کش‌شده.
-var SW_VERSION = 'jouya-v1.0.6';
+// (v1.0.7) موتورِ حافظهٔ IndexedDB: index.html و jouya-store.js باید با هم عوض شوند؛ هر دو در
+// CORE پیش‌ذخیره می‌شوند تا نسخهٔ وب/آفلاین هرگز یکی را بدونِ دیگری نداشته باشد.
+var SW_VERSION = 'jouya-v1.0.7';
 var CACHE = SW_VERSION;
 
 // فهرستِ هستهٔ اپ — پیش‌ذخیره (best-effort؛ نبودِ یک فایل نصب را خراب نمی‌کند)
@@ -37,6 +39,7 @@ var CORE = [
   './assets/js/html2canvas.min.js',
   './assets/js/jspdf.umd.min.js',
   // JS اپ
+  './jouya-store.js',
   './__jouya_dec.js',
   './database.js',
   './script.js',

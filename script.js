@@ -28525,6 +28525,13 @@ function ssbPreviewStoreLogo(event) {
             window.__ssbNewLogo = ev.target.result;
             var lp = document.getElementById('ssb-store-logo-preview');
             if (lp) { lp.src = ev.target.result; lp.style.display = 'inline-block'; }
+            // (APEX) تصویرِ بزرگ‌تر از ۱۰۲۴ پیکسل با نسخهٔ کوچک‌شده جایگزین می‌شود
+            var _o = ev.target.result;
+            _apexShrinkImage(_o, 'logo', function (u) {
+                if (u === _o || window.__ssbNewLogo !== _o) return;
+                window.__ssbNewLogo = u;
+                if (lp) lp.src = u;
+            });
         };
         reader.readAsDataURL(file);
     } catch(e) { console.error('ssbPreviewStoreLogo error:', e); }
@@ -28553,6 +28560,13 @@ function ssbBillImgPreview(event, key, previewId) {
             window.__ssbBill[key] = ev.target.result;
             var pv = document.getElementById(previewId);
             if (pv) { pv.src = ev.target.result; pv.style.display = 'inline-block'; }
+            // (APEX) تصویرِ بزرگ‌تر از ۱۰۲۴ پیکسل با نسخهٔ کوچک‌شده جایگزین می‌شود
+            var _o = ev.target.result;
+            _apexShrinkImage(_o, 'logo', function (u) {
+                if (u === _o || !window.__ssbBill || window.__ssbBill[key] !== _o) return;
+                window.__ssbBill[key] = u;
+                if (pv) pv.src = u;
+            });
         };
         reader.readAsDataURL(file);
     } catch (e) { console.error('ssbBillImgPreview error:', e); }
@@ -44252,6 +44266,7 @@ function _apexUiInit() {
     try { _apexDigitApply(); } catch (e) { console.error('apex digits:', e); }
     try { _braInstall(); } catch (e) { console.error('apex row actions:', e); }
     try { _apexPdReturnInstall(); } catch (e) { console.error('apex pd return:', e); }
+    try { _apexImgNormalizeSchedule(); } catch (e) { console.error('apex img:', e); }
     try {
         var _rz = 0;
         window.addEventListener('resize', function () {
@@ -44944,4 +44959,108 @@ function _apexDigitFontData(kind) {
     // فونتِ «فقط رقم» (woff2، متغیر ۱۰۰ تا ۹۰۰) — برگرفته از Vazirmatn 33.0.3 (SIL OFL 1.1)
     if (kind === 'fa') return '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';
     return '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';
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  (APEX) کوچک‌کردنِ تصاویرِ حجیم — لوگو/تصاویرِ بل و (در آینده) عکسِ جنس و شخص    ║
+// ║  ‑ هنگامِ انتخابِ فایل: اگر طولِ بزرگ‌ترِ تصویر از سقف بیشتر بود، نسخهٔ کوچک‌تر     ║
+// ║    جایگزین می‌شود. لوگو و تصاویرِ بل: ۱۰۲۴ پیکسل (بزرگ‌ترین جای چاپ ۱۵۰px است →  ║
+// ║    حتی در چاپِ ۶۰۰dpi کامل است). عکسِ جنس/شخص: ۸۰۰ پیکسل.                        ║
+// ║  ‑ PNGِ شفاف شفاف می‌ماند؛ لوگوی PNG (مثلاً بارکد/QR) PNG می‌ماند. هیچ تصویری     ║
+// ║    بزرگ‌تر نمی‌شود و اگر نسخهٔ کوچک‌شده حجیم‌تر بود، همان اصل می‌ماند.              ║
+// ║  ‑ یک بار پس از باز شدنِ برنامه، تصاویرِ حجیمِ قبلاً ذخیره‌شده هم کوچک می‌شوند؛   ║
+// ║    «پیش از آن» اصلِ هر تصویر در IndexedDB (مخزنِ originals) نگه داشته می‌شود     ║
+// ║    (JouyaStore.listOriginals / getOriginal) و جزوِ داده/سینک/خروجی نیست.         ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+function _apexImgLimit(kind) { return kind === 'photo' ? 800 : 1024; }
+function _apexShrinkImage(dataUrl, kind, cb) {
+    var done = false;
+    function out(v) { if (done) return; done = true; try { cb(v); } catch (e) { console.error('apex img cb:', e); } }
+    try {
+        if (typeof dataUrl !== 'string' || dataUrl.indexOf('data:image/') !== 0 || /^data:image\/svg/i.test(dataUrl)) { out(dataUrl); return; }
+        var max = _apexImgLimit(kind);
+        var mime = (dataUrl.slice(5, dataUrl.indexOf(';')) || '').toLowerCase();
+        var img = new Image();
+        img.onload = function () {
+            try {
+                var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+                if (!w || !h || Math.max(w, h) <= max) { out(dataUrl); return; }
+                var r = max / Math.max(w, h), nw = Math.max(1, Math.round(w * r)), nh = Math.max(1, Math.round(h * r));
+                var c = document.createElement('canvas'); c.width = nw; c.height = nh;
+                var g = c.getContext('2d');
+                g.imageSmoothingEnabled = true; try { g.imageSmoothingQuality = 'high'; } catch (e) {}
+                g.drawImage(img, 0, 0, nw, nh);
+                var alpha = false;
+                if (mime !== 'image/jpeg' && mime !== 'image/jpg') {
+                    try {
+                        var px = g.getImageData(0, 0, nw, nh).data;
+                        for (var i = 3; i < px.length; i += 4) { if (px[i] < 255) { alpha = true; break; } }
+                    } catch (e) { alpha = true; }
+                }
+                var res;
+                if (alpha || (kind !== 'photo' && mime === 'image/png')) res = c.toDataURL('image/png');
+                else res = c.toDataURL('image/jpeg', kind === 'photo' ? 0.85 : 0.9);
+                out((res && res.indexOf('data:image/') === 0 && res.length < dataUrl.length) ? res : dataUrl);
+            } catch (e) { out(dataUrl); }
+        };
+        img.onerror = function () { out(dataUrl); };
+        setTimeout(function () { out(dataUrl); }, 20000);
+        img.src = dataUrl;
+    } catch (e) { out(dataUrl); }
+}
+
+// ── اصلاحِ یک‌بارهٔ تصاویرِ حجیمِ قبلی (فقط وقتی حافظهٔ IndexedDB فعال است) ─────────
+function _apexImgNormalizeSchedule() {
+    if (window.__apexImgNormStarted) return;
+    window.__apexImgNormStarted = true;
+    var go = function () { try { _apexImgNormalize(); } catch (e) { console.error('apex img normalize:', e); } };
+    setTimeout(function () {
+        if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(go, { timeout: 8000 }); else go();
+    }, 4000);
+}
+function _apexImgNormalize() {
+    var JS = window.JouyaStore;
+    if (!JS || typeof JS.mode !== 'function' || JS.mode() !== 'idb' || typeof JS.keepOriginal !== 'function') return;
+    var MIN = 300000;   // فقط تصاویرِ بالای ~۲۲۵KB بررسی می‌شوند
+    function big(v) { return typeof v === 'string' && v.length > MIN && v.indexOf('data:image/') === 0; }
+    var jobs = [];
+    // تنظیمات و پروفایلِ حساب: هر فیلدِ تصویریِ سطحِ اول
+    ['settings', 'jouya_user_account'].forEach(function (key) {
+        var o; try { o = JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { o = null; }
+        if (!o || typeof o !== 'object' || Array.isArray(o)) return;
+        Object.keys(o).forEach(function (f) { if (big(o[f])) jobs.push({ key: key, field: f, kind: 'logo', orig: o[f] }); });
+    });
+    // اجناس و اشخاص: هر فیلدِ تصویریِ سطحِ اولِ هر رکورد
+    ['products', 'persons'].forEach(function (key) {
+        var a; try { a = JSON.parse(localStorage.getItem(key) || '[]'); } catch (e) { a = []; }
+        if (!Array.isArray(a)) return;
+        a.forEach(function (rec) {
+            if (!rec || typeof rec !== 'object') return;
+            Object.keys(rec).forEach(function (f) { if (big(rec[f])) jobs.push({ key: key, field: f, id: rec.id, kind: 'photo', orig: rec[f] }); });
+        });
+    });
+    if (!jobs.length) return;
+    var i = 0;
+    (function next() {
+        if (i >= jobs.length) return;
+        var j = jobs[i++];
+        _apexShrinkImage(j.orig, j.kind, function (small) {
+            if (small === j.orig) { setTimeout(next, 30); return; }
+            var ref = j.key + (j.id !== undefined ? ('#' + j.id) : '') + '.' + j.field;
+            JS.keepOriginal(ref, j.orig).then(function (kept) {
+                if (!kept) { setTimeout(next, 30); return; }          // اصل نگه داشته نشد → دست نزن
+                try {
+                    var cur = JSON.parse(localStorage.getItem(j.key) || 'null'), changed = false;
+                    if (Array.isArray(cur)) {
+                        cur.forEach(function (rec) { if (rec && rec.id === j.id && rec[j.field] === j.orig) { rec[j.field] = small; changed = true; } });
+                    } else if (cur && cur[j.field] === j.orig) { cur[j.field] = small; changed = true; }
+                    if (changed) {
+                        localStorage.setItem(j.key, JSON.stringify(cur));
+                        console.log('[apex] تصویر کوچک شد:', ref, j.orig.length, '→', small.length);
+                    }
+                } catch (e) { console.error('apex img replace:', e); }
+                setTimeout(next, 30);
+            });
+        });
+    })();
 }

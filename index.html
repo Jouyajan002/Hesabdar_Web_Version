@@ -5,6 +5,126 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>APEX Store Manager</title>
 
+    <!-- ══════════════════════════════════════════════════════════════════════
+         حافظهٔ APEX (IndexedDB) — باید پیش از هر اسکریپتِ دیگر بیاید.
+         ‑ jouya-store.js داده‌های بزرگ را در IndexedDB نگه می‌دارد (بدونِ سقفِ ۵MB) و
+           پیش از اجرای برنامه همه را در RAM بار می‌کند؛ برنامه مثلِ قبل همگام می‌خواند.
+         ‑ چون بارگذاریِ IndexedDB ناهمگام است، اسکریپت‌های پایینِ صفحه با type="text/apex-boot"
+           نوشته شده‌اند و «بارگذارِ بوت» (آخرِ <body>) آن‌ها را پس از آماده‌شدنِ حافظه، به
+           «همان ترتیب» اجرا می‌کند.
+         ‑ این نگهدارنده شنونده‌های DOMContentLoaded و load را تا پایانِ اجرای همهٔ اسکریپت‌ها
+           در صف نگه می‌دارد و سپس دقیقاً یک بار اجرا می‌کند تا ترتیبِ راه‌اندازی مثلِ قبل بماند.
+         ══════════════════════════════════════════════════════════════════════ -->
+    <meta name="apex-storage" content="idb-v1">
+    <script>
+    (function () {
+        'use strict';
+        // شنونده‌هایی که صفحه برای DOMContentLoaded و load ثبت می‌کند، تا پایانِ اجرای همهٔ
+        // اسکریپت‌ها در صف می‌مانند و سپس به همان ترتیب (یک بار) اجرا می‌شوند. شنونده‌های
+        // خودِ محیط (Tauri/Capacitor) که پیش از این ثبت شده‌اند دست‌نخورده می‌مانند.
+        var B = window.__apexBoot = { claimed: false, dclFired: false, loadFired: false,
+                                      dclReleased: false, loadReleased: false };
+        var Q = { DOMContentLoaded: [], load: [] }, running = { DOMContentLoaded: null, load: null };
+        var addD = document.addEventListener, remD = document.removeEventListener;
+        var addW = window.addEventListener, remW = window.removeEventListener;
+        function capOf(o) { return o === true || !!(o && typeof o === 'object' && o.capture); }
+        function held(target, type) {
+            if (type === 'DOMContentLoaded') return !B.dclReleased && (target === document || target === window);
+            if (type === 'load') return !B.loadReleased && target === window;
+            return false;
+        }
+        function find(list, t, f, c) {
+            if (!list) return -1;
+            for (var i = 0; i < list.length; i++) if (!list[i].removed && list[i].t === t && list[i].f === f && list[i].c === c) return i;
+            return -1;
+        }
+        function wrapAdd(target, orig) {
+            return function (type, fn, opt) {
+                if (fn && held(target, type)) {
+                    if (find(Q[type], target, fn, capOf(opt)) < 0) Q[type].push({ t: target, f: fn, c: capOf(opt), o: opt });
+                    return;
+                }
+                return orig.apply(this, arguments);
+            };
+        }
+        function wrapRem(target, orig) {
+            return function (type, fn, opt) {
+                if (type === 'DOMContentLoaded' || type === 'load') {
+                    var c = capOf(opt), i;
+                    if ((i = find(Q[type], target, fn, c)) >= 0) { Q[type].splice(i, 1); return; }
+                    if ((i = find(running[type], target, fn, c)) >= 0) { running[type][i].removed = true; return; }
+                }
+                return orig.apply(this, arguments);
+            };
+        }
+        document.addEventListener = wrapAdd(document, addD);
+        document.removeEventListener = wrapRem(document, remD);
+        window.addEventListener = wrapAdd(window, addW);
+        window.removeEventListener = wrapRem(window, remW);
+
+        function report(err) {
+            try { if (typeof window.reportError === 'function') { window.reportError(err); return; } } catch (e) {}
+            setTimeout(function () { throw err; }, 0);
+        }
+        // اجرای صف با همان ترتیبِ رویدادِ واقعی: capture روی window → document → bubble روی window
+        function invoke(type) {
+            var list = Q[type]; Q[type] = [];
+            var ord = [], i, x, ev;
+            for (i = 0; i < list.length; i++) if (list[i].t === window && list[i].c) ord.push(list[i]);
+            for (i = 0; i < list.length; i++) if (list[i].t === document) ord.push(list[i]);
+            for (i = 0; i < list.length; i++) if (list[i].t === window && !list[i].c) ord.push(list[i]);
+            running[type] = ord;
+            try { ev = new Event(type); } catch (e) { ev = document.createEvent('Event'); ev.initEvent(type, false, false); }
+            for (i = 0; i < ord.length; i++) {
+                x = ord[i]; if (x.removed) continue;
+                try {
+                    if (typeof x.f === 'function') x.f.call(x.t, ev);
+                    else if (x.f && typeof x.f.handleEvent === 'function') x.f.handleEvent(ev);
+                } catch (err) { report(err); }
+            }
+            running[type] = null;
+        }
+        function registerReal(type) {
+            var list = Q[type]; Q[type] = [];
+            for (var i = 0; i < list.length; i++) {
+                var x = list[i];
+                (x.t === document ? addD : addW).call(x.t, type, x.f, x.o);
+            }
+        }
+        function rs(v) {
+            try {
+                if (v) Object.defineProperty(document, 'readyState', { configurable: true, get: function () { return v; } });
+                else delete document.readyState;
+            } catch (e) {}
+        }
+        // رویدادِ واقعی: اگر بارگذارِ بوت فعال نیست (صفحهٔ بدونِ آن)، صف همان لحظه اجرا می‌شود
+        addD.call(document, 'DOMContentLoaded', function () {
+            B.dclFired = true;
+            if (!B.claimed && !B.dclReleased) { B.dclReleased = true; invoke('DOMContentLoaded'); }
+        });
+        addW.call(window, 'load', function () {
+            B.loadFired = true;
+            if (!B.claimed && !B.loadReleased) { B.loadReleased = true; invoke('load'); }
+        });
+        B.claim = function () { B.claimed = true; };
+        // تا پایانِ اجرای اسکریپت‌ها، صفحه برای آن‌ها «در حالِ بارگذاری» است (مثلِ قبل)
+        B.holdState = function () { if (!B.dclReleased) rs('loading'); };
+        B.release = function () {
+            if (!B.dclReleased) {
+                B.dclReleased = true;
+                if (B.dclFired) { rs('interactive'); invoke('DOMContentLoaded'); }
+                else registerReal('DOMContentLoaded');
+            }
+            rs(null);
+            if (!B.loadReleased) {
+                B.loadReleased = true;
+                if (B.loadFired) invoke('load'); else registerReal('load');
+            }
+        };
+    })();
+    </script>
+    <script src="jouya-store.js"></script>
+
     <!-- پس‌زمینهٔ روشن از همان نخستین فریم: پیش از لودر، به‌جای صفحهٔ سیاهِ پیش‌فرضِ
          webview یک پس‌زمینهٔ روشن (هم‌رنگِ لودر) دیده می‌شود. فقط html است تا پس از
          بارگذاری، پس‌زمینهٔ خودِ برنامه (و حالتِ تیره) دست‌نخورده بماند. -->
@@ -5164,20 +5284,17 @@
     </div>
 
     <!-- اسکریپت‌ها -->
-    <!-- لایهٔ فشرده‌سازیِ شفافِ حافظهٔ محلی — باید پیش از هر خواننده/نویسندهٔ حافظه
-         بیاید. ترتیبِ بقیهٔ اسکریپت‌ها دست‌نخورده است؛ این فقط به ابتدا افزوده شده.
-         اگر این فایل نباشد، برنامه دقیقاً مثلِ قبل (بدونِ فشرده‌سازی) کار می‌کند. -->
-    <script src="jouya-store.js" onerror="console.warn('jouya-store.js not found — حافظه بدونِ فشرده‌سازی کار می‌کند')"></script>
+    <!-- (jouya-store.js به ابتدای <head> منتقل شد) -->
     <!-- کتابخانه‌های آفلاین از پوشه assets/js -->
-    <script src="assets/js/jquery-3.6.0.min.js"></script>
-    <script src="assets/js/chart.min.js"></script>
-    <script src="assets/js/persian-date.min.js"></script>
-    <script src="assets/js/persian-datepicker.min.js"></script>
+    <script type="text/apex-boot" src="assets/js/jquery-3.6.0.min.js"></script>
+    <script type="text/apex-boot" src="assets/js/chart.min.js"></script>
+    <script type="text/apex-boot" src="assets/js/persian-date.min.js"></script>
+    <script type="text/apex-boot" src="assets/js/persian-datepicker.min.js"></script>
     <link rel="stylesheet" href="assets/css/persian-datepicker.min.css">
 
     <!-- SheetJS برای کار با فایل‌های اکسل (آفلاین) — اگر در assets/js نبود از CDN لود می‌شود -->
-    <script src="assets/js/xlsx.full.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';document.head.appendChild(s);})();"></script>
-    <script>
+    <script type="text/apex-boot" src="assets/js/xlsx.full.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';document.head.appendChild(s);})();"></script>
+    <script type="text/apex-boot">
     /* اگر XLSX به هر دلیل (فایلِ ناقص، مسدودشدنِ CDN در نسخهٔ نصبی) بارگذاری نشد، یک بارِ دیگر
        از فایلِ محلی و سپس از CDN تلاش می‌شود؛ وگرنه دیالوگِ «کتابخانهٔ اکسل بارگذاری نشده» ظاهر می‌شد. */
     (function () {
@@ -5202,17 +5319,17 @@
     <!-- تولیدِ PDF در خودِ دستگاه (موبایل/مرورگر) برای «اشتراک‌گذاری با نامِ فارسی» از طریق شیت اشتراکِ نیتیو.
          html2canvas تصویرِ صفحه را می‌گیرد و jsPDF آن را به PDF تبدیل می‌کند (فارسی/راست‌چین حفظ می‌شود).
          آفلاین از assets/js لود می‌شوند؛ در نبودِ فایلِ محلی از CDN. -->
-    <script src="assets/js/html2canvas.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';document.head.appendChild(s);})();"></script>
-    <script src="assets/js/jspdf.umd.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';document.head.appendChild(s);})();"></script>
+    <script type="text/apex-boot" src="assets/js/html2canvas.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';document.head.appendChild(s);})();"></script>
+    <script type="text/apex-boot" src="assets/js/jspdf.umd.min.js" onerror="(function(){var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js';document.head.appendChild(s);})();"></script>
 
     <!-- لایهٔ ۲ امنیتی (رمزگشا): اگر بیلد «رمزنگاری‌شده» باشد، فایل‌های JS به‌صورتِ رمزشده
          بارگذاری و همین‌جا در حافظه رمزگشایی می‌شوند. اگر بیلد رمز نشده باشد (یا این فایل
          نباشد)، هیچ اثری ندارد و برنامه عادی بارگذاری می‌شود. باید «پیش از» همهٔ اسکریپت‌های
          برنامه بیاید. -->
-    <script src="__jouya_dec.js" onerror="console.warn('__jouya_dec.js not found (build may be unencrypted)')"></script>
+    <script type="text/apex-boot" src="__jouya_dec.js" onerror="console.warn('__jouya_dec.js not found (build may be unencrypted)')"></script>
     <!-- پلِ نسخهٔ نصبی (Tauri): electronAPI را می‌سازد تا «ذخیره در پوشهٔ دانلودها» و
          «بازکردنِ فایلِ اکسل» مثلِ نسخهٔ الکترون کار کند. در وب/موبایل بی‌اثر است. -->
-    <script src="tauri-bridge.js" onerror="console.warn('tauri-bridge.js not found')"></script>
+    <script type="text/apex-boot" src="tauri-bridge.js" onerror="console.warn('tauri-bridge.js not found')"></script>
     <!-- ═══════════════════════════════════════════════════════════════════════
          پایانِ «حالتِ آزمایشیِ ورودِ اطلاعات» — باید پیش از database.js اجرا شود.
          ---------------------------------------------------------------------
@@ -5224,7 +5341,7 @@
          database.js/script.js اجرا شود؛ وگرنه نسخهٔ درون‌حافظه‌ایِ db دادهٔ آزمایشی
          را برمی‌داشت. کلیدهای هویت/نشست/لایسنس/وضعیتِ سینک هرگز دست نمی‌خورند.
          ═══════════════════════════════════════════════════════════════════════ -->
-    <script>
+    <script type="text/apex-boot">
     (function () {
         'use strict';
         var FLAG = 'jouya_trial_flag', SESS = 'jouya_trial_active', BAK = 'jouya_trial_backup';
@@ -5284,7 +5401,7 @@
      ║  window.stop() جلوی بارگذاریِ فایل‌های برنامه را می‌گیرد تا در حینِ          ║
      ║  بازگردانی هیچ کدی دادهٔ قدیمی را نخوانَد و روی آن ننویسد.                  ║
      ╚══════════════════════════════════════════════════════════════════════════╝ -->
-    <script>
+    <script type="text/apex-boot">
     (function () {
         'use strict';
         var MARKER = 'jouya_store_backend', DONE = 'jouya_store_restored';
@@ -5308,7 +5425,10 @@
         var finish = function () {
             try { localStorage.setItem(DONE, String(Date.now())); } catch (e) {}
             try { localStorage.removeItem(MARKER); } catch (e) {}
-            setTimeout(function () { try { location.reload(); } catch (e) {} }, 150);
+            // (APEX) پیش از بارگذاریِ دوباره صبر کن تا نوشتن در حافظهٔ دائمی (IndexedDB) تمام شود
+            var go = function () { setTimeout(function () { try { location.reload(); } catch (e) {} }, 150); };
+            try { if (window.JouyaStore && window.JouyaStore.whenSaved) { window.JouyaStore.whenSaved().then(go, go); return; } } catch (e) {}
+            go();
         };
 
         var req;
@@ -5348,37 +5468,37 @@
         };
     })();
     </script>
-    <script src="database.js"></script>
-    <script src="script.js"></script>
-    <script src="persian-date-utils.js" onerror="console.warn('persian-date-utils.js not found')"></script>
+    <script type="text/apex-boot" src="database.js"></script>
+    <script type="text/apex-boot" src="script.js"></script>
+    <script type="text/apex-boot" src="persian-date-utils.js" onerror="console.warn('persian-date-utils.js not found')"></script>
     <!-- سیستم احراز هویت، فعال‌سازی لایسنس و بک‌آپ ایمیل (مستقل) -->
-    <script src="auth-system.js" onerror="console.warn('auth-system.js not found')"></script>
+    <script type="text/apex-boot" src="auth-system.js" onerror="console.warn('auth-system.js not found')"></script>
     <!-- پشتیبان‌گیری Google Drive (مستقل) -->
     <!-- شناسهٔ کلاینتِ وبِ گوگل — باید پیش از drive-backup.js بار شود -->
-    <script src="jouya-google-config.js" onerror="console.warn('jouya-google-config.js not found')"></script>
-    <script src="drive-backup.js" onerror="console.warn('drive-backup.js not found')"></script>
+    <script type="text/apex-boot" src="jouya-google-config.js" onerror="console.warn('jouya-google-config.js not found')"></script>
+    <script type="text/apex-boot" src="drive-backup.js" onerror="console.warn('drive-backup.js not found')"></script>
     <!-- پچ نهایی آپدیت آنی دیتابیس — حتماً آخرین script باشد -->
-    <script src="instant-update-fix.js" onerror="console.warn('instant-update-fix.js not found')"></script>
-    <script src="delivery-list.js" onerror="console.warn('delivery-list.js not found')"></script>
+    <script type="text/apex-boot" src="instant-update-fix.js" onerror="console.warn('instant-update-fix.js not found')"></script>
+    <script type="text/apex-boot" src="delivery-list.js" onerror="console.warn('delivery-list.js not found')"></script>
     <!-- سیستم مرکزی و ماژولار ارزها — کارت «نرخ ارز» + مدیریت ارز/نرخ (مستقل) -->
-    <script src="currency-system.js" onerror="console.warn('currency-system.js not found')"></script>
+    <script type="text/apex-boot" src="currency-system.js" onerror="console.warn('currency-system.js not found')"></script>
 <!-- سینکِ ابری (فاز ۲ — تست؛ سینکِ زنده هنوز خاموش است) -->
-    <script src="sync-config.js" onerror="console.warn('sync-config.js not found')"></script>
-    <script src="sync-layer.js" onerror="console.warn('sync-layer.js not found')"></script>
-<script src="auth-cloud.js" onerror="console.warn('auth-cloud.js not found')"></script>
-<script src="device-guard.js" onerror="console.warn('device-guard.js not found')"></script>
+    <script type="text/apex-boot" src="sync-config.js" onerror="console.warn('sync-config.js not found')"></script>
+    <script type="text/apex-boot" src="sync-layer.js" onerror="console.warn('sync-layer.js not found')"></script>
+<script type="text/apex-boot" src="auth-cloud.js" onerror="console.warn('auth-cloud.js not found')"></script>
+<script type="text/apex-boot" src="device-guard.js" onerror="console.warn('device-guard.js not found')"></script>
 <!-- مدیریتِ دکمهٔ برگشتِ اندروید (فقط اندرویدِ نیتیو؛ وب/آیفون/Tauri بی‌اثر) -->
-<script src="capacitor-back.js" onerror="console.warn('capacitor-back.js not found')"></script>
+<script type="text/apex-boot" src="capacitor-back.js" onerror="console.warn('capacitor-back.js not found')"></script>
 <!-- اشتراکِ فایلِ PDF در اپلیکیشنِ اندروید (فقط اندرویدِ نیتیو؛ بقیه بی‌اثر) -->
-<script src="capacitor-share.js" onerror="console.warn('capacitor-share.js not found')"></script>
-<script src="demo-mode.js" onerror="console.warn('demo-mode.js not found')"></script>
+<script type="text/apex-boot" src="capacitor-share.js" onerror="console.warn('capacitor-share.js not found')"></script>
+<script type="text/apex-boot" src="demo-mode.js" onerror="console.warn('demo-mode.js not found')"></script>
 <!-- فاز ۵: موتورِ مقیاسِ خودکارِ منعطفِ موبایل (فقط روی موبایل فعال؛ دسکتاپ دست‌نخورده) -->
-<script src="mobile-fit.js" onerror="console.warn('mobile-fit.js not found')"></script>
-<script src="jouya-selftest.js"></script>
+<script type="text/apex-boot" src="mobile-fit.js" onerror="console.warn('mobile-fit.js not found')"></script>
+<script type="text/apex-boot" src="jouya-selftest.js"></script>
 <!-- بهبودهای رابطِ کاربری (افزودنی): تاییدِ خروج از فرم + پاک‌شدنِ خودکارِ فیلدِ صفر در موبایل + بروزرسانیِ زندهٔ گزارش‌ها با تغییرِ نرخ -->
-<script src="jouya-ux-fixes.js" onerror="console.warn('jouya-ux-fixes.js not found')"></script>
+<script type="text/apex-boot" src="jouya-ux-fixes.js" onerror="console.warn('jouya-ux-fixes.js not found')"></script>
 <!-- راه‌اندازِ PWA: ثبتِ service worker + دکمهٔ «نصب اپلیکیشن» + راهنمای iOS (افزودنی) -->
-<script src="pwa-register.js" onerror="console.warn('pwa-register.js not found')"></script>
+<script type="text/apex-boot" src="pwa-register.js" onerror="console.warn('pwa-register.js not found')"></script>
 <!-- ====== پنل پروفایل (حذف شد - فقط آیکن باقی است) ====== -->
 <span id="profile-display-name" style="display:none;"></span>
 <span id="pp-name" style="display:none;"></span>
@@ -5391,7 +5511,7 @@
 <div id="profile-panel" style="display:none;"></div>
 
 <!-- فقط سیستم اعداد انگلیسی — هیچ عددی به فارسی/زبان دیگر نمایش داده نمی‌شود -->
-<script>
+<script type="text/apex-boot">
 (function(){
     function forceEnglishNumbers(){
         window.getNumberSystem = function(){ return 'en'; };
@@ -5401,6 +5521,76 @@
     forceEnglishNumbers();
     document.addEventListener('DOMContentLoaded', forceEnglishNumbers);
     window.addEventListener('load', forceEnglishNumbers);
+})();
+</script>
+
+<!-- ══════════════════════════════════════════════════════════════════════
+     بارگذارِ بوت (APEX): پس از آماده‌شدنِ حافظه (jouya-store.js)، همهٔ اسکریپت‌های
+     type="text/apex-boot" را به «همان ترتیبِ» صفحه اجرا می‌کند. اسکریپت‌های بیرونیِ
+     پشتِ‌سرِهم موازی دانلود و به‌ترتیب اجرا می‌شوند؛ هر اسکریپتِ درون‌خطی منتظرِ
+     اسکریپت‌های پیش از خودش می‌ماند.
+     ══════════════════════════════════════════════════════════════════════ -->
+<script>
+(function () {
+    'use strict';
+    var B = window.__apexBoot || null;
+    try { if (B && B.claim) B.claim(); } catch (e) {}
+    var items = Array.prototype.slice.call(document.querySelectorAll('script[type="text/apex-boot"]'));
+    var started = false;
+    function release() { try { if (B && B.release) B.release(); } catch (e) {} }
+    function run() {
+        if (started) return;
+        started = true;
+        try { if (B && B.holdState) B.holdState(); } catch (e) {}
+        var i = 0, waiting = 0, paused = false, finished = false;
+        function finish() { if (finished) return; finished = true; release(); }
+        function onDone() {
+            waiting--;
+            if (waiting > 0) return;
+            if (paused) { paused = false; step(); }
+            else if (i >= items.length) finish();
+        }
+        function step() {
+            for (; i < items.length; i++) {
+                var old = items[i];
+                // اگر صفحه جایگزین شد (مثلاً بازگردانیِ داده)، ادامه نده
+                if (!old.parentNode || !document.documentElement.contains(old)) return;
+                if (!old.hasAttribute('src') && waiting > 0) { paused = true; return; }
+                var s = document.createElement('script');
+                for (var a = 0; a < old.attributes.length; a++) {
+                    var at = old.attributes[a];
+                    if (at.name !== 'type') s.setAttribute(at.name, at.value);
+                }
+                if (old.hasAttribute('src')) {
+                    s.async = false;
+                    waiting++;
+                    s.addEventListener('load', onDone);
+                    s.addEventListener('error', onDone);
+                } else {
+                    s.text = old.text;
+                }
+                old.parentNode.replaceChild(s, old);
+            }
+            if (waiting === 0) finish();
+        }
+        step();
+    }
+    function rawPtrExists() {
+        try {
+            var get = window.__jqStoreRawGet || function (k) { return Storage.prototype.getItem.call(localStorage, k); };
+            for (var j = 0; j < localStorage.length; j++) if (get(localStorage.key(j)) === '\u0000APEXIDB1') return true;
+        } catch (e) {}
+        return false;
+    }
+    var J = window.JouyaStore;
+    if (J && J.ready && typeof J.ready.then === 'function' && J.version >= 2) {
+        J.ready.then(function (st) { if (st && st.blocked) return; run(); }, function () { run(); });
+    } else if (rawPtrExists()) {
+        // فایلِ حافظه بارگذاری نشد ولی داده در IndexedDB است → اجرا نکن تا چیزی بازنویسی نشود
+        document.body.insertAdjacentHTML('beforeend', '<div style="position:fixed;inset:0;z-index:2147483600;background:#f8fafc;display:flex;align-items:center;justify-content:center;direction:rtl;font-family:Tahoma,sans-serif;padding:16px;text-align:center"><div><div style="font-weight:800;color:#b91c1c;margin-bottom:8px">فایلِ حافظهٔ برنامه (jouya-store.js) بارگذاری نشد</div><div>اطلاعاتِ شما سالم است. برنامه را ببندید و دوباره باز کنید.</div></div></div>');
+    } else {
+        run();
+    }
 })();
 </script>
 </body>

@@ -922,6 +922,16 @@
                 AuthUI._logoData = ev.target.result;
                 const preview = document.getElementById('auth-logo-preview');
                 if (preview) preview.innerHTML = `<img src="${ev.target.result}" alt="logo">`;
+                // (APEX) لوگوی بزرگ‌تر از ۱۰۲۴ پیکسل با نسخهٔ کوچک‌شده جایگزین می‌شود
+                const _o = ev.target.result;
+                try {
+                    if (typeof _apexShrinkImage === 'function') _apexShrinkImage(_o, 'logo', (u) => {
+                        if (u === _o || AuthUI._logoData !== _o) return;
+                        AuthUI._logoData = u;
+                        const pv = document.getElementById('auth-logo-preview');
+                        if (pv) pv.innerHTML = `<img src="${u}" alt="logo">`;
+                    });
+                } catch (e) {}
             };
             reader.readAsDataURL(file);
         },

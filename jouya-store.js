@@ -1,47 +1,55 @@
 /**
- * jouya-store.js — لایهٔ فشرده‌سازیِ شفافِ حافظهٔ محلی (فروشگاه جویا)
+ * jouya-store.js — موتورِ حافظهٔ APEX Store Manager (نسخهٔ ۲: IndexedDB)
  * ===========================================================================
- *  هدف: برداشتنِ سقفِ عملیِ ۵ مگابایتیِ localStorage، بدونِ تغییر در هیچ کدِ دیگری.
+ *  هدف: برداشتنِ سقفِ ۵ مگابایتیِ localStorage برای همیشه، «بدونِ» تغییر در
+ *  هیچ تابعِ برنامه. database.js، script.js، sync-layer.js، auth-cloud.js و … همه
+ *  مثلِ قبل localStorage.getItem / setItem / removeItem / key / length را صدا
+ *  می‌زنند و همان جواب‌ها را می‌گیرند.
  *
  *  چطور کار می‌کند
  *  ----------------
- *  این فایل فقط دو تابعِ Storage.prototype.setItem و getItem را «می‌پوشاند».
- *  هر مقداری که از یک آستانه بزرگ‌تر باشد پیش از نوشتن فشرده می‌شود و هنگامِ
- *  خواندن دوباره باز می‌شود. نامِ کلیدها، شمارِ کلیدها، ترتیبِ آن‌ها، removeItem،
- *  clear و پیمایشِ localStorage.key(i) هیچ‌کدام تغییر نمی‌کنند — برای بقیهٔ
- *  برنامه (database.js، script.js، sync-layer.js، drive-backup.js، …) هیچ چیز
- *  عوض نشده است و حتی نمی‌دانند این لایه وجود دارد.
+ *   • هر مقدارِ بزرگ (≥ ۸۱۹۲ کاراکتر) در IndexedDB (پایگاهِ «apex_store») نوشته
+ *     می‌شود و در localStorage فقط یک «نشانگرِ» کوچک به جای آن می‌ماند. پس نامِ
+ *     کلیدها، شمارِ کلیدها و پیمایشِ localStorage.key(i) دقیقاً مثلِ قبل است.
+ *   • همهٔ مقدارهای IndexedDB پیش از اجرای برنامه یک‌جا در حافظهٔ RAM بار می‌شوند
+ *     (index.html تا آن لحظه اسکریپت‌های برنامه را اجرا نمی‌کند). پس خواندن
+ *     «همگام و فوری» می‌ماند و هیچ تابعی async نشد.
+ *   • هر نوشتن همان لحظه در RAM اعمال و بلافاصله (در همان چرخه) در یک تراکنشِ
+ *     IndexedDB با durability=strict ثبت می‌شود. چند نوشتنِ پشتِ‌سرِهم (مثلاً ثبتِ
+ *     بل: معاملات + اجناس + صندوق) در «یک» تراکنش ثبت می‌شوند — یا همه یا هیچ.
+ *   • مقدارهای کوچک (تنظیماتِ دستگاه، ورود، سیستمِ اعداد …) مثلِ قبل در خودِ
+ *     localStorage می‌مانند.
  *
- *  چرا این شکل و نه IndexedDB
- *  ---------------------------
- *  IndexedDB ناهمگام (async) است و برای استفاده از آن باید ~۱۴۷۲ تابعِ برنامه به
- *  async تبدیل می‌شد؛ تلاشِ قبلی دقیقاً به همین دلیل سیستم را شکست (دو انبارِ
- *  موازی + به‌هم‌خوردنِ ترتیبِ راه‌اندازی). این لایه همگام (synchronous) است، یک
- *  انبار بیشتر وجود ندارد، و ترتیبِ بارگذاریِ اسکریپت‌ها دست نخورده است.
+ *  ایمنیِ داده
+ *  ------------
+ *   • انتقالِ اولیه: مقدار اول در IndexedDB نوشته، سپس دوباره خوانده و حرف‌به‌حرف
+ *     با اصل مقایسه می‌شود؛ «فقط بعد از آن» اصلِ localStorage با نشانگر جایگزین
+ *     می‌شود. قطعِ برق در هر لحظه‌ای از این مسیر، داده را از بین نمی‌برد و دفعهٔ
+ *     بعد کار از همان‌جا ادامه می‌یابد (بدونِ رکوردِ تکراری).
+ *   • از هر کلید یک نسخهٔ «پیش از انتقال» در مخزنِ backup همین پایگاه نگه داشته
+ *     می‌شود؛ اگر نسخهٔ قدیمیِ برنامه یا هر عاملِ بیرونی مقداری را بازنویسی کند،
+ *     مقدارِ قبلی هم آن‌جا حفظ می‌شود (JouyaStore.listBackups / restoreBackup).
+ *   • اگر نوشتن در IndexedDB شکست بخورد، داده در RAM می‌ماند، خودکار دوباره تلاش
+ *     می‌شود و خطا به‌صورتِ واقعی (نوارِ قرمز) به کاربر نشان داده می‌شود.
+ *   • اگر داده منتقل شده باشد ولی IndexedDB باز نشود، برنامه «اجرا نمی‌شود» تا
+ *     هیچ کدی دادهٔ خالی را روی دادهٔ واقعی ننویسد؛ پیامِ «تلاشِ دوباره» نشان
+ *     داده می‌شود.
+ *   • اگر IndexedDB در دسترس نباشد و هنوز چیزی منتقل نشده باشد، برنامه دقیقاً
+ *     مثلِ نسخهٔ قبلی (localStorage + فشرده‌سازیِ JQZ1) کار می‌کند.
+ *   • مقدارهای فشرده‌شدهٔ نسخهٔ قبلیِ این فایل (JQZ1، فقط نسخهٔ وب) خوانده و
+ *     هنگامِ انتقال باز می‌شوند.
  *
- *  اندازه‌گیریِ واقعی روی دادهٔ کاربر (۱۴۳۲ معامله)
- *  ------------------------------------------------
- *    transactions         1,179,276 →  ~75,000 کاراکتر   (~۱۵×)
- *    cashboxTransactions    235,733 →  ~16,000 کاراکتر
- *    expenses               180,353 →  ~11,000 کاراکتر
- *  یعنی سقفِ عملی از ~۵٬۵۰۰ معامله به ~۸۰٬۰۰۰ معامله می‌رسد.
- *
- *  ایمنی
- *  -----
- *   • قالبِ ذخیره خودتوصیف است (سرآیندِ \u0000JQZ1|). مقدارِ فشرده‌نشده هم مثلِ
- *     قبل خوانده می‌شود، پس دادهٔ قبلیِ کاربران بدونِ هیچ مهاجرتی کار می‌کند.
- *   • پیش از نوشتن، نتیجه بلافاصله باز و با ورودی مقایسه می‌شود؛ اگر یکی نبود،
- *     مقدار به شکلِ خام (بدونِ فشرده‌سازی) نوشته می‌شود. هیچ داده‌ای در معرضِ
- *     خرابی قرار نمی‌گیرد.
- *   • اگر pako به هر دلیل بار نشود، همه‌چیز دقیقاً مثلِ قبل (خام) کار می‌کند.
- *   • خروجیِ JSON و پشتیبانِ گوگل‌درایو از همین getItem می‌خوانند، پس قالبِ
- *     فایل‌های خروجی هیچ تغییری نمی‌کند.
+ *  این فایل باید «اولین اسکریپتِ» <head> باشد و رمزنگاری/obfuscate نشود
+ *  (tools/pack-encrypt.js و tools/obfuscate.js آن را رد می‌کنند).
  * ===========================================================================
  */
 (function () {
     'use strict';
-    if (typeof window === 'undefined' || !window.localStorage) return;
-    if (window.__JQ_STORE_READY) return;
+    if (typeof window === 'undefined') return;
+    if (window.JouyaStore || window.__JQ_STORE_READY) return;
+    var LS = null;
+    try { LS = window.localStorage; } catch (e) { LS = null; }
+    if (!LS) return;
 
     // ── pako 2.1.0 (MIT AND Zlib) — داخلِ یک بستار، بدونِ آلوده‌کردنِ window ──────
     var pako = (function () {
@@ -54,18 +62,22 @@
 
     var deflateRaw = pako && pako.deflateRaw;
     var inflateRaw = pako && pako.inflateRaw;
-    if (typeof deflateRaw !== 'function' || typeof inflateRaw !== 'function') return;
+    var HAS_Z = (typeof deflateRaw === 'function' && typeof inflateRaw === 'function');
 
-    // ── تنظیمات ───────────────────────────────────────────────────────────────
-    var MAGIC     = '\u0000JQZ1|';   // سرآیند؛ هیچ مقدارِ JSON/متنیِ برنامه با \u0000 شروع نمی‌شود
-    var THRESHOLD = 20000;           // فقط مقدارهای بزرگ فشرده می‌شوند
-    var LEVEL     = 3;               // سرعت/نسبتِ متعادل: ~۱۵× با ~۲۵ms برای ۱٫۲MB
-    var BITS      = 15;              // هر کاراکترِ خروجی ۱۵ بیت حمل می‌کند
-    var OFFSET    = 32;              // بازهٔ کاراکترها: 32..32799 (خارج از محدودهٔ surrogate)
+    var S = window.Storage && window.Storage.prototype;
+    if (!S || typeof S.getItem !== 'function' || typeof S.setItem !== 'function') return;
+    var rawGet = S.getItem, rawSet = S.setItem, rawDel = S.removeItem, rawClear = S.clear;
 
-    // ── بسته‌بندیِ بایت‌ها در کاراکترهای امنِ UTF-16 ─────────────────────────────
-    //  همان روشی که lz-string سال‌هاست با آن در localStorage می‌نویسد: هیچ کاراکترِ
-    //  نیمه‌جفتِ (lone surrogate) تولید نمی‌شود، پس رشته در هر موتوری سالم می‌ماند.
+    // ═════════════════════════════════════════════════════════════════════════
+    //  ۱) قالبِ فشردهٔ نسخهٔ قبلی (JQZ1) — خواندن همیشه؛ نوشتن فقط در «حالتِ قدیمی»
+    //     (این بخش عیناً همان منطقِ نسخهٔ قبلیِ این فایل است.)
+    // ═════════════════════════════════════════════════════════════════════════
+    var MAGIC     = '\u0000JQZ1|';
+    var THRESHOLD = 20000;
+    var LEVEL     = 3;
+    var BITS      = 15;
+    var OFFSET    = 32;
+
     function pack(bytes) {
         var out = [], buf = 0, bits = 0, i, n = bytes.length;
         for (i = 0; i < n; i++) {
@@ -74,7 +86,6 @@
             buf &= (1 << bits) - 1;
         }
         if (bits > 0) out.push(String.fromCharCode(OFFSET + ((buf << (BITS - bits)) & 32767)));
-        // به قطعه‌های کوچک تقسیم می‌کنیم تا از سقفِ آرگومانِ apply عبور نکنیم
         var s = '', CH = 8192;
         for (i = 0; i < out.length; i += CH) s += out.slice(i, i + CH).join('');
         return s;
@@ -91,7 +102,6 @@
         }
         return bytes;
     }
-
     function encode(plain) {
         var bytes = deflateRaw(plain, { level: LEVEL });
         return MAGIC + bytes.length + '|' + pack(bytes);
@@ -104,116 +114,755 @@
         return inflateRaw(unpack(stored.slice(i + 1), len), { to: 'string' });
     }
     function isPacked(v) { return typeof v === 'string' && v.length > MAGIC.length && v.slice(0, MAGIC.length) === MAGIC; }
+    function safeDecode(v) {
+        if (!HAS_Z) return null;
+        try { var p = decode(v); return (typeof p === 'string') ? p : null; } catch (e) { return null; }
+    }
 
-    // ── حافظهٔ نهانِ خواندن ─────────────────────────────────────────────────────
-    //  بدونِ این، هر getItem('transactions') یک بازگشاییِ کامل بود و چون برنامه در هر
-    //  رندر ده‌ها بار آن را می‌خواند، کند می‌شد. کلیدِ اعتبارسنجی خودِ رشتهٔ ذخیره‌شده
-    //  است، پس اگر کسی (حتی تبِ دیگر) مقدار را عوض کند، نهان خودبه‌خود باطل می‌شود.
-    var cache = Object.create(null);
-
-    var S = window.Storage && window.Storage.prototype;
-    if (!S || typeof S.getItem !== 'function' || typeof S.setItem !== 'function') return;
-    var rawGet = S.getItem, rawSet = S.setItem, rawDel = S.removeItem, rawClear = S.clear;
-
-    S.getItem = function (key) {
-        var v = rawGet.call(this, key);
+    var zcache = Object.create(null);
+    function readPlain(key, v) {
         if (!isPacked(v)) return v;
-        var c = cache[key];
+        var c = zcache[key];
         if (c && c.stored === v) return c.plain;
-        var plain;
-        try { plain = decode(v); } catch (e) { plain = null; }
-        if (plain === null || plain === undefined) return v;   // هرگز داده را پنهان نکن
-        cache[key] = { stored: v, plain: plain };
+        var plain = safeDecode(v);
+        if (plain === null) return v;                          // هرگز داده را پنهان نکن
+        zcache[key] = { stored: v, plain: plain };
         return plain;
-    };
-
-    S.setItem = function (key, value) {
+    }
+    // نوشتنِ «حالتِ قدیمی» — عیناً همان setItemِ نسخهٔ قبلی
+    function legacySet(st, key, value) {
         var plain = (typeof value === 'string') ? value : String(value);
-        if (plain.length < THRESHOLD) {
-            delete cache[key];
-            return rawSet.call(this, key, plain);
+        if (st === LS && rawGet.call(st, key) === PTR) throw new Error(MSG_PTR_GUARD);
+        if (!HAS_Z || plain.length < THRESHOLD) {
+            delete zcache[key];
+            return rawSet.call(st, key, plain);
         }
-        var c = cache[key];
-        if (c && c.plain === plain && rawGet.call(this, key) === c.stored) return;   // بدونِ تغییر
+        var c = zcache[key];
+        if (c && c.plain === plain && rawGet.call(st, key) === c.stored) return;
         var packed = null;
         try {
             packed = encode(plain);
-            // بازبینیِ فوری: اگر بازگشایی دقیقاً همان ورودی نبود، فشرده‌سازی را رها کن.
             if (decode(packed) !== plain) packed = null;
         } catch (e) { packed = null; }
         if (packed === null || packed.length >= plain.length) {
-            delete cache[key];
+            delete zcache[key];
+            return rawSet.call(st, key, plain);
+        }
+        rawSet.call(st, key, packed);
+        zcache[key] = { stored: packed, plain: plain };
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  ۲) موتورِ IndexedDB
+    // ═════════════════════════════════════════════════════════════════════════
+    var PTR       = '\u0000APEXIDB1';      // نشانگرِ «مقدار در IndexedDB است»
+    var DB_NAME   = 'apex_store';          // (پایگاهِ قدیمیِ «jouya_store» ربطی به این ندارد)
+    var DB_VER    = 1;
+    var IDB_MIN   = 8192;                  // مقدارِ کوچک‌تر از این در localStorage می‌ماند
+    var OPEN_TIMEOUT = 20000;
+    var MSG_PTR_GUARD = 'APEX: این کلید در IndexedDB است و این نسخهٔ صفحه نمی‌تواند روی آن بنویسد. برنامه را دوباره باز کنید.';
+
+    // فقط index.htmlِ جدید (با بوتِ مرحله‌ای) این موتور را فعال می‌کند؛ اگر نسخهٔ قدیمیِ
+    // صفحه (مثلاً از کشِ مرورگر) این فایل را بار کند، «حالتِ قدیمی» اجرا می‌شود.
+    var BOOT = false;
+    try {
+        var _mt = document.querySelector('meta[name="apex-storage"]');
+        BOOT = !!(_mt && _mt.getAttribute('content') === 'idb-v1');
+    } catch (e) { BOOT = false; }
+
+    var mode   = BOOT ? 'pending' : 'legacy';     // pending | idb | legacy | blocked
+    var idb    = null;
+    var mem    = Object.create(null);             // کلید → مقدار (فقط کلیدهای IndexedDB)
+    var owned  = Object.create(null);             // کلید → true
+    var early  = Object.create(null);             // نوشتن‌های پیش از آماده‌شدن
+    var earlyOrder = [];
+    var remoteEarly = [];
+    var queue  = Object.create(null);             // صفِ نوشتن: کلید → {op, v, ptr, fp}
+    var tqueue = [];                              // کلیدهایی که نشانهٔ انتقالشان باید پاک شود
+    var queued = false, inflight = null, failures = 0, retryTimer = null;
+    var waiters = [];
+    var lastError = null;
+    var earlyWarned = Object.create(null);
+    var stats0 = { migrated: 0, lost: 0, recovered: 0, superseded: 0 };
+
+    function hasOwn(o, k) { return Object.prototype.hasOwnProperty.call(o, k); }
+    function keysOf(o) { var a = [], k; for (k in o) if (hasOwn(o, k)) a.push(k); return a; }
+    function nextTick(fn) {
+        try { Promise.resolve().then(fn); } catch (e) { setTimeout(fn, 0); }
+    }
+
+    // اثرِ انگشتِ یک رشته (برای تشخیصِ «کدام نسخه تازه‌تر است» پس از قطعِ ناگهانی)
+    var imul = Math.imul || function (a, b) {
+        var ah = (a >>> 16) & 0xffff, al = a & 0xffff, bh = (b >>> 16) & 0xffff, bl = b & 0xffff;
+        return ((al * bl) + (((ah * bl + al * bh) << 16) >>> 0) | 0);
+    };
+    function fp(s) {
+        if (s === null || s === undefined) return 'N';
+        var h1 = 0x811c9dc5, h2 = 5381, i, c, n = s.length;
+        for (i = 0; i < n; i++) {
+            c = s.charCodeAt(i);
+            h1 ^= c; h1 = imul(h1, 16777619);
+            h2 = ((h2 << 5) + h2 + c) | 0;
+        }
+        return n + ':' + (h1 >>> 0).toString(36) + ':' + (h2 >>> 0).toString(36);
+    }
+
+    // ── پیام‌های کاربر (بدونِ وابستگی به script.js) ───────────────────────────
+    function onBody(fn) {
+        // عمداً با تایمر، نه DOMContentLoaded (آن رویداد تا پایانِ بوت نگه داشته می‌شود)
+        if (document.body) { try { fn(); } catch (e) {} return; }
+        setTimeout(function () { onBody(fn); }, 50);
+    }
+    function showBlock(title, text, allowContinue, onContinue) {
+        onBody(function () {
+            var old = document.getElementById('apex-store-block');
+            if (old) old.parentNode.removeChild(old);
+            var d = document.createElement('div');
+            d.id = 'apex-store-block';
+            d.setAttribute('style', 'position:fixed;inset:0;z-index:2147483600;background:#f8fafc;display:flex;' +
+                'align-items:center;justify-content:center;direction:rtl;font-family:Vazirmatn,Tahoma,sans-serif;padding:16px;');
+            var box = '<div style="max-width:440px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:22px;' +
+                'box-shadow:0 10px 30px rgba(15,23,42,.12);text-align:center;color:#1e293b">' +
+                '<div style="font-weight:800;font-size:17px;margin-bottom:10px;color:#b91c1c">' + title + '</div>' +
+                '<div style="font-size:14px;line-height:1.9;color:#334155">' + text + '</div>' +
+                '<div style="margin-top:16px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">' +
+                '<button id="apex-store-retry" style="background:#1e3a5f;color:#fff;border:0;border-radius:8px;padding:9px 18px;font:inherit;cursor:pointer">تلاشِ دوباره</button>' +
+                (allowContinue ? '<button id="apex-store-cont" style="background:#fff;color:#b91c1c;border:1px solid #fecaca;border-radius:8px;padding:9px 14px;font:inherit;cursor:pointer">ادامه بدونِ این اطلاعات</button>' : '') +
+                '</div></div>';
+            d.innerHTML = box;
+            document.body.appendChild(d);
+            try { document.documentElement.classList.remove('jouya-show-loader'); } catch (e) {}
+            var r = document.getElementById('apex-store-retry');
+            if (r) r.onclick = function () { try { location.reload(); } catch (e) {} };
+            var c = document.getElementById('apex-store-cont');
+            if (c && onContinue) c.onclick = function () {
+                if (!window.confirm('اطلاعاتِ این بخش‌ها دیگر بازیابی نمی‌شود. مطمئن هستید؟')) return;
+                try { d.parentNode.removeChild(d); } catch (e) {}
+                onContinue();
+            };
+        });
+    }
+    var bannerShown = false;
+    function showBanner(err) {
+        if (bannerShown) return; bannerShown = true;
+        onBody(function () {
+            var b = document.getElementById('apex-store-banner');
+            if (!b) {
+                b = document.createElement('div');
+                b.id = 'apex-store-banner';
+                b.setAttribute('style', 'position:fixed;top:0;left:0;right:0;z-index:2147483500;background:#b91c1c;color:#fff;' +
+                    'direction:rtl;text-align:center;font-family:Vazirmatn,Tahoma,sans-serif;font-size:13px;padding:7px 12px;');
+                document.body.appendChild(b);
+            }
+            var full = err && (err.name === 'QuotaExceededError' || /quota/i.test(String(err.message || '')));
+            b.textContent = full
+                ? 'فضای دیسکِ دستگاه پر است و آخرین تغییرات هنوز به‌صورتِ دائمی ذخیره نشده‌اند. کمی فضا آزاد کنید؛ برنامه را نبندید — ذخیره خودکار دوباره تلاش می‌شود.'
+                : 'آخرین تغییرات هنوز به‌صورتِ دائمی ذخیره نشده‌اند (خطای حافظهٔ دستگاه). برنامه را نبندید — ذخیره خودکار دوباره تلاش می‌شود.';
+            b.style.display = 'block';
+        });
+    }
+    function hideBanner() {
+        if (!bannerShown) return; bannerShown = false;
+        try { var b = document.getElementById('apex-store-banner'); if (b) b.style.display = 'none'; } catch (e) {}
+    }
+
+    // ── همگام‌سازیِ چند زبانه (فقط نسخهٔ وب؛ Tauri/اندروید یک پنجره دارند) ─────────
+    var bch = null, peers = false;
+    try { if (BOOT && typeof BroadcastChannel === 'function') bch = new BroadcastChannel('apex_store_v1'); } catch (e) { bch = null; }
+    function bc(k, v) {
+        if (!bch || !peers) return;
+        try { bch.postMessage({ k: k, v: v }); } catch (e) {}
+    }
+    function applyRemote(d) {
+        if (d.v === null) { delete owned[d.k]; delete mem[d.k]; }
+        else { owned[d.k] = true; mem[d.k] = d.v; }
+    }
+    if (bch) {
+        bch.onmessage = function (e) {
+            var d = e && e.data;
+            if (!d) return;
+            if (d.hello) { peers = true; if (!d.reply) { try { bch.postMessage({ hello: 1, reply: 1 }); } catch (x) {} } return; }
+            if (typeof d.k !== 'string') return;
+            if (mode === 'idb') applyRemote(d); else remoteEarly.push(d);
+        };
+        try { bch.postMessage({ hello: 1 }); } catch (e) {}
+    }
+
+    // ── صفِ نوشتن در IndexedDB ───────────────────────────────────────────────
+    function enqueue(k, op) {
+        var prev = queue[k];
+        if (op.op === 'put' && !op.ptr && prev && prev.op === 'put' && prev.ptr) { op.ptr = true; op.fp = prev.fp; }
+        queue[k] = op;
+        schedule();
+    }
+    function schedule() {
+        if (queued) return;
+        queued = true;
+        nextTick(flush);
+    }
+    function idle() { return !inflight && !keysOf(queue).length && !tqueue.length; }
+    function resolveWaiters() {
+        if (!idle()) return;
+        var w = waiters; waiters = [];
+        for (var i = 0; i < w.length; i++) { try { w[i](true); } catch (e) {} }
+    }
+    function flush() {
+        queued = false;
+        if (inflight || !idb) return;
+        var keys = keysOf(queue), tdels = tqueue;
+        if (!keys.length && !tdels.length) { resolveWaiters(); return; }
+        var batch = queue;
+        queue = Object.create(null); tqueue = [];
+        var tx;
+        try { tx = idb.transaction(['kv', 'trans'], 'readwrite', { durability: 'strict' }); }
+        catch (e) { return fail(batch, tdels, e); }
+        inflight = batch;
+        var done = false;
+        tx.oncomplete = function () {
+            if (done) return; done = true;
+            inflight = null; failures = 0; hideBanner();
+            for (var i = 0; i < keys.length; i++) {
+                var k = keys[i], op = batch[k];
+                if (op.op === 'put' && op.ptr && owned[k] === true) {
+                    // مقدار با موفقیت ثبت شد → حالا (و فقط حالا) اصلِ localStorage با نشانگر عوض می‌شود
+                    try { if (rawGet.call(LS, k) !== PTR) rawSet.call(LS, k, PTR); tqueue.push(k); }
+                    catch (e) { /* نشانهٔ انتقال می‌ماند؛ راه‌اندازیِ بعدی کار را تمام می‌کند */ }
+                }
+            }
+            if (keysOf(queue).length || tqueue.length) schedule(); else resolveWaiters();
+        };
+        tx.onabort = function () {
+            if (done) return; done = true;
+            inflight = null;
+            fail(batch, tdels, tx.error || new Error('IndexedDB transaction aborted'));
+        };
+        try {
+            var kv = tx.objectStore('kv'), tr = tx.objectStore('trans'), i, k, op;
+            for (i = 0; i < keys.length; i++) {
+                k = keys[i]; op = batch[k];
+                if (op.op === 'put') { kv.put(op.v, k); if (op.ptr) tr.put(op.fp, k); }
+                else { kv['delete'](k); tr['delete'](k); }
+            }
+            for (i = 0; i < tdels.length; i++) tr['delete'](tdels[i]);
+            if (typeof tx.commit === 'function') tx.commit();
+        } catch (e) {
+            try { tx.abort(); } catch (x) {}
+            if (!done) { done = true; inflight = null; fail(batch, tdels, e); }
+        }
+    }
+    function fail(batch, tdels, err) {
+        lastError = err; failures++;
+        try { console.error('[apex-store] ذخیره در IndexedDB ناموفق (تلاشِ ' + failures + '):', err); } catch (e) {}
+        var ks = keysOf(batch), i, k, b, q;
+        for (i = 0; i < ks.length; i++) {
+            k = ks[i]; b = batch[k]; q = queue[k];
+            if (!q) queue[k] = b;                                   // تغییرِ تازه‌تری نیامده → همین دوباره
+            else if (b.op === 'put' && b.ptr && q.op === 'put' && !q.ptr) { q.ptr = true; q.fp = b.fp; }
+        }
+        tqueue = tdels.concat(tqueue);
+        if (failures >= 2) showBanner(err);
+        if (retryTimer) clearTimeout(retryTimer);
+        retryTimer = setTimeout(function () {
+            retryTimer = null;
+            if (!idb) { reopen(); return; }
+            flush();
+        }, Math.min(30000, 300 * Math.pow(2, Math.min(failures, 7))));
+    }
+    function reopen() {
+        openDB().then(function (d) { idb = d; attachDB(d); flush(); }, function (e) { fail(Object.create(null), [], e); });
+    }
+    function attachDB(d) {
+        d.onversionchange = function () { try { d.close(); } catch (e) {} if (idb === d) idb = null; };
+        d.onclose = function () { if (idb === d) { idb = null; if (!idle()) reopen(); } };
+    }
+
+    // ── باز کردن و خواندنِ پایگاه ────────────────────────────────────────────
+    function openDB() {
+        return new Promise(function (resolve, reject) {
+            var req, settled = false;
+            var to = setTimeout(function () { if (!settled) { settled = true; reject(new Error('IndexedDB open timeout')); } }, OPEN_TIMEOUT);
+            try { req = indexedDB.open(DB_NAME, DB_VER); }
+            catch (e) { clearTimeout(to); settled = true; reject(e); return; }
+            req.onupgradeneeded = function () {
+                var d = req.result, names = ['kv', 'trans', 'meta', 'backup', 'originals'];
+                for (var i = 0; i < names.length; i++) if (!d.objectStoreNames.contains(names[i])) d.createObjectStore(names[i]);
+            };
+            req.onsuccess = function () {
+                clearTimeout(to);
+                if (settled) { try { req.result.close(); } catch (e) {} return; }
+                settled = true; resolve(req.result);
+            };
+            req.onerror = function () { clearTimeout(to); if (!settled) { settled = true; reject(req.error || new Error('IndexedDB open error')); } };
+        });
+    }
+    function readStore(d, name, keysOnly) {
+        return new Promise(function (resolve, reject) {
+            var out = Object.create(null), tx, st, cur;
+            try { tx = d.transaction(name, 'readonly'); st = tx.objectStore(name); }
+            catch (e) { reject(e); return; }
+            try { cur = keysOnly && st.openKeyCursor ? st.openKeyCursor() : st.openCursor(); }
+            catch (e) { reject(e); return; }
+            cur.onsuccess = function () {
+                var c = cur.result;
+                if (c) { out[String(c.key)] = keysOnly ? true : c.value; c['continue'](); }
+            };
+            tx.oncomplete = function () { resolve(out); };
+            tx.onabort = tx.onerror = function () { reject(tx.error || new Error('read ' + name + ' failed')); };
+        });
+    }
+    function runTx(d, stores, fn) {
+        return new Promise(function (resolve, reject) {
+            var tx;
+            try { tx = d.transaction(stores, 'readwrite', { durability: 'strict' }); fn(tx); }
+            catch (e) { try { if (tx) tx.abort(); } catch (x) {} reject(e); return; }
+            tx.oncomplete = function () { resolve(true); };
+            tx.onabort = function () { reject(tx.error || new Error('transaction aborted')); };
+            try { if (typeof tx.commit === 'function') tx.commit(); } catch (e) {}
+        });
+    }
+    function getMany(d, name, keys) {
+        return new Promise(function (resolve, reject) {
+            var out = Object.create(null), tx;
+            if (!keys.length) { resolve(out); return; }
+            try { tx = d.transaction(name, 'readonly'); } catch (e) { reject(e); return; }
+            var st = tx.objectStore(name);
+            keys.forEach(function (k) {
+                var r = st.get(k);
+                r.onsuccess = function () { out[k] = r.result; };
+            });
+            tx.oncomplete = function () { resolve(out); };
+            tx.onabort = tx.onerror = function () { reject(tx.error || new Error('verify read failed')); };
+        });
+    }
+    function bkKey(k, why) { return k + '\u0001' + why + '\u0001' + Date.now() + '\u0001' + Math.random().toString(36).slice(2, 7); }
+    function bkParse(id) { var p = String(id).split('\u0001'); return { key: p[0], why: p[1] || '', at: parseInt(p[2], 10) || 0 }; }
+
+    function lsKeys() {
+        var a = [], i, n;
+        try { n = LS.length; for (i = 0; i < n; i++) { var k = LS.key(i); if (k !== null) a.push(k); } } catch (e) {}
+        return a;
+    }
+    function lsHasPointers() {
+        var ks = lsKeys();
+        for (var i = 0; i < ks.length; i++) { try { if (rawGet.call(LS, ks[i]) === PTR) return true; } catch (e) {} }
+        return false;
+    }
+
+    // ── راه‌اندازی: خواندنِ همه‌چیز، تطبیق با localStorage، انتقالِ تأییدشده ─────
+    function hydrate() {
+        var d, kvMap, trMap, bkIds;
+        return openDB().then(function (db0) {
+            d = db0;
+            return Promise.all([readStore(d, 'kv'), readStore(d, 'trans'), readStore(d, 'backup', true)]);
+        }).then(function (r) {
+            kvMap = r[0]; trMap = r[1]; bkIds = r[2];
+            var hasPremig = Object.create(null);
+            keysOf(bkIds).forEach(function (id) { var b = bkParse(id); if (b.why === 'pre-migration') hasPremig[b.key] = true; });
+
+            var ks = lsKeys(), inLS = Object.create(null);
+            var ownedNow = Object.create(null), adopt = Object.create(null), pointerize = [];
+            var backups = [], kvDel = [], trDel = [], lost = [];
+            ks.forEach(function (k) {
+                inLS[k] = true;
+                var raw; try { raw = rawGet.call(LS, k); } catch (e) { raw = null; }
+                if (raw === null) return;
+                var hasKv = hasOwn(kvMap, k), hasTr = hasOwn(trMap, k);
+                if (raw === PTR) {
+                    if (hasKv) { ownedNow[k] = kvMap[k]; if (hasTr) trDel.push(k); }
+                    else lost.push(k);
+                    return;
+                }
+                var packed = isPacked(raw);
+                var plain = packed ? safeDecode(raw) : raw;
+                if (plain === null) return;                      // بازنشدنی: دست‌نخورده می‌ماند
+                var big = plain.length >= IDB_MIN || packed;
+                if (hasKv) {
+                    if (kvMap[k] === plain || (hasTr && trMap[k] === fp(raw))) {
+                        // نسخهٔ IndexedDB همان یا تازه‌تر است (قطعِ برق پیش از نوشتنِ نشانگر)
+                        ownedNow[k] = kvMap[k]; pointerize.push(k);
+                    } else {
+                        // مقدارِ localStorage تازه‌تر است (مثلاً نسخهٔ قدیمیِ برنامه روی آن نوشته) →
+                        // همان برنده است؛ مقدارِ قبلیِ IndexedDB در backup حفظ می‌شود.
+                        backups.push({ id: bkKey(k, 'replaced'), v: kvMap[k] });
+                        stats0.superseded++;
+                        if (big) { adopt[k] = plain; ownedNow[k] = plain; pointerize.push(k); }
+                        else kvDel.push(k);
+                    }
+                    if (hasTr) trDel.push(k);
+                } else if (big) {
+                    adopt[k] = plain; ownedNow[k] = plain; pointerize.push(k);
+                    if (!hasPremig[k]) backups.push({ id: bkKey(k, 'pre-migration'), v: plain });
+                    if (hasTr) trDel.push(k);
+                } else if (hasTr) trDel.push(k);
+            });
+            keysOf(kvMap).forEach(function (k) {
+                if (inLS[k]) return;
+                if (hasOwn(trMap, k) && trMap[k] === 'N') {           // اولین نوشتنِ یک کلیدِ تازه، پیش از نشانگر
+                    ownedNow[k] = kvMap[k]; pointerize.push(k); trDel.push(k);
+                } else {                                              // کلید حذف شده بود
+                    backups.push({ id: bkKey(k, 'deleted'), v: kvMap[k] });
+                    kvDel.push(k);
+                    if (hasOwn(trMap, k)) trDel.push(k);
+                }
+            });
+            keysOf(trMap).forEach(function (k) { if (!hasOwn(kvMap, k) && trDel.indexOf(k) < 0) trDel.push(k); });
+
+            var adoptKeys = keysOf(adopt);
+            var needWrite = adoptKeys.length || backups.length || kvDel.length || trDel.length;
+            var p = needWrite ? runTx(d, ['kv', 'trans', 'backup', 'meta'], function (tx) {
+                var kv = tx.objectStore('kv'), tr = tx.objectStore('trans'), bk = tx.objectStore('backup');
+                adoptKeys.forEach(function (k) { kv.put(adopt[k], k); });
+                kvDel.forEach(function (k) { kv['delete'](k); });
+                trDel.forEach(function (k) { tr['delete'](k); });
+                backups.forEach(function (b) { bk.put(b.v, b.id); });
+                if (adoptKeys.length) tx.objectStore('meta').put({ at: Date.now(), keys: adoptKeys.length }, 'lastMigration');
+            }) : Promise.resolve(true);
+            return p.then(function () {
+                // بازبینیِ حرف‌به‌حرف پیش از جایگزینیِ اصل
+                return getMany(d, 'kv', adoptKeys);
+            }).then(function (back) {
+                var bad = [];
+                adoptKeys.forEach(function (k) {
+                    if (back[k] !== adopt[k]) { bad.push(k); delete ownedNow[k]; }
+                });
+                if (bad.length) {
+                    try { console.error('[apex-store] بازبینیِ انتقال ناموفق؛ این کلیدها در localStorage ماندند:', bad); } catch (e) {}
+                    pointerize = pointerize.filter(function (k) { return bad.indexOf(k) < 0; });
+                }
+                pointerize.forEach(function (k) {
+                    try { rawSet.call(LS, k, PTR); delete zcache[k]; }
+                    catch (e) { /* محال: نشانگر کوچک‌تر از اصل است */ }
+                });
+                stats0.migrated = adoptKeys.length - bad.length;
+                // کلیدهایی که نشانگر دارند ولی مقدارشان نیست → از آخرین backup بازیابی
+                if (!lost.length) return { d: d, ownedNow: ownedNow, lost: [] };
+                return readStore(d, 'backup').then(function (all) {
+                    var best = Object.create(null);
+                    keysOf(all).forEach(function (id) {
+                        var b = bkParse(id);
+                        if (lost.indexOf(b.key) < 0) return;
+                        if (!best[b.key] || b.at > best[b.key].at) best[b.key] = { at: b.at, v: all[id] };
+                    });
+                    var rec = lost.filter(function (k) { return best[k] && typeof best[k].v === 'string'; });
+                    var still = lost.filter(function (k) { return rec.indexOf(k) < 0; });
+                    return runTx(d, ['kv'], function (tx) {
+                        var kv = tx.objectStore('kv');
+                        rec.forEach(function (k) { kv.put(best[k].v, k); });
+                    }).then(function () {
+                        rec.forEach(function (k) { ownedNow[k] = best[k].v; });
+                        stats0.recovered = rec.length; stats0.lost = still.length;
+                        if (rec.length) try { console.warn('[apex-store] از backup بازیابی شد:', rec); } catch (e) {}
+                        return { d: d, ownedNow: ownedNow, lost: still };
+                    });
+                });
+            });
+        });
+    }
+
+    function goIdb(d, ownedNow) {
+        idb = d; attachDB(d);
+        keysOf(ownedNow).forEach(function (k) { owned[k] = true; mem[k] = ownedNow[k]; });
+        mode = 'idb';
+        // نوشتن‌های پیش از آماده‌شدن (به همان ترتیب)
+        earlyOrder.forEach(function (k) {
+            var e = early[k]; if (!e) return;
+            try { if (e.del) S.removeItem.call(LS, k); else S.setItem.call(LS, k, e.v); } catch (x) {}
+        });
+        early = Object.create(null); earlyOrder = [];
+        remoteEarly.forEach(applyRemote); remoteEarly = [];
+        // درخواستِ «ذخیره‌سازیِ ماندگار» تا مرورگر هنگامِ کمبودِ فضا داده را پاک نکند
+        try {
+            if (navigator.storage && navigator.storage.persist && !/firefox/i.test(navigator.userAgent || '')) {
+                navigator.storage.persisted().then(function (p) { if (!p) navigator.storage.persist(); })['catch'](function () {});
+            }
+        } catch (e) {}
+        setTimeout(pruneBackups, 15000);
+    }
+    function goLegacy(reason) {
+        mode = 'legacy';
+        try { console.warn('[apex-store] حالتِ قدیمی (localStorage):', reason); } catch (e) {}
+        earlyOrder.forEach(function (k) {
+            var e = early[k]; if (!e) return;
+            try { if (e.del) { delete zcache[k]; rawDel.call(LS, k); } else legacySet(LS, k, e.v); } catch (x) {}
+        });
+        early = Object.create(null); earlyOrder = [];
+        window.__JQ_STORE_READY = HAS_Z;
+    }
+    function pruneBackups() {
+        if (!idb) return;
+        readStore(idb, 'backup', true).then(function (ids) {
+            var by = Object.create(null), del = [];
+            keysOf(ids).forEach(function (id) {
+                var b = bkParse(id);
+                if (b.why === 'pre-migration') return;              // نسخهٔ پیش از انتقال همیشه می‌ماند
+                (by[b.key] = by[b.key] || []).push({ id: id, at: b.at });
+            });
+            keysOf(by).forEach(function (k) {
+                var a = by[k].sort(function (x, y) { return y.at - x.at; });
+                for (var i = 3; i < a.length; i++) del.push(a[i].id);
+            });
+            if (del.length && idb) return runTx(idb, ['backup'], function (tx) { var s = tx.objectStore('backup'); del.forEach(function (id) { s['delete'](id); }); });
+        })['catch'](function () {});
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
+    //  ۳) جایگزینیِ متدهای Storage (فقط برای localStorage؛ sessionStorage مثلِ قبل)
+    // ═════════════════════════════════════════════════════════════════════════
+    function warnEarly(k) {
+        if (earlyWarned[k]) return; earlyWarned[k] = true;
+        try { console.warn('[apex-store] «' + k + '» پیش از آماده‌شدنِ حافظه خوانده شد.'); } catch (e) {}
+    }
+    function blockedError() { var e = new Error('حافظهٔ برنامه آماده نیست؛ برنامه را دوباره باز کنید.'); e.name = 'ApexStoreBlocked'; return e; }
+
+    S.getItem = function (key) {
+        if (this !== LS || mode === 'legacy') return readPlain(key, rawGet.call(this, key));
+        key = String(key);
+        if (mode === 'idb') {
+            if (owned[key] === true) return mem[key];
+            var v = rawGet.call(this, key);
+            if (v === PTR) return null;
+            return readPlain(key, v);
+        }
+        if (hasOwn(early, key)) return early[key].del ? null : early[key].v;
+        var r = rawGet.call(this, key);
+        if (r === PTR) { warnEarly(key); return null; }
+        return readPlain(key, r);
+    };
+
+    S.setItem = function (key, value) {
+        if (this !== LS || mode === 'legacy') return legacySet(this, key, value);
+        key = String(key);
+        var plain = (typeof value === 'string') ? value : String(value);
+        if (mode === 'idb') {
+            if (owned[key] === true) {
+                if (mem[key] === plain) return;
+                mem[key] = plain;
+                enqueue(key, { op: 'put', v: plain });
+                bc(key, plain);
+                return;
+            }
+            if (plain.length >= IDB_MIN) {
+                var before = rawGet.call(this, key);
+                owned[key] = true; mem[key] = plain; delete zcache[key];
+                enqueue(key, { op: 'put', v: plain, ptr: true, fp: fp(before) });
+                bc(key, plain);
+                return;
+            }
+            delete zcache[key];
             return rawSet.call(this, key, plain);
         }
-        rawSet.call(this, key, packed);       // خطای سهمیه همان‌طور که بود بالا می‌رود
-        cache[key] = { stored: packed, plain: plain };
+        if (mode === 'blocked') throw blockedError();
+        // pending: پیش از آماده‌شدن
+        var r = rawGet.call(this, key);
+        if (r === PTR || plain.length >= IDB_MIN || hasOwn(early, key)) {
+            if (!hasOwn(early, key)) earlyOrder.push(key);
+            early[key] = { v: plain };
+            return;
+        }
+        delete zcache[key];
+        return rawSet.call(this, key, plain);
     };
 
     if (typeof rawDel === 'function') {
-        S.removeItem = function (key) { delete cache[key]; return rawDel.call(this, key); };
+        S.removeItem = function (key) {
+            if (this !== LS || mode === 'legacy') { delete zcache[key]; return rawDel.call(this, key); }
+            key = String(key);
+            if (mode === 'blocked') throw blockedError();
+            delete zcache[key];
+            if (mode === 'idb') {
+                if (owned[key] === true) {
+                    delete owned[key]; delete mem[key];
+                    enqueue(key, { op: 'del' });
+                    bc(key, null);
+                }
+                return rawDel.call(this, key);
+            }
+            if (!hasOwn(early, key)) earlyOrder.push(key);
+            early[key] = { del: true };
+            return rawDel.call(this, key);
+        };
     }
     if (typeof rawClear === 'function') {
-        S.clear = function () { cache = Object.create(null); return rawClear.call(this); };
+        S.clear = function () {
+            if (this !== LS || mode === 'legacy') { zcache = Object.create(null); return rawClear.call(this); }
+            if (mode === 'blocked') throw blockedError();
+            zcache = Object.create(null);
+            if (mode === 'idb') {
+                keysOf(owned).forEach(function (k) { enqueue(k, { op: 'del' }); bc(k, null); });
+                owned = Object.create(null); mem = Object.create(null);
+            } else {
+                early = Object.create(null); earlyOrder = [];
+            }
+            return rawClear.call(this);
+        };
     }
 
-    // ── ابزارِ بازبینی (فقط گزارش؛ هیچ اثری بر منطق ندارد) ───────────────────────
-    // نوشتن/خواندنِ «خامِ واقعی» — فقط برای ابزارِ عیب‌یابی و آزمون؛ برنامه از آن
-    // استفاده نمی‌کند. (بدونِ این، یک ابزارِ آزمون که می‌خواهد حافظه را لبریز کند،
-    // ناخواسته از خودِ لایهٔ فشرده‌سازی رد می‌شود و هرگز به سقف نمی‌رسد.)
-    window.__jqStoreRawSet = function (key, value) { return rawSet.call(localStorage, key, value); };
-    window.__jqStoreRawGet = function (key) { return rawGet.call(localStorage, key); };
+    // ═════════════════════════════════════════════════════════════════════════
+    //  ۴) API و ابزارِ عیب‌یابی (برنامه به این‌ها وابسته نیست)
+    // ═════════════════════════════════════════════════════════════════════════
+    function whenSaved() {
+        return new Promise(function (resolve) {
+            if (mode !== 'idb' || idle()) { resolve(true); return; }
+            waiters.push(resolve);
+        });
+    }
+    var readyResolve;
+    var ready = new Promise(function (res) { readyResolve = res; });
+
+    window.JouyaStore = {
+        version: 2,
+        ready: ready,
+        mode: function () { return mode; },
+        whenSaved: whenSaved,
+        pending: function () { return keysOf(queue).length + (inflight ? keysOf(inflight).length : 0); },
+        stats: function () {
+            var o = { mode: mode, idbKeys: 0, idbChars: 0, lsChars: 0, pending: this.pending(), failures: failures,
+                      lastError: lastError ? String(lastError.name || lastError.message || lastError) : null,
+                      migrated: stats0.migrated, recovered: stats0.recovered, lost: stats0.lost, superseded: stats0.superseded };
+            keysOf(owned).forEach(function (k) { o.idbKeys++; o.idbChars += (mem[k] || '').length; });
+            lsKeys().forEach(function (k) { try { o.lsChars += (rawGet.call(LS, k) || '').length + k.length; } catch (e) {} });
+            return new Promise(function (resolve) {
+                try {
+                    if (navigator.storage && navigator.storage.estimate) {
+                        navigator.storage.estimate().then(function (e) { o.usage = e.usage; o.quota = e.quota; resolve(o); }, function () { resolve(o); });
+                        return;
+                    }
+                } catch (e) {}
+                resolve(o);
+            });
+        },
+        // نگهداریِ نسخهٔ اصلیِ یک تصویر پیش از کوچک‌کردن (خارج از دادهٔ برنامه؛ سینک/خروجی نمی‌شود)
+        keepOriginal: function (ref, dataUrl) {
+            if (mode !== 'idb' || !idb) return Promise.resolve(false);
+            return runTx(idb, ['originals'], function (tx) {
+                tx.objectStore('originals').put({ ref: String(ref), at: Date.now(), data: dataUrl }, String(ref) + '\u0001' + Date.now());
+            }).then(function () { return true; }, function () { return false; });
+        },
+        listOriginals: function () {
+            if (!idb) return Promise.resolve([]);
+            return readStore(idb, 'originals').then(function (all) {
+                return keysOf(all).map(function (id) { var o = all[id] || {}; return { id: id, ref: o.ref, at: o.at, chars: (o.data || '').length }; });
+            });
+        },
+        getOriginal: function (id) {
+            if (!idb) return Promise.resolve(null);
+            return getMany(idb, 'originals', [id]).then(function (r) { return r[id] ? r[id].data : null; });
+        },
+        listBackups: function () {
+            if (!idb) return Promise.resolve([]);
+            return readStore(idb, 'backup').then(function (all) {
+                return keysOf(all).map(function (id) { var b = bkParse(id); return { id: id, key: b.key, why: b.why, at: b.at, chars: (all[id] || '').length }; })
+                    .sort(function (a, b) { return b.at - a.at; });
+            });
+        },
+        // بازگرداندنِ یک نسخهٔ backup روی همان کلید (از مسیرِ عادیِ setItem؛ برای پشتیبانی)
+        restoreBackup: function (id) {
+            if (!idb) return Promise.resolve(false);
+            return getMany(idb, 'backup', [id]).then(function (r) {
+                var v = r[id]; if (typeof v !== 'string') return false;
+                localStorage.setItem(bkParse(id).key, v);
+                return whenSaved();
+            });
+        }
+    };
+
+    // سازگاری با ابزارهای عیب‌یابیِ نسخهٔ قبلی (script.js → __hbStorageReport)
+    window.__jqStoreRawSet = function (key, value) { return rawSet.call(LS, key, value); };
+    window.__jqStoreRawGet = function (key) { return rawGet.call(LS, key); };
     window.__jqStoreRawLen = function (key) {
-        try { var v = rawGet.call(localStorage, key); return v == null ? 0 : v.length; } catch (e) { return 0; }
+        try { var v = rawGet.call(LS, key); return v == null ? 0 : v.length; } catch (e) { return 0; }
     };
     window.__jqStoreIsPacked = function (key) {
-        try { return isPacked(rawGet.call(localStorage, key)); } catch (e) { return false; }
+        try { return isPacked(rawGet.call(LS, key)); } catch (e) { return false; }
     };
     window.__jqStoreReport = function () {
-        var rows = [], total = 0, plainTotal = 0, i, k, raw, pl;
-        try {
-            for (i = 0; i < localStorage.length; i++) {
-                k = localStorage.key(i);
-                raw = rawGet.call(localStorage, k) || '';
-                pl = isPacked(raw) ? (localStorage.getItem(k) || '') : raw;
-                total += raw.length + k.length;
-                plainTotal += pl.length + k.length;
-                rows.push({ key: k, stored: raw.length, plain: pl.length, packed: isPacked(raw) });
-            }
-        } catch (e) {}
-        rows.sort(function (a, b) { return b.stored - a.stored; });
-        return {
-            storedChars: total, plainChars: plainTotal, limitChars: 5242880,
-            usedPercent: Math.round(total / 5242880 * 1000) / 10,
-            ratio: total ? Math.round(plainTotal / total * 10) / 10 : 1,
-            top: rows.slice(0, 12)
-        };
+        var rows = [], total = 0, plainTotal = 0;
+        lsKeys().forEach(function (k) {
+            var raw = rawGet.call(LS, k) || '', pl;
+            if (raw === PTR) pl = mem[k] || ''; else pl = isPacked(raw) ? (readPlain(k, raw) || '') : raw;
+            total += raw.length + k.length; plainTotal += pl.length + k.length;
+            rows.push({ key: k, stored: raw.length, plain: pl.length, packed: isPacked(raw), idb: raw === PTR });
+        });
+        rows.sort(function (a, b) { return b.plain - a.plain; });
+        return { mode: mode, storedChars: total, plainChars: plainTotal, limitChars: 5242880,
+                 usedPercent: Math.round(total / 5242880 * 1000) / 10,
+                 ratio: total ? Math.round(plainTotal / total * 10) / 10 : 1, top: rows.slice(0, 12) };
     };
-    // فشرده‌سازیِ یک‌بارهٔ کلیدهای بزرگی که از قبل خام ذخیره شده‌اند. هیچ داده‌ای
-    // تغییر نمی‌کند — فقط همان مقدار دوباره و فشرده نوشته می‌شود. اگر چیزی خطا داد،
-    // همان کلید خام می‌ماند و برنامه بدونِ هیچ تفاوتی کار می‌کند.
     window.__jqStoreCompact = function () {
-        var done = 0, saved = 0, keys = [], i, k, raw;
-        try { for (i = 0; i < localStorage.length; i++) keys.push(localStorage.key(i)); } catch (e) {}
-        for (i = 0; i < keys.length; i++) {
-            k = keys[i]; if (!k) continue;
+        if (mode !== 'legacy' || !HAS_Z) return { compacted: 0, savedChars: 0 };
+        var done = 0, saved = 0;
+        lsKeys().forEach(function (k) {
             try {
-                raw = rawGet.call(localStorage, k);
-                if (raw == null || raw.length < THRESHOLD || isPacked(raw)) continue;
+                var raw = rawGet.call(LS, k);
+                if (raw == null || raw.length < THRESHOLD || isPacked(raw) || raw === PTR) return;
                 var before = raw.length;
-                localStorage.setItem(k, raw);
+                legacySet(LS, k, raw);
                 var after = window.__jqStoreRawLen(k);
                 if (after < before) { done++; saved += (before - after); }
-            } catch (e) { /* همان کلید خام می‌ماند */ }
-        }
+            } catch (e) {}
+        });
         return { compacted: done, savedChars: saved };
     };
 
-    window.__JQ_STORE_READY = true;
-    // فشرده‌سازیِ اولیه در نخستینِ فرصتِ بیکار اجرا می‌شود تا راه‌اندازیِ برنامه
-    // ذره‌ای هم کند نشود. تا پیش از آن هم همه‌چیز مثلِ قبل کار می‌کند.
-    try {
-        var kick = function () { try { window.__jqStoreCompact(); } catch (e) {} };
-        if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(kick, { timeout: 8000 });
-        else setTimeout(kick, 2500);
-    } catch (e) {}
+    // ═════════════════════════════════════════════════════════════════════════
+    //  ۵) شروع
+    // ═════════════════════════════════════════════════════════════════════════
+    if (!BOOT) {
+        // صفحهٔ قدیمی (بدونِ بوتِ مرحله‌ای): همان رفتارِ نسخهٔ قبلی. اگر داده قبلاً به
+        // IndexedDB منتقل شده باشد، این صفحه نمی‌تواند آن را بخواند → هشدار و جلوگیری از بازنویسی.
+        window.__JQ_STORE_READY = HAS_Z;
+        if (lsHasPointers()) {
+            showBlock('نسخهٔ برنامه ناقص بارگذاری شد',
+                'اطلاعاتِ شما سالم و در حافظهٔ جدیدِ برنامه است، ولی این صفحه از نسخهٔ قدیمیِ برنامه است.<br>برنامه را ببندید و دوباره باز کنید (در مرورگر: صفحه را تازه کنید).', false);
+        } else if (HAS_Z) {
+            try {
+                var kick = function () { try { window.__jqStoreCompact(); } catch (e) {} };
+                if (typeof window.requestIdleCallback === 'function') window.requestIdleCallback(kick, { timeout: 8000 });
+                else setTimeout(kick, 2500);
+            } catch (e) {}
+        }
+        readyResolve({ mode: 'legacy' });
+        return;
+    }
+
+    var hasIDB = false;
+    try { hasIDB = (typeof indexedDB !== 'undefined' && !!indexedDB && typeof Promise === 'function'); } catch (e) { hasIDB = false; }
+    if (!hasIDB) {
+        if (lsHasPointers()) {
+            mode = 'blocked';
+            showBlock('حافظهٔ برنامه باز نشد', 'اطلاعاتِ شما در حافظهٔ دستگاه سالم است ولی این محیط به آن دسترسی ندارد. برنامه را دوباره باز کنید.', false);
+            readyResolve({ mode: 'blocked', blocked: true });
+        } else { goLegacy('IndexedDB در دسترس نیست'); readyResolve({ mode: 'legacy' }); }
+        return;
+    }
+
+    hydrate().then(function (res) {
+        if (res.lost.length) {
+            mode = 'blocked';
+            try { console.error('[apex-store] مقدارِ این کلیدها پیدا نشد:', res.lost); } catch (e) {}
+            showBlock('بخشی از اطلاعات پیدا نشد',
+                'مقدارِ این بخش‌ها در حافظهٔ دستگاه پیدا نشد: <b dir="ltr">' + res.lost.join(', ') + '</b><br>' +
+                'اگر فایلِ پشتیبانِ JSON دارید، پس از ادامه آن را وارد کنید. ابتدا «تلاشِ دوباره» را امتحان کنید.', true,
+                function () {
+                    res.lost.forEach(function (k) { try { rawDel.call(LS, k); } catch (e) {} });
+                    goIdb(res.d, res.ownedNow);
+                    readyResolve({ mode: 'idb' });
+                });
+            return;   // ready تا تصمیمِ کاربر باز نمی‌شود
+        }
+        goIdb(res.d, res.ownedNow);
+        readyResolve({ mode: 'idb', migrated: stats0.migrated });
+    })['catch'](function (err) {
+        lastError = err;
+        try { console.error('[apex-store] راه‌اندازیِ IndexedDB ناموفق:', err); } catch (e) {}
+        if (lsHasPointers()) {
+            mode = 'blocked';
+            showBlock('حافظهٔ برنامه باز نشد',
+                'اطلاعاتِ شما در حافظهٔ دستگاه سالم است ولی این بار باز نشد. «تلاشِ دوباره» را بزنید؛ اگر ادامه داشت، دستگاه را یک بار ری‌استارت کنید.', false);
+            readyResolve({ mode: 'blocked', blocked: true });
+        } else {
+            goLegacy(err && (err.message || err.name));
+            readyResolve({ mode: 'legacy' });
+        }
+    });
 })();
