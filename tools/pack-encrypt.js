@@ -34,7 +34,9 @@ try { AES = require(path.join(__dirname, 'aesctr.js')); }
 catch (e) { console.log('::warning::[pack] tools/aesctr.js پیدا نشد؛ رمزنگاری اعمال نشد.'); process.exit(0); }
 
 // فایل‌هایی که نباید رمز شوند (بوت‌استرپ و سرویس‌ورکر)
-var SKIP = { '__jouya_dec.js': 1, 'service-worker.js': 1 };
+// jouya-store.js (موتورِ حافظه) پیش از __jouya_dec.js و در <head> بار می‌شود؛ اگر رمز شود،
+// استابش (__jouyaDec) هنوز تعریف نشده و برنامه اجرا نمی‌شود → عمداً رمز نمی‌شود.
+var SKIP = { '__jouya_dec.js': 1, 'service-worker.js': 1, 'jouya-store.js': 1 };
 
 var DEC_FILENAME = '__jouya_dec.js';
 
