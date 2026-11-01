@@ -10428,7 +10428,7 @@ html, body { overflow-anchor: none; }
 /* نوارِ کناریِ رنگی بر اساسِ جهتِ معامله (همان رنگ‌های قبلیِ این لیست) */
 .cbtx-row .sales-card { border-left: 6px solid #94a3b8; }
 .cbtx-row.cbtx-income  .sales-card { border-left-color: #16a34a; }
-.cbtx-row.cbtx-expense .sales-card { border-left-color: #ea8a1e; }
+.cbtx-row.cbtx-expense .sales-card { border-left-color: #dc2626; }   /* (APEX) خروجی = سرخ */
 .cbtx-row.cbtx-neutral .sales-card { border-left-color: #94a3b8; }
 
 /* انیمیشنِ فقط opacity — مانندِ لیستِ معاملاتِ شخص */
@@ -10595,4 +10595,61 @@ body.dark-mode .apex-ble-pdlink { color: #93c5fd; }
     .bill-act-btn svg { width: 16px; height: 16px; }
     .nd-refresh-btn { width: 28px; height: 28px; }
     .nd-refresh-btn svg { width: 17px; height: 17px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   (APEX) جدولِ اقلامِ بلِ فروش و خرید — ظاهرِ صاف مثلِ صفحه‌گسترده (اکسل):
+   فیلدها بدونِ قاب/زمینهٔ جداگانه، فقط خطوطِ جدول؛ سلولِ فعال با کادرِ رنگی.
+   فقط #sales-items-table و #purchase-items-table؛ چیدمان و منطق دست‌نخورده.
+   ══════════════════════════════════════════════════════════════════════════════ */
+#sales-items-table tbody td, #purchase-items-table tbody td,
+#sales-items-table tfoot td, #purchase-items-table tfoot td { border-left: 1px solid #e7ebf1; border-bottom: 1px solid #e7ebf1; }
+#sales-items-table tbody td:last-child, #purchase-items-table tbody td:last-child,
+#sales-items-table tfoot td:last-child, #purchase-items-table tfoot td:last-child { border-left: none; }
+#sales-items-table tbody input:not([type="hidden"]), #purchase-items-table tbody input:not([type="hidden"]),
+#sales-items-table tbody select, #purchase-items-table tbody select,
+.bill-items-box #sales-items-table tbody .product-search-input,
+.bill-items-box #purchase-items-table tbody .product-search-input {
+    border: 0 !important; border-radius: 0 !important; background: transparent !important; box-shadow: none !important;
+}
+#sales-items-table tbody input:not([type="hidden"]):focus, #purchase-items-table tbody input:not([type="hidden"]):focus,
+#sales-items-table tbody select:focus, #purchase-items-table tbody select:focus {
+    outline: none !important; box-shadow: inset 0 0 0 2px var(--bill-navy, #1e3a5f) !important; background: rgba(30, 58, 95, .05) !important;
+}
+body.dark-mode #sales-items-table tbody td, body.dark-mode #purchase-items-table tbody td,
+body.dark-mode #sales-items-table tfoot td, body.dark-mode #purchase-items-table tfoot td { border-left-color: rgba(255,255,255,.08); border-bottom-color: rgba(255,255,255,.08); }
+body.dark-mode #sales-items-table tbody input:not([type="hidden"]), body.dark-mode #purchase-items-table tbody input:not([type="hidden"]),
+body.dark-mode #sales-items-table tbody select, body.dark-mode #purchase-items-table tbody select,
+body.dark-mode .bill-items-box #sales-items-table tbody .product-search-input,
+body.dark-mode .bill-items-box #purchase-items-table tbody .product-search-input {
+    border: 0 !important; background: transparent !important; box-shadow: none !important;
+}
+body.dark-mode #sales-items-table tbody input:not([type="hidden"]):focus, body.dark-mode #purchase-items-table tbody input:not([type="hidden"]):focus {
+    box-shadow: inset 0 0 0 2px #3b82f6 !important; background: rgba(59, 130, 246, .08) !important;
+}
+
+/* (APEX) قطعاتِ یک قلم: دکمهٔ سه‌نقطهٔ عمودی، برچسب‌های قطعه و فورمِ کوچک */
+.bill-act-btn.bill-act-more svg { stroke: none; }
+.apex-parts { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+.apex-part-chip { display: inline-block; font-size: .72rem; line-height: 1.5; padding: 0 7px; border-radius: 10px; white-space: nowrap; }
+.apex-part-chip.is-add { background: #dcfce7; color: #166534; }
+.apex-part-chip.is-rem { background: #fee2e2; color: #991b1b; }
+body.dark-mode .apex-part-chip.is-add { background: rgba(22, 163, 74, .18); color: #86efac; }
+body.dark-mode .apex-part-chip.is-rem { background: rgba(220, 38, 38, .18); color: #fca5a5; }
+.apex-parts-modal .apex-parts-stock { display: block; margin-top: 4px; color: #64748b; font-size: .78rem; }
+.apex-parts-modal .apex-parts-hint { margin: 10px 2px 0; color: #64748b; font-size: .8rem; line-height: 1.7; }
+.apex-parts-list { display: flex; flex-direction: column; gap: 6px; }
+.apex-parts-li { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 10px; border-radius: 8px; font-size: .85rem; }
+.apex-parts-li.is-add { background: #f0fdf4; color: #166534; }
+.apex-parts-li.is-rem { background: #fef2f2; color: #991b1b; }
+.apex-parts-li button { border: 0; background: transparent; color: inherit; font-size: 1.1rem; cursor: pointer; line-height: 1; }
+body.dark-mode .apex-parts-li.is-add { background: rgba(22, 163, 74, .14); color: #86efac; }
+body.dark-mode .apex-parts-li.is-rem { background: rgba(220, 38, 38, .14); color: #fca5a5; }
+
+/* (APEX) «اطلاعات فروش/خرید» در موبایل: ستون‌ها به اندازهٔ محتوا (با _apexTxdFit) */
+@media (max-width: 768px) {
+    #tx-detail .txd-items-table.apex-txd-fit { table-layout: fixed; }
+    #tx-detail .txd-items-table.apex-txd-fit th,
+    #tx-detail .txd-items-table.apex-txd-fit td { padding-left: 2px; padding-right: 2px; white-space: nowrap; }
+    #tx-detail .txd-items-table.apex-txd-fit td:nth-child(2) { white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
 }

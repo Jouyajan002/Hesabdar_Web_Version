@@ -1032,6 +1032,36 @@ if (typeof window !== 'undefined') window._saleCostSnapshot = _saleCostSnapshot;
 // ========================================================================
 var _fifoProfitCache = { sig: null, maps: null, at: 0 };
 
+// (APEX) سهمِ «تخفیفِ کلیِ بل» برای هر قلم.
+//  تخفیفِ کلیِ بل = totalDiscount − جمعِ تخفیفِ اقلام. این مبلغ قبلاً در مفاد/بهای تمام‌شده
+//  کسر نمی‌شد (فقط تخفیفِ هر قلم کسر می‌شد). سهمِ هر قلم به نسبتِ ارزشِ خالصِ همان قلم
+//  (تعداد × قیمت − تخفیفِ قلم + مبلغِ ضایعاتِ همان قلم) است؛ سطرِ ضایعات سهم نمی‌گیرد چون
+//  درآمدش از قبل روی قلمِ اصلی حساب می‌شود. بلی که تخفیفِ کلی ندارد → خروجیِ خالی (بی‌اثر).
+function _fifoBillDiscShares(tx) {
+    var out = {};
+    try {
+        if (!tx || !Array.isArray(tx.items)) return out;
+        var i, it, line = 0;
+        for (i = 0; i < tx.items.length; i++) { it = tx.items[i]; if (it) line += parseFloat(it.discount) || 0; }
+        var extra = (parseFloat(tx.totalDiscount) || 0) - line;
+        if (!(extra > 0.000001)) return out;
+        var w = [], W = 0;
+        for (i = 0; i < tx.items.length; i++) {
+            it = tx.items[i];
+            var v = 0;
+            if (it && !it.isWastage) v = (parseFloat(it.quantity) || 0) * (parseFloat(it.price) || 0) - (parseFloat(it.discount) || 0) + (parseFloat(it.wastageAmount) || 0);
+            if (!(v > 0)) v = 0;
+            w.push(v); W += v;
+        }
+        if (!(W > 0)) {
+            for (i = 0; i < tx.items.length; i++) { it = tx.items[i]; if (it && !it.isWastage) { out[i] = extra; break; } }
+            return out;
+        }
+        for (i = 0; i < w.length; i++) if (w[i] > 0) out[i] = extra * w[i] / W;
+    } catch (e) {}
+    return out;
+}
+
 function _fifoItemBase(it) {
     var qty = parseFloat(it.quantity) || 0;
     var price = parseFloat(it.price) || 0;
@@ -1081,6 +1111,7 @@ function _computeFifoProfitMaps() {
     var saleMap = {};       // { saleId: مفادِ کلِ بل به «ارزِ سند» }  ← سازگارِ کامل با کدِ فعلی
     var itemMap = {};       // { 'saleId|idx': مفادِ قلم به «ارزِ سند» }
     var saleMapBase = {};   // { saleId: مفادِ کلِ بل به «ارزِ مرجع» } ← برای گزارشِ تجمیعیِ صحیح
+    var _partCredit = [];   // (APEX) بهای قطعاتِ «کسری» که به انبار برگشته‌اند → از بهای همان فروش کم می‌شود
     var itemMapBase = {};   // { 'saleId|idx': مفادِ قلم به «ارزِ مرجع» }
     // «برگشت از فروش»: مقدارِ برگشت‌شده (واحدِ اصلی) برای هر قلمِ فروشِ اصلی، تا سودِ همان
     // بخش از فروش معکوس شود. کلید: 'origSaleId|origItemIndex'.
@@ -1174,12 +1205,15 @@ function _computeFifoProfitMaps() {
                 if (_shipTot > 0 && typeof _computeShippingDistribution === 'function' && Array.isArray(tx.items)) {
                     try { _shipDist = _computeShippingDistribution(tx.items, _shipTot, tx.shippingMethod || 'value'); } catch (e) { _shipDist = null; }
                 }
+                var _pds = _fifoBillDiscShares(tx);
                 tx.items.forEach(function (it, _pi) {
                     if (!it || it.isService || it.productId == null) return;
                     var b = _fifoItemBase(it);
                     if (b.baseQty <= 0) return;
                     var _shipUnit = (_shipDist && _shipDist[_pi] && _shipDist[_pi].shippingUnitCost != null) ? (parseFloat(_shipDist[_pi].shippingUnitCost) || 0) : 0;
-                    var _landedBase = b.perBase + _shipUnit;
+                    // (APEX) تخفیفِ خرید (تخفیفِ همین قلم + سهمش از تخفیفِ کلیِ بل) بهای هر واحد را کم می‌کند
+                    var _pDiscUnit = ((parseFloat(it.discount) || 0) + (_pds[_pi] || 0)) / b.baseQty;
+                    var _landedBase = Math.max(0, b.perBase - _pDiscUnit) + _shipUnit;
                     var _bcost = {}; _bcost[cur] = _landedBase;   // هزینهٔ سریِ خرید به ارزِ همان بل
                     ensure(it.productId).push({
                         ts: ts, kind: 0, seq: seq, qty: b.baseQty,
@@ -1187,8 +1221,22 @@ function _computeFifoProfitMaps() {
                         buyCur: cur,          // ارزِ سریِ خرید
                         buyTx: tx             // مرجعِ سند برای خواندنِ نرخِ ثبت‌شدهٔ خرید
                     });
+                    // (APEX) قطعاتِ قلمِ خرید: «کسری» = قطعه با همان قیمت وارد انبار می‌شود (سریِ تازه)؛
+                    //  «افزودن» = قطعه از انبار در همین جنس به کار رفت (خروجیِ بدونِ مفاد).
+                    if (Array.isArray(it.parts)) it.parts.forEach(function (pt) {
+                        var _pq = parseFloat(pt && pt.quantity) || 0;
+                        if (!pt || pt.productId == null || !(_pq > 0)) return;
+                        if (pt.mode === 'add') {
+                            ensure(pt.productId).push({ ts: ts, kind: 1, seq: seq, qty: _pq, baseQty: _pq, currency: cur, saleTx: tx,
+                                isPurchaseReturn: true, costAcc: 0, costAccBase: 0, estAcc: false });
+                        } else {
+                            var _pc = {}; _pc[cur] = parseFloat(pt.price) || 0;
+                            ensure(pt.productId).push({ ts: ts, kind: 0, seq: seq, qty: _pq, cost: _pc, buyCur: cur, buyTx: tx });
+                        }
+                    });
                 });
             } else if (tx.type === 'فروش') {
+                var _sds = _fifoBillDiscShares(tx);
                 tx.items.forEach(function (it, idx) {
                     if (!it || it.isService || it.productId == null) return;
                     var b = _fifoItemBase(it);
@@ -1213,11 +1261,35 @@ function _computeFifoProfitMaps() {
                         wastageRev: _wRev,
                         saleId: tx.id, itemIndex: idx, currency: cur,
                         perBase: _spMap,
-                        discount: parseFloat(it.discount) || 0,
+                        // (APEX) تخفیفِ همین قلم + سهمش از تخفیفِ کلیِ بل
+                        discount: (parseFloat(it.discount) || 0) + (_sds[idx] || 0),
                         costAcc: 0,           // بهای تجمیعی به «ارزِ فروش» (سازگارِ کدِ فعلی)
                         costAccBase: 0,       // بهای تجمیعی به «ارزِ مرجع» (محاسبهٔ صحیح)
                         estAcc: false,        // آیا در انباشتِ بها تخمینی رخ داد؟
                         saleTx: tx            // مرجعِ سند برای نرخِ فروش
+                    });
+                    // (APEX) قطعاتِ قلمِ فروش (درآمدش از قبل در قیمتِ همین قلم است):
+                    //  «افزودن» → بهای قطعه (FIFO) از مفادِ همین فروش کم می‌شود؛
+                    //  «کسری»  → قطعه با بهای خودش به انبار برمی‌گردد و همان بها از بهای فروش کم می‌شود.
+                    if (Array.isArray(it.parts)) it.parts.forEach(function (pt, pj) {
+                        var _pq = parseFloat(pt && pt.quantity) || 0;
+                        if (!pt || pt.productId == null || !(_pq > 0)) return;
+                        if (pt.mode === 'add') {
+                            var _z = {}; _z[cur] = 0;
+                            ensure(pt.productId).push({ ts: ts, kind: 1, seq: seq, qty: _pq, baseQty: _pq, wastageRev: 0,
+                                saleId: tx.id, itemIndex: idx + '#p' + pj, currency: cur, perBase: _z, discount: 0,
+                                costAcc: 0, costAccBase: 0, estAcc: false, saleTx: tx });
+                        } else {
+                            var _uc = parseFloat(pt.unitCost);
+                            if (!(_uc > 0)) {
+                                var _pp = prodById[pt.productId];
+                                _uc = 0;
+                                try { if (_pp) _uc = parseFloat(_resolveProductPrice(_pp, cur, 'purchase', 'primary').price) || 0; } catch (e) {}
+                            }
+                            var _cc = {}; _cc[cur] = _uc;
+                            ensure(pt.productId).push({ ts: ts, kind: 0, seq: seq, qty: _pq, cost: _cc, buyCur: cur, buyTx: tx });
+                            _partCredit.push({ tx: tx, v: _uc * _pq });
+                        }
                     });
                 });
             } else if (tx.type === 'برگشت' && tx.returnType === 'فروش') {
@@ -1499,12 +1571,25 @@ function _computeFifoProfitMaps() {
         //  همان نقشه‌هایی می‌نشیند که بقیهٔ برنامه می‌خوانند. نتیجه: داشبورد،
         //  مفادِ هر بل و هر دو شاخهٔ گزارش یک عدد می‌دهند.
         // ════════════════════════════════════════════════════════════════════
+        // (APEX) بهای قطعاتِ کسری‌شده (برگشته به انبار) به مفادِ همان فروش افزوده می‌شود
+        try {
+            _partCredit.forEach(function (pc) {
+                if (!pc || !pc.tx || pc.tx.id == null || !(pc.v > 0)) return;
+                saleMap[pc.tx.id] = _round((saleMap[pc.tx.id] || 0) + pc.v);
+                var _cb = _toBaseAt(pc.v, pc.tx);
+                saleMapBase[pc.tx.id] = _round((saleMapBase[pc.tx.id] || 0) + _cb.v);
+                if (_cb.est) estimatedSales[pc.tx.id] = true;
+            });
+        } catch (e) {}
+
         try {
             txs.forEach(function (tx) {
                 if (!tx || tx.type !== 'فروش' || !Array.isArray(tx.items)) return;
+                var _vds = _fifoBillDiscShares(tx);
                 tx.items.forEach(function (it, idx) {
                     if (!it || !it.isService || it.isWastage) return;
                     var pr = _svcItemProfit(it);
+                    if (_vds[idx]) pr -= _vds[idx];     // (APEX) سهمِ تخفیفِ کلیِ بل
                     if (!pr) return;
                     var _k = tx.id + '|' + idx;
                     itemMap[_k] = _round((itemMap[_k] || 0) + pr);
@@ -1707,7 +1792,8 @@ function computeSaleProfit(tx, products) {
     var p = 0;
     var hasAnyComputed = false;
     var anySnapshot = false;
-    tx.items.forEach(function (it) {
+    var _cds = _fifoBillDiscShares(tx);
+    tx.items.forEach(function (it, _cx) {
         if (it.isService) return;
         // اولویت با «قیمت خریدِ لحظهٔ فروش» که هنگام فروش روی قلم ذخیره شده است؛ تا اگر بعداً
         // همان جنس به قیمت متفاوت خریداری شود، مفادِ فروش‌های قبلی تغییر نکند. این مقدار فقط
@@ -1747,7 +1833,7 @@ function computeSaleProfit(tx, products) {
         if (!purchasePrice) {
             purchasePrice = _fallbackCostInCurrency(it, prod, txCur, tx);
         }
-        p += ((parseFloat(it.price) || 0) - purchasePrice) * (parseFloat(it.quantity) || 0) - (parseFloat(it.discount) || 0);
+        p += ((parseFloat(it.price) || 0) - purchasePrice) * (parseFloat(it.quantity) || 0) - (parseFloat(it.discount) || 0) - (_cds[_cx] || 0);
     });
     // اگر هیچ جنسی پیدا نشد (مثلاً همه حذف شده‌اند)، از مقدار ذخیره‌شده استفاده کن
     if (!hasAnyComputed) return (typeof tx.profit === 'number' && !isNaN(tx.profit)) ? tx.profit : (parseFloat(tx.profit) || 0);
@@ -3735,6 +3821,11 @@ function savePerson() {
             _personPickerCallback(result.data);
             _personPickerCallback = null;
             _personPickerCategory = null;
+            // (APEX) پایانِ حالتِ انتخاب — دقیقاً مثلِ انتخابِ شخصِ موجود از لیست. بدونِ این،
+            // وضعیتِ انتخابگرِ اشخاص باقی می‌ماند و انتخابگرِ اجناسِ بعدی را باطل می‌کرد.
+            if (typeof _restorePickerBackButton === 'function') _restorePickerBackButton();
+            var _pth = document.querySelector('#persons-table thead');
+            if (_pth) _pth.style.display = '';
             var ret = _personPickerReturnSection;
             if (ret) {
                 showSection(ret);
@@ -4053,6 +4144,8 @@ function saveSale() {
             if (row.dataset.lineCost  != null && String(row.dataset.lineCost).trim()  !== '') _saleItm.lineCost = parseFloat(row.dataset.lineCost) || 0;
             if (row.dataset.lineFrom  != null && String(row.dataset.lineFrom).trim()  !== '') _saleItm.dateFrom = String(row.dataset.lineFrom).trim();
             if (row.dataset.lineTo    != null && String(row.dataset.lineTo).trim()    !== '') _saleItm.dateTo   = String(row.dataset.lineTo).trim();
+            // (APEX) قطعاتِ افزوده/کسری‌شدهٔ همین قلم
+            if (!isService && row.dataset.parts) { var _apParts = _apexPartsForSave(row, currency, false); if (_apParts) _saleItm.parts = _apParts; }
             items.push(_saleItm);
         }
     });
@@ -4617,6 +4710,17 @@ registerDataRebuilder({
             if (!tx || !Array.isArray(tx.items)) return;
             if (tx.type !== 'فروش' && tx.type !== 'خرید') return;
             tx.items.forEach(function (it) {
+                // (APEX) قطعاتِ همین قلم: «افزودن» قطعه را از گدام خارج و «کسری» آن را وارد می‌کند
+                //  (در فروش و خرید یکسان؛ قطعه همیشه به واحدِ اصلیِ خودش است).
+                if (it && Array.isArray(it.parts)) it.parts.forEach(function (pt) {
+                    if (!pt || pt.productId == null) return;
+                    var _pq = parseFloat(pt.quantity) || 0;
+                    if (!(_pq > 0)) return;
+                    var _pi = products.findIndex(function (p) { return p.id == pt.productId; });
+                    if (_pi === -1) return;
+                    products[_pi].stock = (parseFloat(products[_pi].stock) || 0) + (pt.mode === 'add' ? -_pq : _pq);
+                    changed = true;
+                });
                 var idx = products.findIndex(function (p) { return p.id == it.productId; });
                 if (idx === -1) return;
                 var qty = _engQtyForStock(it);
@@ -5225,6 +5329,8 @@ function savePurchase() {
             // ویرایشِ همین قلم در همین بل (فورمِ کوچک) — فقط روی همین سند
             if (row.dataset.lineDetails != null && String(row.dataset.lineDetails).trim() !== '') _purItm.details = String(row.dataset.lineDetails).trim();
             if (row.dataset.lineExpiry  != null && String(row.dataset.lineExpiry).trim()  !== '') _purItm.expiryDate = String(row.dataset.lineExpiry).trim();
+            // (APEX) قطعاتِ افزوده/کسری‌شدهٔ همین قلم
+            if (row.dataset.parts) { var _apPartsP = _apexPartsForSave(row, null, true); if (_apPartsP) _purItm.parts = _apPartsP; }
             items.push(_purItm);
         } else if (productId === 'new') {
             showMessage('توجه', 'لطفاً جنس جدید را از مدیریت اجناس ثبت کنید.');
@@ -6859,6 +6965,24 @@ function _resolveProductPrice(product, currency, kind, unitType) {
         try {
             if (typeof db === 'undefined') return null;
             var v;
+            // (APEX) فرمِ ثبتِ جنس قیمتِ «ارزِ پایه» را در فیلدِ قدیمیِ …AFN هم آینه می‌کند.
+            //  وقتی ارزِ پایه AFN نیست (مثلاً دالر)، آن آینه در واقع مبلغِ دالری است و نباید
+            //  به‌عنوانِ قیمتِ افغانی خوانده شود؛ قیمتِ افغانی از نقشهٔ ارزیِ جنس تبدیل می‌شود
+            //  (همان مسیری که در حالتِ معکوس — پایهٔ افغانی، بل به دالر — کار می‌کند).
+            if (cur === 'AFN') {
+                var _bc = null;
+                try { if (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) _bc = CurrencySystem.getBaseCode(); } catch (e) {}
+                var _mp = isSec ? (isSale ? product.secondarySalePrices : product.secondaryPurchasePrices)
+                                : (isSale ? product.salePrices : product.purchasePrices);
+                var _lg = isSec ? (isSale ? product.secondarySalePriceAFN : product.secondaryPurchasePriceAFN)
+                                : (isSale ? product.salePriceAFN : product.purchasePriceAFN);
+                if (_bc && _bc !== 'AFN' && _mp && typeof _mp === 'object' && !Array.isArray(_mp) &&
+                    !(parseFloat(_mp.AFN) > 0) && parseFloat(_mp[_bc]) > 0 &&
+                    parseFloat(_lg) === parseFloat(_mp[_bc]) && typeof db._convertProductPrice === 'function') {
+                    v = parseFloat(db._convertProductPrice(_mp, null, null, 'AFN'));
+                    return (isNaN(v) || v <= 0) ? null : v;
+                }
+            }
             if (isSec) {
                 if (typeof db.getSecondaryPrice === 'function') v = db.getSecondaryPrice(product, cur, isSale ? 'sale' : 'purchase');
             } else if (isSale) {
@@ -12040,6 +12164,11 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
     // ستون فقط وقتی اضافه می‌شود که «حداقل یک قلم» جزئیات داشته باشد (در غیرِ آن اصلاً نمایش داده نمی‌شود).
     var _allProdsForDetails = null;
     function _itemDetailText(it) {
+        // (APEX) قطعاتِ افزوده/کسری‌شدهٔ همین قلم هم در ستونِ «جزئیات» نوشته می‌شود
+        var _base = _itemDetailText0(it), _pt = _apexPartsSummaryText(it);
+        return _pt ? (_base ? (_base + ' — ' + _pt) : _pt) : _base;
+    }
+    function _itemDetailText0(it) {
         try {
             if (it && it.details != null && String(it.details).trim()) return String(it.details).trim();
             if (it && it.productId != null) {
@@ -13955,6 +14084,13 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
         + '.rep-actions,#rep-share-menu,#rep-share-btn,.rep-share-wrap,#__ppbar,#__ppmenu,.print-btn{display:none !important;}'
         + 'html.jouya-pp-live body{padding:18px 20px !important;box-sizing:border-box !important;}'
         + '@media print{html.jouya-pp-live body{padding:0 !important;}}'
+        // (APEX) موبایل: ستون‌های جدولِ اقلامِ بل به اندازهٔ حروفِ هر ستون (ستونِ «شرح» دیگر ۴۸٪ ثابت نیست)
+        + (((window.innerWidth || 1024) <= 768)
+            ? 'table.items{table-layout:auto !important;}'
+              + 'table.items th,table.items td{width:auto !important;}'
+              + 'table.items .c-num,table.items .c-qty,table.items .c-price,table.items .c-total{white-space:nowrap;}'
+              + 'table.items td.c-desc,table.items td.c-details{overflow-wrap:anywhere;}'
+            : '')
         + '</style>';
     var headInject = vp + (assetsHead || '') + (extraCss || '') + ppFix;
     var doc = String(rawHtml);
@@ -14026,7 +14162,15 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
                 body.style.transform = ''; body.style.width = '';
                 frame.style.width = PP_DESIGN_W + 'px';
                 frame.style.maxWidth = 'none';
-                var sc = avail / PP_DESIGN_W;
+                // (APEX) اگر خودِ صفحهٔ بل (A4 + حاشیه) از ۸۰۰px پهن‌تر است، با همان پهنای واقعی
+                // رندر و کوچک می‌شود تا هیچ بخشی از عرض بیرون نماند.
+                var _natW = Math.max(PP_DESIGN_W, (d.documentElement ? d.documentElement.scrollWidth : 0) || 0, body.scrollWidth || 0);
+                if (_natW > PP_DESIGN_W) frame.style.width = _natW + 'px';
+                // پهنای «درونِ» نگه‌دارنده (بدونِ paddingِ دو طرف) — وگرنه لبهٔ چپِ بل بریده می‌شد
+                var _avC = avail;
+                try { var _w0 = window.getComputedStyle(wrap); _avC = avail - (parseFloat(_w0.paddingLeft) || 0) - (parseFloat(_w0.paddingRight) || 0); } catch (_) {}
+                if (!(_avC > 0)) _avC = avail;
+                var sc = _avC / _natW;
                 var ch = Math.max(body.scrollHeight || 0,
                                   (d.documentElement ? d.documentElement.scrollHeight : 0) || 0, 220);
                 frame.style.height = Math.ceil(ch + 8) + 'px';
@@ -14035,6 +14179,13 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
                 holder.style.width = '100%';
                 holder.style.overflow = 'hidden';
                 holder.style.height = Math.ceil((ch + 8) * sc) + 'px';
+                // (APEX) پیش‌نمایش در وسطِ صفحه (نه چسبیده به نوارِ بالا) — وقتی کوتاه‌تر از صفحه است
+                try {
+                    var _wcs = window.getComputedStyle(wrap);
+                    var _inner = (wrap.clientHeight || 0) - (parseFloat(_wcs.paddingTop) || 0) - (parseFloat(_wcs.paddingBottom) || 0);
+                    var _hh = Math.ceil((ch + 8) * sc);
+                    holder.style.marginTop = (_inner > _hh) ? Math.floor((_inner - _hh) / 2) + 'px' : '0px';
+                } catch (_) {}
                 try { console.log('[jouya-preview] fit(mobile)', { avail: avail, design: PP_DESIGN_W, scale: Math.round(sc * 100) / 100 }); } catch (_) {}
                 return;
             }
@@ -16244,6 +16395,8 @@ function editTransaction(id) {
                                         if (typeof _updateUnitSwitchVisibility === 'function') _updateUnitSwitchVisibility(row, _p);
                                     }
                                 } catch(_e) {}
+                                // (APEX) بازگردانیِ قطعاتِ همین قلم
+                                if (item && Array.isArray(item.parts) && item.parts.length) { row.dataset.parts = JSON.stringify(item.parts); try { _apexPartsRender(row); } catch (_e2) {} }
                                 if (priceInput) updateItemTotal(priceInput);
                             }
                         });
@@ -16373,6 +16526,8 @@ function editTransaction(id) {
                                         if (typeof _updateUnitSwitchVisibility === 'function') _updateUnitSwitchVisibility(row, _p2);
                                     }
                                 } catch(_e) {}
+                                // (APEX) بازگردانیِ قطعاتِ همین قلم
+                                if (item && Array.isArray(item.parts) && item.parts.length) { row.dataset.parts = JSON.stringify(item.parts); try { _apexPartsRender(row); } catch (_e2) {} }
                                 if (priceInput) updatePurchaseItemTotal(priceInput);
                             }
                         });
@@ -20234,6 +20389,8 @@ function saveAndPrintSale() {
                 var _snap2 = _saleCostSnapshot(_snapProd2, quantity, _unitType, _secFactor);
                 if (_snap2) { _saleItm2.purchasePriceAFN = _snap2.purchasePriceAFN; _saleItm2.purchasePriceUSD = _snap2.purchasePriceUSD; }
             }
+            // (APEX) قطعاتِ افزوده/کسری‌شدهٔ همین قلم
+            if (row.dataset.parts) { var _apParts2 = _apexPartsForSave(row, currency, false); if (_apParts2) _saleItm2.parts = _apParts2; }
             items.push(_saleItm2);
         }
     });
@@ -26218,6 +26375,9 @@ function _selectProductForPicker(product) {
     // اگر از بخشِ گزارش (اجناس / مفاد و سرمایه) وارد شده باشیم → انتخابِ چندگانه (تیک/برداشتنِ تیک)
     if (typeof _rpProductPick !== 'undefined' && _rpProductPick) { _rpToggleProductPick(product); return; }
 
+    // (APEX) انتخابِ قطعه برای «افزودن/کسری قطعات» یک قلمِ بل
+    if (_productPickerInput && _productPickerInput.__apexPart) { _apexPartPicked(product); return; }
+
     // اگر از فورمِ برگشت (گدام) وارد شده باشیم → درج در فورمِ برگشت
     if (typeof _srProductPick !== 'undefined' && _srProductPick) {
         var _ret = _srProductPick.section;
@@ -29487,8 +29647,9 @@ function ssbExportData() {
     try {
         const data = db.exportData ? db.exportData() : { success: false };
         if (data.success) {
-            __hbSaveJsonFile(JSON.stringify(data.data, null, 2), `export_${Date.now()}.json`)
-                .then(function (res) { ssbShowMsg(__hbSavedJsonMsg(res), !res.ok); })
+            // (APEX) با انتخابِ محلِ ذخیره (نامِ فایل همان export_<زمان>.json می‌ماند)
+            __hbSaveJsonFilePick(JSON.stringify(data.data, null, 2), `export_${Date.now()}.json`)
+                .then(function (res) { if (res && res.cancelled) { ssbShowMsg('ذخیره لغو شد.', false); return; } ssbShowMsg(__hbSavedJsonMsg(res), !res.ok); })
                 .catch(function (e) { ssbShowMsg('خطا در خروجی: ' + ((e && e.message) || ''), true); });
         }
     } catch(e) { ssbShowMsg('خطا در خروجی', true); }
@@ -32022,6 +32183,14 @@ function showProductInOutList(productId, fromDetail) {
     allTx.forEach(function(tx) {
         if (tx.type !== 'فروش' && tx.type !== 'خرید') return;
         if (!tx.items || !Array.isArray(tx.items)) return;
+        // (APEX) قطعاتی که از/به قلمِ دیگری در همین بل افزوده/کسری شده‌اند
+        tx.items.forEach(function(it) {
+            if (!it || !Array.isArray(it.parts)) return;
+            it.parts.forEach(function(pt) {
+                if (pt && pt.productId == productId && (parseFloat(pt.quantity) || 0) > 0)
+                    events.push({ sortKey: (tx.createdAt || tx.date || ''), kind: 'part', tx: tx, item: it, part: pt });
+            });
+        });
         var item = tx.items.find(function(it) { return it.productId == productId; });
         if (!item) return;
         events.push({ sortKey: (tx.createdAt || tx.date || ''), kind: 'tx', tx: tx, item: item });
@@ -32218,6 +32387,32 @@ function showProductInOutList(productId, fromDetail) {
                 stockCls: (runningStock < 0 ? 'is-remaining' : 'is-settled'),
                 badgeCls: isSaleRet ? 'badge-blue' : 'badge-red',
                 kebabHtml: _rKebab
+            });
+        } else if (ev.kind === 'part') {
+            // (APEX) ردیفِ قطعه: «کسری» = ورود به گدام ، «افزودن» = خروج از گدام
+            var ptx = ev.tx, ppt = ev.part || {}, pit = ev.item || {};
+            var pq = parseFloat(ppt.quantity || 0) || 0;
+            var pIn = (ppt.mode !== 'add');
+            runningStock += pIn ? pq : -pq;
+            var pParty = ptx.customerName || ptx.supplierName || ptx.personName || '---';
+            tr.className = 'sales-card-row ptx-row ' + (pIn ? 'ptx-purchase' : 'ptx-return');
+            tr.style.cursor = 'pointer';
+            tr.dataset.date = (ptx.createdAt || ptx.date || '');
+            tr.dataset.amount = String(parseFloat(ppt.price || 0) || 0);
+            tr.dataset.dir = pIn ? 'ورود' : 'خروج';
+            (function(txId) { tr.onclick = function() { viewTransaction(txId); }; })(ptx.id);
+            tr.innerHTML = _inoutSalesCardHtml({
+                icon: pIn ? '<i class="fas fa-arrow-down"></i>' : '<i class="fas fa-arrow-up"></i>',
+                moveText: pIn ? ('ورود (کسری قطعه از «' + (pit.productName || '') + '»)') : ('خروج (افزودن قطعه به «' + (pit.productName || '') + '»)'),
+                partyText: pParty,
+                billNo: (ptx.billNumber || 'ندارد'),
+                dateText: formatAfghanDateTime(ptx.date, ptx.createdAt),
+                qtyText: (pIn ? '+ ' : '- ') + formatNumber(pq) + ' ' + (ppt.unit || product.unit || 'عدد'),
+                priceText: formatNumber(parseFloat(ppt.price || 0) || 0) + ' ' + _curSymGlobal(ptx.currency || _baseCur()) + ' <small style="opacity:.65;">' + (ptx.currency || _baseCur()) + '</small>',
+                stockHtml: _formatQtyWithUnits(runningStock, product) + (runningStock < 0 ? ' <small style="color:#dc2626">(کمبود)</small>' : ''),
+                stockCls: (runningStock < 0 ? 'is-remaining' : 'is-settled'),
+                badgeCls: pIn ? 'badge-blue' : 'badge-red',
+                kebabHtml: ''
             });
         } else {
             var rec = ev.rec, it2 = ev.item || {};
@@ -40510,6 +40705,7 @@ function showTxDetail(id, retSection) {
             });
         }
         _set('txd-items', ih, true);
+        try { setTimeout(_apexTxdFit, 0); } catch (e) {}
     }
 
     _set('txd-remaining', _pdCur(remaining, cur));
@@ -41195,15 +41391,19 @@ function ndRenderRecent() {
             if (ta === tbb) return (parseFloat(b && b.id) || 0) - (parseFloat(a && a.id) || 0);
             return ta < tbb ? 1 : -1;
         });
-        rows = txs.slice(0, 8);
+        // (APEX) تا ۱۰۰ معاملهٔ اخیر آماده می‌شود؛ ۸ تای اول مثلِ قبل نشان داده می‌شود و
+        // _ndFillRecent در دسکتاپ (شبکهٔ قفل‌شده) بقیه را تا پر شدنِ کارت — بدونِ اسکرول — می‌افزاید.
+        rows = txs.slice(0, 100);
     } catch (e) { rows = []; }
 
     if (!rows.length) {
+        window.__ndRecentRows = [];
         tb.innerHTML = '<tr><td colspan="4" class="nd-recent-empty">هنوز معامله‌ای ثبت نشده است</td></tr>';
         return;
     }
-    var html = '';
-    rows.forEach(function (t) {
+    var html = '', _all = [];
+    rows.forEach(function (t, _ri) {
+        var _h0 = html; html = '';
         var type = t.type || '';
         if (type === 'برگشت') type = 'برگشت از ' + (t.returnType || '');
         var party = t.personName || t.customerName || t.supplierName || t.partyName || '---';
@@ -41217,8 +41417,42 @@ function ndRenderRecent() {
              +   '<td class="nd-tx-amt">' + ndNum(amt) + ' ' + ndEsc(cur) + '</td>'
              +   '<td class="nd-tx-st">' + ndEsc(st) + '</td>'
              + '</tr>';
+        _all.push(html);
+        html = _h0 + (_ri < 8 ? html : '');
     });
+    window.__ndRecentRows = _all;
     tb.innerHTML = html;
+    try { _ndFillRecent(); } catch (e) {}
+}
+
+// (APEX) کارتِ «آخرین معامله»: وقتی بلندیِ داشبورد روی صفحه قفل است (کلاسِ nd-fit؛ هر نمایشگرِ
+// پهن‌تر از ۷۶۸px)، تعدادِ سطرها دقیقاً به اندازهٔ ظرفیتِ کارت در همان نمایشگر می‌شود: تا پر شدنِ
+// کارت افزوده و اگر بیش از ظرفیت بود کم می‌شود — بدونِ فضای خالی و بدونِ اسکرول.
+// در موبایل (بدونِ قفل) همان رفتارِ قبلی (۸ سطر در کادرِ قابلِ پیمایش) دست‌نخورده می‌ماند.
+function _ndRecentReset() {
+    try {
+        var tb = document.getElementById('nd-recent-body');
+        if (!tb) return;
+        while (tb.rows.length > 8 && !tb.querySelector('.nd-recent-empty')) tb.deleteRow(tb.rows.length - 1);
+    } catch (e) {}
+}
+function _ndFillRecent() {
+    try {
+        var grid = document.getElementById('nd-grid');
+        var tb = document.getElementById('nd-recent-body');
+        var body = document.querySelector('#dashboard .nd-recent > .nd-card-body');
+        var all = window.__ndRecentRows || [];
+        if (!grid || !tb || !body || !grid.classList.contains('nd-fit') || !body.clientHeight) return;
+        if (tb.querySelector('.nd-recent-empty')) return;
+        // اگر حتی سطرهای فعلی جا نمی‌شوند، از آخر کم کن (حداقل یک سطر)
+        while (tb.rows.length > 1 && body.scrollHeight > body.clientHeight + 1) tb.deleteRow(tb.rows.length - 1);
+        var n = tb.rows.length;
+        while (n < all.length) {
+            tb.insertAdjacentHTML('beforeend', all[n]);
+            if (body.scrollHeight > body.clientHeight + 1) { tb.deleteRow(tb.rows.length - 1); break; }
+            n++;
+        }
+    } catch (e) {}
 }
 
 // ── جستجوی سراسری روی تمام بخش‌ها ────────────────────────────────────────────
@@ -43041,6 +43275,7 @@ function ndFitDashboardHeight() {
             ndClearDashScale(grid);
             grid.classList.remove('nd-fit');
             if (body) body.classList.remove('nd-dash-fit');
+            _ndRecentReset();
             return;
         }
         // فاصلهٔ پایینِ ناحیهٔ محتوا (جای نوارِ پایین) در داشبورد لازم نیست، چون خودِ
@@ -43049,6 +43284,9 @@ function ndFitDashboardHeight() {
 
         // اندازه‌گیری‌ها باید «بدونِ مقیاس» انجام شوند، وگرنه نتیجه غلط می‌شود.
         ndClearDashScale(grid);
+        // (APEX) سطرهای افزودهٔ «آخرین معامله» پیش از سنجش برداشته می‌شوند تا محاسبهٔ بلندی
+        // دقیقاً مثلِ قبل (با ۸ سطر) انجام شود؛ پس از چیدمانِ نهایی دوباره پر می‌شوند.
+        _ndRecentReset();
 
         var top = grid.getBoundingClientRect().top;
         var vh  = window.innerHeight || document.documentElement.clientHeight || 0;
@@ -43109,6 +43347,7 @@ function ndFitDashboardHeight() {
 
         // بومِ نمودار با چیدمانِ نهایی اندازه می‌گیرد تا سهمِ فضای باقی‌مانده را بگیرد
         ndSizeChartCanvas();
+        try { _ndFillRecent(); } catch (e) {}
         // اصلاحِ دوم: اگر پس از نشستنِ چیدمان باز هم راهنما/پاورقیِ نمودار بیرون ماند،
         // بوم دقیقاً به همان اندازه کوتاه می‌شود تا کاملاً دیده شوند.
         try {
@@ -44170,7 +44409,7 @@ function _cbtxSalesCardHtml(o) {
                     '<div class="sales-card-amount">مبلغ: <span>' + (o.amountText || '-') + '</span></div>' +
                     '<div class="sales-card-remaining ' + (o.totalCls || 'is-settled') + '">مبلغ کل: <span>' + (o.totalText || '-') + '</span></div>' +
                     '<div class="sales-card-actions">' +
-                        '<span class="sales-card-status-badge ' + (o.badgeCls || 'badge-black') + '"><i class="fas fa-check"></i></span>' +
+                        // (APEX) تیکِ وضعیت در کارتِ معاملاتِ حساب برداشته شد؛ ورودی (سبز) / خروجی (سرخ) با رنگِ لبهٔ کارت معلوم است
                         (o.kebabHtml || '') +
                     '</div>' +
                 '</div>' +
@@ -44270,7 +44509,7 @@ function _apexUiInit() {
     try {
         var _rz = 0;
         window.addEventListener('resize', function () {
-            clearTimeout(_rz); _rz = setTimeout(_bfcFitAll, 120);
+            clearTimeout(_rz); _rz = setTimeout(function () { _bfcFitAll(); try { _apexTxdFit(); } catch (e) {} }, 120);
         });
     } catch (e) {}
 }
@@ -44302,8 +44541,14 @@ function _braInstall() {
         var tbl = document.getElementById(cfg.table);
         if (!tb || !tbl) return;
         tbl.classList.add('bill-flex-table');
+        var _tabFix = (cfg.tbody === 'sales-items-body' || cfg.tbody === 'purchase-items-body');
         var run = function () {
             for (var i = 0; i < tb.children.length; i++) _braDecorateRow(tb.children[i], cfg);
+            // (APEX) Tab فقط روی فیلدها: هر دکمه/آیکنِ داخلِ ردیف‌ها از ترتیبِ Tab بیرون می‌رود
+            if (_tabFix) {
+                var _bs = tb.querySelectorAll('button:not([tabindex]), a[href]:not([tabindex]), [role="button"]:not([tabindex])');
+                for (var j = 0; j < _bs.length; j++) _bs[j].setAttribute('tabindex', '-1');
+            }
             _bfcSchedule(cfg.table);
         };
         run();
@@ -44320,15 +44565,20 @@ function _braInstall() {
     try { if (document.fonts && document.fonts.ready) document.fonts.ready.then(_bfcFitAll); } catch (e) {}
 }
 
-function _braButtonsHtml() {
+function _braButtonsHtml(withMore) {
     var c = '<circle cx="12" cy="12" r="9"/>';
+    // (APEX) tabindex="-1": کلیدِ Tab فقط روی فیلدهای ورودِ رقم/متن حرکت می‌کند، نه روی این آیکن‌ها
     return '<span class="bill-acts">' +
-        '<button type="button" class="bill-act-btn bill-act-plus" title="افزایشِ تعداد" aria-label="افزایشِ تعداد" onclick="apexRowStep(this,1)">' +
+        '<button type="button" tabindex="-1" class="bill-act-btn bill-act-plus" title="افزایشِ تعداد" aria-label="افزایشِ تعداد" onclick="apexRowStep(this,1)">' +
             '<svg viewBox="0 0 24 24" aria-hidden="true">' + c + '<path d="M12 8v8M8 12h8"/></svg></button>' +
-        '<button type="button" class="bill-act-btn bill-act-minus" title="کاهشِ تعداد" aria-label="کاهشِ تعداد" onclick="apexRowStep(this,-1)">' +
+        '<button type="button" tabindex="-1" class="bill-act-btn bill-act-minus" title="کاهشِ تعداد" aria-label="کاهشِ تعداد" onclick="apexRowStep(this,-1)">' +
             '<svg viewBox="0 0 24 24" aria-hidden="true">' + c + '<path d="M8 12h8"/></svg></button>' +
-        '<button type="button" class="bill-act-btn bill-act-del" title="حذف" aria-label="حذف" onclick="apexRowRemove(this)">' +
+        '<button type="button" tabindex="-1" class="bill-act-btn bill-act-del" title="حذف" aria-label="حذف" onclick="apexRowRemove(this)">' +
             '<svg viewBox="0 0 24 24" aria-hidden="true">' + c + '<path d="M9.2 9.2l5.6 5.6M14.8 9.2l-5.6 5.6"/></svg></button>' +
+        (withMore
+            ? '<button type="button" tabindex="-1" class="bill-act-btn bill-act-more" title="قطعات" aria-label="قطعات" aria-haspopup="menu" onclick="apexRowMore(this,event)">' +
+                  '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="18" r="1.6" fill="currentColor" stroke="none"/></svg></button>'
+            : '') +
     '</span>';
 }
 
@@ -44350,7 +44600,8 @@ function _braDecorateRow(tr, cfg) {
     var td = document.createElement('td');
     td.className = 'bill-acts-cell';
     // سطرِ ضایعات از فیصدی ساخته می‌شود؛ افزایش/کاهش/حذفِ دستی برایش معنا ندارد
-    if (!(tr.dataset && tr.dataset.wastage === '1')) td.innerHTML = _braButtonsHtml();
+    var _withMore = !!(cfg && (cfg.tbody === 'sales-items-body' || cfg.tbody === 'purchase-items-body'));
+    if (!(tr.dataset && tr.dataset.wastage === '1')) td.innerHTML = _braButtonsHtml(_withMore);
     tr.appendChild(td);
 }
 
@@ -45064,3 +45315,410 @@ function _apexImgNormalize() {
         });
     })();
 }
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  (APEX) قطعاتِ یک قلمِ بل — «افزودن قطعات» و «کسری قطعات»                     ║
+// ║  ─────────────────────────────────────────────────────────────────────────── ║
+// ║  مثال: فروشِ کمپیوترِ ۷۲۸۰ بدونِ رمِ ۴ گیگ → «کسری قطعات»:                     ║
+// ║    • مبلغِ قطعه (تعداد × قیمت) از قیمتِ فروشِ همان قلم کم می‌شود،               ║
+// ║    • موجودیِ رم در گدام زیاد می‌شود (قطعه به انبار برمی‌گردد).                   ║
+// ║  «افزودن قطعات»: مبلغِ قطعه به قیمتِ قلم افزوده و موجودیِ قطعه کم می‌شود.          ║
+// ║  ذخیره: روی خودِ قلم در it.parts = [{productId, name, unit, quantity, price, mode}]║
+// ║  (mode: 'add' | 'remove'). جمعِ بل همان تعداد × قیمتِ قلم است؛ قطعات فقط روی     ║
+// ║  موجودی (Rebuilderِ stock)، بهای تمام‌شده/مفاد (FIFO) و ورود/خروجِ جنس اثر دارند. ║
+// ║  مفادِ فروش: افزودن → (قیمتِ قطعه − بهای قطعه)×تعداد اضافه می‌شود؛ کسری →         ║
+// ║  همان مقدار کم می‌شود (قطعه با بهای خودش به انبار برمی‌گردد).                     ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+function _apexPartsOf(row) {
+    try { var a = JSON.parse((row && row.dataset && row.dataset.parts) || '[]'); return Array.isArray(a) ? a : []; }
+    catch (e) { return []; }
+}
+function _apexPartsRowCtx(row) {
+    if (!row) return null;
+    var tb = row.parentElement;
+    var isPurchase = !!(tb && tb.id === 'purchase-items-body');
+    if (!isPurchase && !(tb && tb.id === 'sales-items-body')) return null;
+    var hid = row.querySelector(isPurchase ? '.purchase-item-product' : '.item-product');
+    var pid = hid ? String(hid.value || '').trim() : '';
+    return {
+        row: row, isPurchase: isPurchase,
+        productId: pid,
+        isProduct: !!(pid && pid !== 'new' && pid !== 'WASTE-BILL' && pid.indexOf('SVC-') !== 0 && !(row.dataset && (row.dataset.serviceId || row.dataset.wastage === '1'))),
+        nameInput: row.querySelector('.product-search-input'),
+        qtyInput: row.querySelector(isPurchase ? '.purchase-item-quantity' : '.item-quantity'),
+        priceInput: row.querySelector(isPurchase ? '.purchase-item-price' : '.item-price'),
+        section: isPurchase ? 'purchase-form' : 'sales-form',
+        currency: (document.getElementById(isPurchase ? 'purchase-currency' : 'sales-currency') || {}).value || _baseCur()
+    };
+}
+function _apexNum(v) {
+    var s = (typeof toEnglishDigits === 'function') ? toEnglishDigits(String(v == null ? '' : v)) : String(v == null ? '' : v);
+    var n = parseFloat(s.replace(/,/g, ''));
+    return isFinite(n) ? n : 0;
+}
+
+// ── منوی سه‌نقطهٔ ردیف ─────────────────────────────────────────────────────────
+function apexRowMore(btn, ev) {
+    if (ev && ev.stopPropagation) ev.stopPropagation();
+    var row = btn && btn.closest ? btn.closest('tr') : null;
+    var old = document.getElementById('apex-row-menu');
+    if (old) { var same = old._row === row; _apexCloseRowMenu(); if (same) return; }
+    var c = _apexPartsRowCtx(row);
+    if (!c) return;
+    var dis = c.isProduct ? '' : ' disabled';
+    var m = document.createElement('div');
+    m.id = 'apex-row-menu';
+    m.className = 'apex-pop-menu';
+    m.setAttribute('role', 'menu');
+    m._row = row;
+    m.innerHTML =
+        '<button type="button" role="menuitem" data-act="add"' + dis + '><i class="fas fa-plus-circle"></i><span>افزودن قطعات</span></button>' +
+        '<button type="button" role="menuitem" data-act="remove"' + dis + '><i class="fas fa-minus-circle"></i><span>کسری قطعات</span></button>';
+    m.addEventListener('click', function (e) {
+        e.stopPropagation();
+        var b = e.target.closest ? e.target.closest('button[data-act]') : null;
+        if (!b || b.disabled) return;
+        var act = b.getAttribute('data-act');
+        _apexCloseRowMenu();
+        apexPartsOpen(row, act, null);
+    });
+    document.body.appendChild(m);
+    var r = btn.getBoundingClientRect();
+    var mw = m.offsetWidth, mh = m.offsetHeight;
+    var vw = window.innerWidth || document.documentElement.clientWidth;
+    var vh = window.innerHeight || document.documentElement.clientHeight;
+    var left = Math.min(Math.max(8, r.left), vw - mw - 8);
+    var top = r.bottom + 6;
+    if (top + mh > vh - 8) top = Math.max(8, r.top - mh - 6);
+    m.style.left = left + 'px'; m.style.top = top + 'px';
+    setTimeout(function () {
+        var close = function (e) { if (m.contains(e.target)) return; _apexCloseRowMenu(); };
+        m._close = close;
+        document.addEventListener('click', close, true);
+    }, 0);
+}
+function _apexCloseRowMenu() {
+    var m = document.getElementById('apex-row-menu');
+    if (!m) return;
+    if (m._close) document.removeEventListener('click', m._close, true);
+    m.parentNode.removeChild(m);
+}
+
+// ── فورمِ کوچکِ قطعه (هم‌شکلِ فورمِ ویرایشِ جنس در بل) ───────────────────────────
+function apexPartsOpen(row, mode, product, keep) {
+    var c = _apexPartsRowCtx(row);
+    if (!c || !c.isProduct) return;
+    _apexPartsClose();
+    var isAdd = (mode === 'add');
+    keep = keep || {};
+    var fmt = (typeof formatNumber === 'function') ? formatNumber : String;
+    var esc = (typeof _bleEsc === 'function') ? _bleEsc : function (t) { return String(t == null ? '' : t); };
+    var price = keep.price;
+    if (product && (price == null || price === '')) {
+        try {
+            var _r = _resolveProductPrice(product, c.currency, c.isPurchase ? 'purchase' : 'sale', 'primary');
+            price = (_r && _r.price) ? _r.price : '';
+        } catch (e) { price = ''; }
+    }
+    var qty = (keep.qty != null && keep.qty !== '') ? keep.qty : 1;
+    var stockTxt = '';
+    if (product) {
+        var st = parseFloat(product.stock) || 0;
+        stockTxt = 'موجودی در گدام: ' + fmt(st) + ' ' + esc(product.unit || '');
+    }
+    var parentName = c.nameInput ? c.nameInput.value : '';
+    var parts = _apexPartsOf(row);
+    var listHtml = '';
+    if (parts.length) {
+        listHtml = '<div class="wh-field full"><label>قطعاتِ ثبت‌شدهٔ همین قلم</label><div class="apex-parts-list">' +
+            parts.map(function (pt, i) {
+                return '<div class="apex-parts-li ' + (pt.mode === 'add' ? 'is-add' : 'is-rem') + '">' +
+                    '<span>' + (pt.mode === 'add' ? '+ ' : '− ') + esc(pt.name) + ' × ' + fmt(pt.quantity) + ' — ' + fmt(_apexNum(pt.quantity) * _apexNum(pt.price)) + '</span>' +
+                    '<button type="button" tabindex="-1" title="حذفِ این قطعه" onclick="apexPartsRemove(' + i + ')">×</button></div>';
+            }).join('') + '</div></div>';
+    }
+    var fields =
+        '<div class="wh-field full"><label>قلمِ بل</label><input type="text" value="' + esc(parentName) + '" readonly tabindex="-1"></div>' +
+        '<div class="wh-field full"><label>وصل به گدام</label>' +
+            '<input type="text" id="apx-part-name" readonly placeholder="برای انتخاب از گدام یا ثبتِ جنسِ جدید کلیک کنید" value="' + esc(product ? product.name : '') + '" onclick="apexPartsPick()" style="cursor:pointer;">' +
+            (stockTxt ? '<small class="apex-parts-stock">' + stockTxt + '</small>' : '') + '</div>' +
+        '<div class="wh-field"><label>تعداد' + (product && product.unit ? ' (' + esc(product.unit) + ')' : '') + '</label>' +
+            '<input type="number" id="apx-part-qty" step="any" min="0" value="' + esc(qty) + '" oninput="_apexPartsSum()"></div>' +
+        '<div class="wh-field"><label>قیمت</label>' +
+            '<input type="number" id="apx-part-price" step="0.01" min="0" value="' + esc(price == null ? '' : price) + '" oninput="_apexPartsSum()"></div>' +
+        '<div class="wh-field full"><label>مجموعه</label><input type="text" id="apx-part-sum" readonly tabindex="-1"></div>' +
+        listHtml;
+    var title = (isAdd ? 'افزودن قطعات' : 'کسری قطعات');
+    var overlay = document.createElement('div');
+    overlay.className = 'modal ble-modal apex-parts-modal';
+    overlay.id = 'apex-parts-modal';
+    overlay.style.display = 'block';
+    overlay.innerHTML =
+        '<div class="modal-content wh-modal-content ble-modal-content">' +
+            '<div class="bill-header-bar ble-header">' +
+                '<button type="button" class="btn-back-header" onclick="_apexPartsClose()" title="برگشت"><i class="fas fa-arrow-right"></i></button>' +
+                '<h3 class="bill-header-title">' + title + '</h3>' +
+            '</div>' +
+            '<div class="modal-body"><div class="wh-form-grid ble-grid">' + fields + '</div>' +
+                '<p class="apex-parts-hint">' + (isAdd
+                    ? 'مجموعه به قیمتِ فروشِ این قلم افزوده و از موجودیِ این قطعه در گدام کم می‌شود.'
+                    : 'مجموعه از قیمتِ این قلم کم و به موجودیِ این قطعه در گدام افزوده می‌شود.') + '</p></div>' +
+            '<div class="modal-footer bill-footer"><span class="bill-footer-actions">' +
+                '<button type="button" class="bill-btn-save" onclick="apexPartsSave()"><i class="fas fa-folder"></i> ثبت</button>' +
+            '</span></div>' +
+        '</div>';
+    overlay.addEventListener('click', function (e) { if (e.target === overlay) _apexPartsClose(); });
+    document.body.appendChild(overlay);
+    window.__apexPartsCtx = { row: row, mode: isAdd ? 'add' : 'remove', product: product || null };
+    _apexPartsSum();
+    var f = document.getElementById(product ? 'apx-part-qty' : 'apx-part-name');
+    if (f && product) { try { f.focus(); f.select(); } catch (e) {} }
+    if (typeof applyNumberSystemToDocument === 'function') { try { applyNumberSystemToDocument(); } catch (e) {} }
+}
+function _apexPartsClose() {
+    var m = document.getElementById('apex-parts-modal');
+    if (m && m.parentNode) m.parentNode.removeChild(m);
+}
+function _apexPartsSum() {
+    var q = _apexNum((document.getElementById('apx-part-qty') || {}).value);
+    var p = _apexNum((document.getElementById('apx-part-price') || {}).value);
+    var s = document.getElementById('apx-part-sum');
+    if (s) s.value = (typeof formatNumber === 'function') ? formatNumber(Math.round(q * p * 100) / 100) : String(q * p);
+}
+// رفتن به گدام (لیستِ اجناس در حالتِ انتخاب؛ ثبتِ جنسِ جدید هم از همان‌جا) — مثلِ دکمهٔ «گدام» در بل
+function apexPartsPick() {
+    var ctx = window.__apexPartsCtx;
+    if (!ctx) return;
+    var c = _apexPartsRowCtx(ctx.row);
+    if (!c) return;
+    ctx.keep = { qty: (document.getElementById('apx-part-qty') || {}).value, price: (document.getElementById('apx-part-price') || {}).value };
+    if (!ctx.product) ctx.keep.price = '';
+    _apexPartsClose();
+    _productPickerReturnSection = c.section;
+    _productPickerInput = { __apexPart: true };
+    _productPickerIsPurchase = c.isPurchase;
+    showSection('products-list');
+    if (typeof loadProductsList === 'function') loadProductsList();
+    setTimeout(function () { if (typeof _setupPickerBackButton === 'function') _setupPickerBackButton('products-list', c.section); }, 0);
+}
+// برگشت از گدام با جنسِ انتخاب‌شده (از _selectProductForPicker)
+function _apexPartPicked(product) {
+    var ctx = window.__apexPartsCtx;
+    var ret = _productPickerReturnSection;
+    _productPickerInput = null;
+    _productPickerIsPurchase = false;
+    _productPickerReturnSection = null;
+    if (typeof _restorePickerBackButton === 'function') _restorePickerBackButton();
+    window._returningFromProductPicker = ret;
+    if (ret) showSection(ret);
+    window._returningFromProductPicker = null;
+    if (!ctx || !ctx.row || !document.body.contains(ctx.row)) return;
+    var full = null;
+    try { full = ((db.getAllProducts && db.getAllProducts()) || db.getProducts() || []).find(function (p) { return p.id == product.id; }) || product; } catch (e) { full = product; }
+    var keep = ctx.keep || {};
+    if (!ctx.product || ctx.product.id != full.id) keep = { qty: keep.qty, price: '' };
+    setTimeout(function () { apexPartsOpen(ctx.row, ctx.mode, full, keep); }, 0);
+}
+function apexPartsSave() {
+    var ctx = window.__apexPartsCtx;
+    if (!ctx || !ctx.row) return;
+    var c = _apexPartsRowCtx(ctx.row);
+    if (!c) return;
+    var msg = function (t) { if (typeof showToast === 'function') showToast(t, 'warning'); else if (typeof showMessage === 'function') showMessage('توجه', t); };
+    if (!ctx.product) { msg('لطفاً قطعه را از گدام انتخاب کنید.'); return; }
+    if (String(ctx.product.id) === String(c.productId)) { msg('قطعه نمی‌تواند خودِ همین جنس باشد.'); return; }
+    var q = _apexNum((document.getElementById('apx-part-qty') || {}).value);
+    var p = _apexNum((document.getElementById('apx-part-price') || {}).value);
+    if (!(q > 0)) { msg('تعدادِ قطعه باید بیشتر از صفر باشد.'); return; }
+    if (p < 0) { msg('قیمت نمی‌تواند منفی باشد.'); return; }
+    var amount = q * p;
+    var parentQty = _apexNum(c.qtyInput && c.qtyInput.value);
+    if (!(parentQty > 0)) parentQty = 1;
+    var cur = _apexNum(c.priceInput && c.priceInput.value);
+    var next = cur + (ctx.mode === 'add' ? 1 : -1) * (amount / parentQty);
+    if (next < 0) { msg('مبلغِ کسری از قیمتِ این قلم بیشتر است.'); return; }
+    var parts = _apexPartsOf(ctx.row);
+    parts.push({ productId: ctx.product.id, name: ctx.product.name || '', unit: ctx.product.unit || '', quantity: q, price: p, mode: ctx.mode });
+    ctx.row.dataset.parts = JSON.stringify(parts);
+    _apexSetRowPrice(c, next);
+    _apexPartsRender(ctx.row);
+    _apexPartsClose();
+}
+function apexPartsRemove(i) {
+    var ctx = window.__apexPartsCtx;
+    if (!ctx || !ctx.row) return;
+    var c = _apexPartsRowCtx(ctx.row);
+    var parts = _apexPartsOf(ctx.row);
+    var pt = parts[i];
+    if (!c || !pt) return;
+    var parentQty = _apexNum(c.qtyInput && c.qtyInput.value); if (!(parentQty > 0)) parentQty = 1;
+    var amount = _apexNum(pt.quantity) * _apexNum(pt.price);
+    var cur = _apexNum(c.priceInput && c.priceInput.value);
+    _apexSetRowPrice(c, Math.max(0, cur + (pt.mode === 'add' ? -1 : 1) * (amount / parentQty)));
+    parts.splice(i, 1);
+    if (parts.length) ctx.row.dataset.parts = JSON.stringify(parts); else delete ctx.row.dataset.parts;
+    _apexPartsRender(ctx.row);
+    apexPartsOpen(ctx.row, ctx.mode, ctx.product, { qty: (document.getElementById('apx-part-qty') || {}).value, price: (document.getElementById('apx-part-price') || {}).value });
+}
+function _apexSetRowPrice(c, v) {
+    if (!c.priceInput) return;
+    var r = Math.round(v * 1e6) / 1e6;
+    c.priceInput.value = String(r);
+    try { if (c.priceInput.dataset) delete c.priceInput.dataset.suggested; } catch (e) {}
+    c.priceInput.dispatchEvent(new Event('input', { bubbles: true }));
+    c.priceInput.dispatchEvent(new Event('change', { bubbles: true }));
+}
+// نمایشِ قطعات زیرِ نامِ همان قلم
+function _apexPartsRender(row) {
+    if (!row) return;
+    var cell = row.querySelector('.product-search-wrapper') ? row.querySelector('.product-search-wrapper').parentElement : null;
+    if (!cell) return;
+    var box = cell.querySelector('.apex-parts');
+    var parts = _apexPartsOf(row);
+    if (!parts.length) { if (box) box.parentNode.removeChild(box); return; }
+    if (!box) { box = document.createElement('div'); box.className = 'apex-parts'; cell.appendChild(box); }
+    var fmt = (typeof formatNumber === 'function') ? formatNumber : String;
+    var esc = (typeof _bleEsc === 'function') ? _bleEsc : function (t) { return String(t == null ? '' : t); };
+    box.innerHTML = parts.map(function (pt) {
+        return '<span class="apex-part-chip ' + (pt.mode === 'add' ? 'is-add' : 'is-rem') + '" title="' + (pt.mode === 'add' ? 'قطعهٔ افزوده' : 'قطعهٔ کسری') + '">' +
+            (pt.mode === 'add' ? '+ ' : '− ') + esc(pt.name) + ' × ' + fmt(pt.quantity) + '</span>';
+    }).join('');
+}
+// برای ذخیره در سند: قطعاتِ همان قلم (+ بهای واحدِ قطعهٔ کسری در فروش، قفل‌شده در لحظهٔ ثبت)
+function _apexPartsForSave(row, currency, isPurchase) {
+    var parts = _apexPartsOf(row);
+    if (!parts.length) return null;
+    var all = [];
+    try { all = (db.getAllProducts && db.getAllProducts()) || db.getProducts() || []; } catch (e) {}
+    return parts.map(function (pt) {
+        var o = { productId: pt.productId, name: pt.name, unit: pt.unit, quantity: _apexNum(pt.quantity), price: _apexNum(pt.price), mode: pt.mode === 'add' ? 'add' : 'remove' };
+        if (!isPurchase && o.mode === 'remove') {
+            var pr = all.find(function (p) { return p.id == pt.productId; });
+            var uc = 0;
+            try { if (pr) uc = _resolveProductPrice(pr, currency, 'purchase', 'primary').price || 0; } catch (e) {}
+            o.unitCost = uc;
+        }
+        return o;
+    });
+}
+function _apexPartsSummaryText(it) {
+    try {
+        if (!it || !Array.isArray(it.parts) || !it.parts.length) return '';
+        var fmt = (typeof formatNumber === 'function') ? formatNumber : String;
+        var adds = it.parts.filter(function (p) { return p && p.mode === 'add'; });
+        var rems = it.parts.filter(function (p) { return p && p.mode !== 'add'; });
+        var f = function (p) { return (p.name || '') + ' × ' + fmt(p.quantity); };
+        var s = [];
+        if (adds.length) s.push('افزوده: ' + adds.map(f).join('، '));
+        if (rems.length) s.push('کسری: ' + rems.map(f).join('، '));
+        return s.join(' | ');
+    } catch (e) { return ''; }
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  (APEX) «اطلاعات فروش/خرید» در موبایل: عرضِ ستون‌های جدولِ اجناس و خدمات به      ║
+// ║  اندازهٔ حروفِ عنوان و محتوای هر ستون (مثلِ جدولِ بلِ فروش/خرید)؛ ستونِ نام بقیهٔ  ║
+// ║  فضا را می‌گیرد و متنِ بلند در چند خط می‌شکند تا همه‌چیز در یک نگاه دیده شود.       ║
+// ║  در دسکتاپ (پهن‌تر از ۷۶۸px) رفتارِ قبلی دست‌نخورده می‌ماند.                        ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+function _apexTxdFit() {
+    var table = document.querySelector('#tx-detail .txd-items-table');
+    if (!table || !table.tHead || !table.tHead.rows.length) return;
+    var ths = table.tHead.rows[0].cells, n = ths.length, NAME = 1;
+    var cg = table.querySelector('colgroup');
+    var mob = (window.innerWidth || 1024) <= 768;
+    if (!mob) {
+        if (cg && cg.dataset.apex) { cg.parentNode.removeChild(cg); table.classList.remove('apex-txd-fit'); table.style.width = ''; table.style.minWidth = ''; }
+        return;
+    }
+    if (!table.offsetParent) return;                         // بخش دیده نمی‌شود
+    if (!cg) {
+        cg = document.createElement('colgroup'); cg.dataset.apex = '1';
+        for (var i = 0; i < n; i++) cg.appendChild(document.createElement('col'));
+        table.insertBefore(cg, table.firstChild);
+    }
+    var cols = cg.children;
+    table.classList.add('apex-txd-fit');                     // پیش از سنجش، تا فاصله‌گذاریِ نهایی سنجیده شود
+    var ctx = _bfcCtx();
+    var rows = table.tBodies.length ? table.tBodies[0].rows : [];
+    var total = 0;
+    for (var c = 0; c < n; c++) {
+        if (c === NAME) continue;
+        var w = _bfcTextW(ctx, ths[c], (ths[c].textContent || '').trim()) + _bfcBoxX(ths[c]);
+        for (var r = 0; r < rows.length; r++) {
+            var cell = rows[r].cells[c];
+            if (!cell || cell.colSpan > 1) continue;
+            var t = (cell.textContent || '').replace(/\s+/g, ' ').trim();
+            var cw = _bfcTextW(ctx, cell, t) + _bfcBoxX(cell);
+            if (cw > w) w = cw;
+        }
+        w = Math.ceil(w + 4);
+        if (w < 26) w = 26;
+        cols[c].style.width = w + 'px';
+        total += w;
+    }
+    cols[NAME].style.width = '';
+    var need = total + 96;                                   // کمینهٔ ستونِ نام
+    table.style.minWidth = need + 'px';
+    table.style.setProperty('width', 'max(100%, ' + need + 'px)', 'important');
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  (APEX) «دانلود JSON» از سایدبار — با حقِ انتخابِ محلِ ذخیره                   ║
+// ║  ‑ نسخهٔ نصبی (Tauri/WebView2، از جمله ویندوز ۷) و وبِ دسکتاپ: پنجرهٔ «ذخیره در…» ║
+// ║    سیستم (showSaveFilePicker) با همان نامِ export_<زمان>.json.                    ║
+// ║  ‑ اپلیکیشنِ اندروید: فایل با همان نام ساخته و شیتِ اشتراک/ذخیرهٔ سیستم باز می‌شود ║
+// ║    تا کاربر مقصد را انتخاب کند (Files/Drive/…). اندروید بدونِ افزونهٔ نیتیوِ ویژه   ║
+// ║    پنجرهٔ انتخابِ پوشه ندارد؛ اگر شیت باز نشد، رفتارِ قبلی (پوشهٔ Download) اجرا می‌شود.║
+// ║  ‑ وبِ موبایل: شیتِ اشتراکِ مرورگر با فایل (Save to Files/Drive …)، وگرنه دانلودِ  ║
+// ║    عادیِ مرورگر.                                                                ║
+// ║  سایرِ مسیرهای JSON (پشتیبانِ خودکار و …) همان __hbSaveJsonFile را صدا می‌زنند. ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+function __hbSaveJsonFilePick(text, fileName) {
+    var name = __jouyaAndSafeName(fileName, 'json');
+    var isAndroid = __hbIsAndroidNative();
+    // ۱) پنجرهٔ ذخیرهٔ سیستم (دسکتاپ: Tauri/WebView2، Chrome، Edge)
+    if (!isAndroid && typeof window.showSaveFilePicker === 'function') {
+        var p;
+        try {
+            p = window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }] });
+        } catch (e) { p = Promise.reject(e); }
+        return p.then(function (h) {
+            return h.createWritable().then(function (w) {
+                return w.write(new Blob([text], { type: 'application/json' })).then(function () { return w.close(); });
+            }).then(function () { return { ok: true, android: false, picked: true, where: 'محلِ انتخاب‌شده', path: h.name || name }; });
+        }).catch(function (e) {
+            if (e && e.name === 'AbortError') return { ok: false, cancelled: true };
+            return __hbSaveJsonFile(text, name);           // پنجره در دسترس نبود → رفتارِ قبلی
+        });
+    }
+    // ۲) اندروید: ساختِ فایل با همان نام + شیتِ اشتراک/ذخیرهٔ سیستم
+    if (isAndroid) {
+        return __jouyaAndWrite(name, text, true).then(function (res) {
+            return __jouyaAndCall('Share', 'share', { title: name, files: [res.uri], dialogTitle: 'ذخیرهٔ فایل JSON' })
+                .then(function () { return { ok: true, android: true, shared: true, where: 'محلِ انتخاب‌شده در شیتِ اشتراک', path: name }; });
+        }).catch(function (e) {
+            var m = String((e && (e.message || e.errorMessage)) || e || '');
+            if (/cancel/i.test(m)) return { ok: false, cancelled: true };
+            return __hbSaveJsonFile(text, name);
+        });
+    }
+    // ۳) وبِ موبایل: شیتِ اشتراکِ مرورگر با فایل
+    try {
+        var mobile = (window.innerWidth || 1024) <= 768 || !!(window.matchMedia && window.matchMedia('(hover: none)').matches);
+        if (mobile && navigator.share && typeof File === 'function') {
+            var f = new File([text], name, { type: 'application/json' });
+            if (!navigator.canShare || navigator.canShare({ files: [f] })) {
+                return navigator.share({ files: [f], title: name }).then(function () {
+                    return { ok: true, android: false, shared: true, where: 'محلِ انتخاب‌شده در شیتِ اشتراک', path: name };
+                }).catch(function (e) {
+                    if (e && e.name === 'AbortError') return { ok: false, cancelled: true };
+                    return __hbSaveJsonFile(text, name);
+                });
+            }
+        }
+    } catch (e) {}
+    // ۴) دانلودِ عادیِ مرورگر (رفتارِ قبلی)
+    return __hbSaveJsonFile(text, name);
+}
+if (typeof window !== 'undefined') window.__hbSaveJsonFilePick = __hbSaveJsonFilePick;

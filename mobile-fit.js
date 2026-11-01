@@ -106,6 +106,26 @@
     }
     document.addEventListener('click', cashboxKebabTapBridge, true);
 
+    /* (APEX) روی لمس، رویدادِ mouseenterِ ساختگیِ مرورگر (که بلافاصله پس از لمس می‌آید) منوی
+     * صندوق را «پیش از click» باز می‌کرد. منو در موبایل به‌شکلِ شیتِ پایینِ صفحه است؛ برای کارت‌هایی
+     * که در نیمهٔ پایینِ صفحه‌اند (مثلاً کارتِ سوم)، شیت درست زیرِ انگشت باز می‌شد و clickِ همان
+     * لمس به‌جای دکمهٔ سه‌نقطه به خودِ شیت می‌رسید → منو باز/بسته می‌شد و به‌نظر «کار نمی‌کرد»
+     * تا کاربر صفحه را بالا ببرد. حالا در موبایل، mouseenterِ ناشی از لمس روی سه‌نقطهٔ صندوق نادیده
+     * گرفته می‌شود و منو فقط از مسیرِ clickِ همین پل (بالا) باز می‌شود — برای همهٔ کارت‌ها یکسان. */
+    var _lastTouchAt = 0;
+    document.addEventListener('touchstart', function () { _lastTouchAt = Date.now(); }, true);
+    document.addEventListener('pointerdown', function (e) { if (e && e.pointerType && e.pointerType !== 'mouse') _lastTouchAt = Date.now(); }, true);
+    document.addEventListener('mouseenter', function (e) {
+        try {
+            if (!isMobile()) return;
+            var t = e.target;
+            if (!t || !t.classList || !t.classList.contains('fin-cb-kebab')) return;
+            if (Date.now() - _lastTouchAt > 1500) return;      // ماوسِ واقعی → رفتارِ قبلی
+            e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        } catch (_) {}
+    }, true);
+
     /* ───────────────────────────────────────────────────────────────────────
      * ۱-ب) بستنِ خودکارِ منوهای عملیات (سه‌نقطه: ویرایش/حذف/…) روی لمس
      *  مشکل: منوهای شناورِ برنامه با «hover» بسته می‌شوند (mouseleave/mouseover).
@@ -165,16 +185,8 @@
             }
             // ۲) لمسِ دکمهٔ بازکنندهٔ منو → دست نزن (منو تازه باز می‌شود).
             if (t.closest(TRIGGER_SELECTOR)) return;
-            // ۳) لمسِ بیرون از هر منو → اگر منویی باز است، همه را ببند و «همین لمس»
-            //    به هیچ عنصرِ دیگری نرسد. پیش‌تر منو بسته می‌شد ولی همان لمس، ردیف یا
-            //    دکمهٔ زیرِ انگشت را هم فعال می‌کرد و کاربر ناخواسته به صفحهٔ دیگری
-            //    می‌رفت. حالا لمسِ اول فقط می‌بندد و لمسِ بعدی عادی کار می‌کند.
-            if (anyMenuOpen()) {
-                closeAllFloatingActionMenus();
-                e.preventDefault();
-                e.stopPropagation();
-                if (e.stopImmediatePropagation) e.stopImmediatePropagation();
-            }
+            // ۳) لمسِ بیرون از هر منو → اگر منویی باز است، همه را ببند.
+            if (anyMenuOpen()) closeAllFloatingActionMenus();
         } catch (_) {}
     }
     // فازِ capture تا مستقل از بستن‌کننده‌های داخلی، بسته‌شدن تضمین شود.
@@ -345,9 +357,6 @@
         try {
             var info = document.querySelector('#dashboard .dash-info-col');
             if (!info) return;
-            // داشبوردِ جدید: کارتِ «نرخ ارز» خودش جای مشخص و بازِ خودش را دارد،
-            // پس تاگلِ کشوییِ قدیمی ساخته نمی‌شود.
-            if (document.getElementById('nd-grid')) return;
             if (document.getElementById('jouya-info-toggle')) return;
             var toggle = document.createElement('button');
             toggle.id = 'jouya-info-toggle';
