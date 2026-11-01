@@ -1,0 +1,92 @@
+/* ============================================================================
+ *  Estedad — فونتِ اصلیِ APEX Store Manager
+ *  نسخهٔ 8.5 — https://github.com/aminabedi68/Estedad — مجوز: SIL Open Font License 1.1
+ *
+ *  فایل‌ها: assets/fonts/estedad/Estedad-<وزن>.ttf  (همان فایل‌های اصلیِ فونت)
+ *  هر وزن یک فایلِ جداست؛ مرورگر فقط وزن‌هایی را بار می‌کند که در صفحه به کار رفته‌اند و
+ *  هر font-weight در CSS دقیقاً به فایلِ همان وزن می‌رسد (بدونِ «بولدِ مصنوعی»).
+ *  font-display: block → متن هرگز با فونتِ دیگری کشیده و بعد عوض نمی‌شود (پرشِ متن/چاپِ ناجور)؛
+ *  اگر فایلی نباشد، مرورگر بی‌درنگ به فونتِ بعدیِ فهرست (Vazirmatn / Tahoma) می‌رود.
+ *  شکلِ رقم‌ها (فارسی/انگلیسی) جداگانه در script.js (_apexDigitCss) برای هر وزن تعریف می‌شود.
+ * ========================================================================== */
+
+/* 100 — بسیار نازک (فقط اگر جایی خواسته شود) */
+@font-face {
+  font-family: 'Estedad';
+  src: url('estedad/Estedad-Thin.ttf') format('truetype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: block;
+}
+
+/* 200 — نازک (فقط اگر جایی خواسته شود) */
+@font-face {
+  font-family: 'Estedad';
+  src: url('estedad/Estedad-ExtraLight.ttf') format('truetype');
+  font-weight: 200;
+  font-style: normal;
+  font-display: block;
+}
+
+/* 300 — متنِ کم‌اهمیت/توضیحات */
+@font-face {
+  font-family: 'Estedad';
+  src: url('estedad/Estedad-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: block;
+}
+
+/* 400 — متنِ عادی، فیلدها، جدول‌ها */
+@font-face {
+  font-family: 'Estedad';
+  src: url('estedad/Estedad-Regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: block;
+}
+
+/* 500 — برچسب‌ها و منوها */
+@font-face {
+  font-family: 'Estedad';
+  src: url('estedad/Estedad-Medium.ttf') format('truetype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: block;
+}
+
+/* 600 — دکمه‌ها و سرستون‌ها */
+@font-face {
+  font-family: 'Estedad';
+  src: url('estedad/Estedad-SemiBold.ttf') format('truetype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: block;
+}
+
+/* 700 — عنوان‌ها و مبلغ‌ها */
+@font-face {
+  font-family: 'Estedad';
+  src: url('estedad/Estedad-Bold.ttf') format('truetype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: block;
+}
+
+/* 800 — عنوانِ کارت‌ها و عددهای مهم */
+@font-face {
+  font-family: 'Estedad';
+  src: url('estedad/Estedad-ExtraBold.ttf') format('truetype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: block;
+}
+
+/* 900 — عددهای خیلی برجسته */
+@font-face {
+  font-family: 'Estedad';
+  src: url('estedad/Estedad-Black.ttf') format('truetype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: block;
+}
