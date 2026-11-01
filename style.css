@@ -94,7 +94,7 @@ body.dark-mode {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
-    font-family: 'Vazirmatn', sans-serif;
+    font-family: 'Estedad', 'Vazirmatn', sans-serif;
     outline: none;
 }
 
@@ -2036,7 +2036,7 @@ body, .main-content {
     padding: 11px 14px;
     border: none;
     border-radius: 10px;
-    font-family: 'Vazirmatn', sans-serif;
+    font-family: 'Estedad', 'Vazirmatn', sans-serif;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
@@ -2289,7 +2289,7 @@ body, .main-content {
     background: var(--bg-input);
     color: var(--text-main);
     font-size: 0.93rem;
-    font-family: 'Vazirmatn', sans-serif;
+    font-family: 'Estedad', 'Vazirmatn', sans-serif;
     transition: var(--transition);
     width: 100%;
 }
@@ -3236,7 +3236,7 @@ section#expenses .btn-icon:hover,
     color: #f1f5f9;
     font-size: 0.9rem;
     margin-bottom: 10px;
-    font-family: 'Vazirmatn', sans-serif;
+    font-family: 'Estedad', 'Vazirmatn', sans-serif;
     transition: border-color 0.2s;
     direction: rtl;
 }
@@ -3266,7 +3266,7 @@ section#expenses .btn-icon:hover,
     border: none;
     border-radius: 9px;
     font-size: 0.9rem;
-    font-family: 'Vazirmatn', sans-serif;
+    font-family: 'Estedad', 'Vazirmatn', sans-serif;
     cursor: pointer;
     margin-bottom: 8px;
     font-weight: 600;
@@ -3458,7 +3458,7 @@ body.dark-mode .filter-menu label {
     border-radius: 20px;
     background: transparent;
     color: var(--text-secondary, #94a3b8);
-    font-family: Vazirmatn, sans-serif;
+    font-family: Estedad, Vazirmatn, sans-serif;
     font-size: 0.78rem;
     cursor: pointer;
     transition: all 0.18s;
@@ -6086,7 +6086,7 @@ body::-webkit-scrollbar,
     border-radius: 10px;
     background: #f8fafc;
     color: #475569;
-    font-family: Vazirmatn, sans-serif;
+    font-family: Estedad, Vazirmatn, sans-serif;
     font-weight: 700;
     font-size: 0.85rem;
     cursor: pointer;
@@ -7636,7 +7636,7 @@ body.dark-mode .exp-empty-row td, body.dark-mode .emp-empty-row td { background:
     padding: 10px;
     box-shadow: 0 18px 40px -8px rgba(0, 0, 0, 0.55);
     direction: rtl;
-    font-family: 'Vazirmatn', sans-serif;
+    font-family: 'Estedad', 'Vazirmatn', sans-serif;
     animation: dscPop 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 @keyframes dscPop { from { transform: scale(0.94); opacity: 0; } to { transform: scale(1); opacity: 1; } }
@@ -9481,7 +9481,7 @@ body.dark-mode {
     border: 1px solid var(--nd-border); border-radius: 12px;
     box-shadow: 0 14px 40px rgba(2, 6, 23, .3);
     padding: 10px; direction: rtl;
-    font-family: 'Vazirmatn', Tahoma, sans-serif;
+    font-family: 'Estedad', 'Vazirmatn', Tahoma, sans-serif;
 }
 .nd-profile-pop .nd-pp-head {
     display: flex; align-items: center; gap: 10px;
@@ -9504,7 +9504,7 @@ body.dark-mode {
 .nd-modal-overlay {
     position: fixed; inset: 0; z-index: 2147483100;
     background: rgba(2, 6, 23, .55); display: flex; align-items: center; justify-content: center;
-    padding: 16px; direction: rtl; font-family: 'Vazirmatn', Tahoma, sans-serif;
+    padding: 16px; direction: rtl; font-family: 'Estedad', 'Vazirmatn', Tahoma, sans-serif;
 }
 .nd-modal {
     width: 100%; max-width: 480px; max-height: 86vh; display: flex; flex-direction: column;

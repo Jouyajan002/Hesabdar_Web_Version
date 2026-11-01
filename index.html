@@ -148,7 +148,8 @@
     <link rel="apple-touch-icon" sizes="180x180" href="assets/icons/apple-touch-icon.png">
     <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png">
     <link rel="icon" type="image/png" sizes="16x16" href="assets/icons/favicon-16.png">
-    <!-- فونت‌های آفلاین - Vazirmatn از پوشه assets/fonts -->
+    <!-- فونت‌های آفلاین از پوشه assets/fonts — فونتِ اصلی: Estedad (همهٔ وزن‌ها)؛ Vazirmatn فقط پشتیبان -->
+    <link rel="stylesheet" href="assets/fonts/estedad.css">
     <link rel="stylesheet" href="assets/fonts/vazirmatn.css">
     <!-- Font Awesome آفلاین از پوشه assets/css -->
     <link rel="stylesheet" href="assets/css/all.min.css">
@@ -196,7 +197,7 @@
             display: flex; position: fixed; inset: 0; z-index: 2147482000;
             align-items: center; justify-content: center;
             background: #ffffff; direction: rtl;
-            font-family: 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
+            font-family: 'Estedad', 'Vazirmatn', 'Segoe UI', Tahoma, sans-serif;
             opacity: 1; transition: opacity .4s ease;
         }
         html.jouya-fade-loader #jouya-boot-loader { opacity: 0; pointer-events: none; }
@@ -4713,7 +4714,7 @@
                                     <span id="rp-results-title">نتایج گزارش</span>
                                 </div>
                                 <div class="rp-results-scroll">
-                                    <table id="rp-results-table" style="width:100%; border-collapse:separate; border-spacing:0; text-align:right; font-family:'Vazirmatn',Tahoma,sans-serif;">
+                                    <table id="rp-results-table" style="width:100%; border-collapse:separate; border-spacing:0; text-align:right; font-family:'Estedad','Vazirmatn',Tahoma,sans-serif;">
                                         <thead id="rp-results-thead"></thead>
                                         <tbody id="rp-results-tbody"></tbody>
                                     </table>
@@ -5417,7 +5418,7 @@
         try {
             document.documentElement.innerHTML =
                 '<body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;' +
-                'font-family:Tahoma,sans-serif;background:#1e3a5f;color:#fff;direction:rtl;text-align:center">' +
+                'font-family:Estedad,Tahoma,sans-serif;background:#1e3a5f;color:#fff;direction:rtl;text-align:center">' +
                 '<div><div style="font-size:18px;font-weight:700">در حال بازگردانیِ اطلاعات…</div>' +
                 '<div style="margin-top:10px;opacity:.85;font-size:14px">چند لحظه صبر کنید؛ برنامه خودکار باز می‌شود.</div></div></body>';
         } catch (e) {}
@@ -5587,7 +5588,7 @@
         J.ready.then(function (st) { if (st && st.blocked) return; run(); }, function () { run(); });
     } else if (rawPtrExists()) {
         // فایلِ حافظه بارگذاری نشد ولی داده در IndexedDB است → اجرا نکن تا چیزی بازنویسی نشود
-        document.body.insertAdjacentHTML('beforeend', '<div style="position:fixed;inset:0;z-index:2147483600;background:#f8fafc;display:flex;align-items:center;justify-content:center;direction:rtl;font-family:Tahoma,sans-serif;padding:16px;text-align:center"><div><div style="font-weight:800;color:#b91c1c;margin-bottom:8px">فایلِ حافظهٔ برنامه (jouya-store.js) بارگذاری نشد</div><div>اطلاعاتِ شما سالم است. برنامه را ببندید و دوباره باز کنید.</div></div></div>');
+        document.body.insertAdjacentHTML('beforeend', '<div style="position:fixed;inset:0;z-index:2147483600;background:#f8fafc;display:flex;align-items:center;justify-content:center;direction:rtl;font-family:Estedad,Tahoma,sans-serif;padding:16px;text-align:center"><div><div style="font-weight:800;color:#b91c1c;margin-bottom:8px">فایلِ حافظهٔ برنامه (jouya-store.js) بارگذاری نشد</div><div>اطلاعاتِ شما سالم است. برنامه را ببندید و دوباره باز کنید.</div></div></div>');
     } else {
         run();
     }

@@ -959,7 +959,7 @@
             const c = colors[type] || colors.error;
             const toast = document.createElement('div');
             toast.id = 'auth-alert-toast';
-            toast.style.cssText = `position:fixed;top:24px;left:50%;transform:translateX(-50%);background:${c.bg};color:${c.color};padding:14px 22px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,0.15);z-index:99999;font-size:14px;font-weight:600;display:flex;align-items:center;gap:10px;font-family:'Vazirmatn',sans-serif;direction:rtl;`;
+            toast.style.cssText = `position:fixed;top:24px;left:50%;transform:translateX(-50%);background:${c.bg};color:${c.color};padding:14px 22px;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,0.15);z-index:99999;font-size:14px;font-weight:600;display:flex;align-items:center;gap:10px;font-family:'Estedad','Vazirmatn',sans-serif;direction:rtl;`;
             toast.innerHTML = `<i class="fas ${c.icon}" style="font-size:18px;"></i><span>${msg}</span>`;
             document.body.appendChild(toast);
             setTimeout(() => toast.remove(), 4500);
@@ -1478,7 +1478,7 @@
 
             const modal = document.createElement('div');
             modal.id = 'account-conflict-dialog';
-            modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:"Vazirmatn",sans-serif;direction:rtl;padding:14px;overflow-y:auto;';
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.6);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:"Estedad","Vazirmatn",sans-serif;direction:rtl;padding:14px;overflow-y:auto;';
             modal.innerHTML = `
                 <div style="background:#fff;border-radius:18px;padding:28px 26px;max-width:480px;width:100%;box-shadow:0 25px 60px rgba(0,0,0,0.3);">
                     <div style="text-align:center;margin-bottom:18px;">
@@ -1550,7 +1550,7 @@
             if (old) old.remove();
             const modal = document.createElement('div');
             modal.id = 'restore-info-dialog';
-            modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:"Vazirmatn",sans-serif;direction:rtl;';
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:"Estedad","Vazirmatn",sans-serif;direction:rtl;';
             modal.innerHTML = `
                 <div style="background:#fff;border-radius:18px;padding:32px 28px;max-width:440px;width:92%;box-shadow:0 25px 60px rgba(0,0,0,0.25);text-align:center;">
                     <div style="width:64px;height:64px;background:linear-gradient(135deg,#dbeafe,#e0e7ff);border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;">
@@ -2416,7 +2416,7 @@
         modal.id = 'logout-confirm-overlay';
         modal.style.cssText = 'position:fixed;inset:0;background:rgba(15,23,42,0.55);backdrop-filter:blur(4px);z-index:99999;display:flex;align-items:center;justify-content:center;';
         modal.innerHTML = `
-            <div style="background:#fff;border-radius:18px;padding:36px 32px;max-width:380px;width:90%;box-shadow:0 25px 60px rgba(0,0,0,0.25);text-align:center;font-family:'Vazirmatn',sans-serif;direction:rtl;">
+            <div style="background:#fff;border-radius:18px;padding:36px 32px;max-width:380px;width:90%;box-shadow:0 25px 60px rgba(0,0,0,0.25);text-align:center;font-family:'Estedad','Vazirmatn',sans-serif;direction:rtl;">
                 <div style="width:64px;height:64px;background:#fee2e2;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;">
                     <i class="fas fa-sign-out-alt" style="font-size:28px;color:#ef4444;"></i>
                 </div>
@@ -2451,7 +2451,7 @@
 
         // نمایش پیام کوتاه
         const msg = document.createElement('div');
-        msg.style.cssText = 'position:fixed;inset:0;background:#f1f5f9;z-index:999999;display:flex;align-items:center;justify-content:center;font-family:"Vazirmatn",sans-serif;direction:rtl;';
+        msg.style.cssText = 'position:fixed;inset:0;background:#f1f5f9;z-index:999999;display:flex;align-items:center;justify-content:center;font-family:"Estedad","Vazirmatn",sans-serif;direction:rtl;';
         msg.innerHTML = '<div style="text-align:center;color:#64748b;"><i class="fas fa-spinner fa-spin" style="font-size:32px;margin-bottom:16px;"></i><br>در حال خروج...</div>';
         document.body.appendChild(msg);
 

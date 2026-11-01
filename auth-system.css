@@ -15,7 +15,7 @@
     padding: 20px;
     overflow-y: auto;
     direction: rtl;
-    font-family: 'Vazirmatn', 'Segoe UI', sans-serif;
+    font-family: 'Estedad', 'Vazirmatn', 'Segoe UI', sans-serif;
     animation: authFadeIn 0.5s ease;
 }
 
@@ -839,7 +839,7 @@ body.dark-mode .aubc-icon-drive {
     padding: 20px;
     backdrop-filter: blur(8px);
     direction: rtl;
-    font-family: 'Vazirmatn', 'Segoe UI', sans-serif;
+    font-family: 'Estedad', 'Vazirmatn', 'Segoe UI', sans-serif;
     animation: authFadeIn 0.3s ease;
 }
 

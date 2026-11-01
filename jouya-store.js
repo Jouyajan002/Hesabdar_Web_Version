@@ -220,7 +220,7 @@
             var d = document.createElement('div');
             d.id = 'apex-store-block';
             d.setAttribute('style', 'position:fixed;inset:0;z-index:2147483600;background:#f8fafc;display:flex;' +
-                'align-items:center;justify-content:center;direction:rtl;font-family:Vazirmatn,Tahoma,sans-serif;padding:16px;');
+                'align-items:center;justify-content:center;direction:rtl;font-family:Estedad,Vazirmatn,Tahoma,sans-serif;padding:16px;');
             var box = '<div style="max-width:440px;background:#fff;border:1px solid #e2e8f0;border-radius:14px;padding:22px;' +
                 'box-shadow:0 10px 30px rgba(15,23,42,.12);text-align:center;color:#1e293b">' +
                 '<div style="font-weight:800;font-size:17px;margin-bottom:10px;color:#b91c1c">' + title + '</div>' +
@@ -251,7 +251,7 @@
                 b = document.createElement('div');
                 b.id = 'apex-store-banner';
                 b.setAttribute('style', 'position:fixed;top:0;left:0;right:0;z-index:2147483500;background:#b91c1c;color:#fff;' +
-                    'direction:rtl;text-align:center;font-family:Vazirmatn,Tahoma,sans-serif;font-size:13px;padding:7px 12px;');
+                    'direction:rtl;text-align:center;font-family:Estedad,Vazirmatn,Tahoma,sans-serif;font-size:13px;padding:7px 12px;');
                 document.body.appendChild(b);
             }
             var full = err && (err.name === 'QuotaExceededError' || /quota/i.test(String(err.message || '')));

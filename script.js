@@ -2555,8 +2555,8 @@ function loadComparisonChart(todayIncome, todaySales, todayExpenses, yesterdayIn
                 tooltip: { callbacks: { label: (ctx) => formatCurrencyAFN(ctx.raw) } }
             },
             scales: {
-                y: { beginAtZero: true, ticks: { callback: (v) => formatCurrencyAFN(v), font: { family: 'Vazirmatn', size: 10 } } },
-                x: { ticks: { font: { family: 'Vazirmatn' } } }
+                y: { beginAtZero: true, ticks: { callback: (v) => formatCurrencyAFN(v), font: { family: 'Estedad, Vazirmatn, Tahoma, sans-serif', size: 10 } } },
+                x: { ticks: { font: { family: 'Estedad, Vazirmatn, Tahoma, sans-serif' } } }
             }
         }
     });
@@ -6139,10 +6139,10 @@ function createSalesChart(days = 7) {
                 tooltip: {
                     rtl: true,
                     titleFont: {
-                        family: 'Vazirmatn'
+                        family: 'Estedad, Vazirmatn, Tahoma, sans-serif'
                     },
                     bodyFont: {
-                        family: 'Vazirmatn'
+                        family: 'Estedad, Vazirmatn, Tahoma, sans-serif'
                     },
                     callbacks: {
                         label: function(context) {
@@ -6158,7 +6158,7 @@ function createSalesChart(days = 7) {
                     },
                     ticks: {
                         font: {
-                            family: 'Vazirmatn'
+                            family: 'Estedad, Vazirmatn, Tahoma, sans-serif'
                         }
                     }
                 },
@@ -6169,7 +6169,7 @@ function createSalesChart(days = 7) {
                     },
                     ticks: {
                         font: {
-                            family: 'Vazirmatn'
+                            family: 'Estedad, Vazirmatn, Tahoma, sans-serif'
                         },
                         callback: function(value) {
                             return formatNumber(value) + ' ' + ((typeof getCurrencyLabel === 'function') ? getCurrencyLabel(null) : 'افغانی');
@@ -6384,8 +6384,8 @@ const monthNames = ['حمل','ثور','جوزا','سرطان','اسد','سنبل
                 tooltip: {
                     rtl: true,
                     backgroundColor: 'rgba(30,41,59,0.92)',
-                    titleFont: { family: 'Vazirmatn', size: 12 },
-                    bodyFont: { family: 'Vazirmatn', size: 11 },
+                    titleFont: { family: 'Estedad, Vazirmatn, Tahoma, sans-serif', size: 12 },
+                    bodyFont: { family: 'Estedad, Vazirmatn, Tahoma, sans-serif', size: 11 },
                     padding: 10,
                     callbacks: {
                         label: ctx => ' ' + ctx.dataset.label + ': ' + (typeof formatCurrencyAFN === 'function' ? formatCurrencyAFN(ctx.raw) : (typeof formatNumber === 'function' ? formatNumber(ctx.raw) : ctx.raw))
@@ -6394,13 +6394,13 @@ const monthNames = ['حمل','ثور','جوزا','سرطان','اسد','سنبل
             },
             scales: {
                 x: {
-                    ticks: { font: { family: 'Vazirmatn', size: 10 }, color: '#94a3b8' },
+                    ticks: { font: { family: 'Estedad, Vazirmatn, Tahoma, sans-serif', size: 10 }, color: '#94a3b8' },
                     grid: { color: 'rgba(148,163,184,0.10)', drawBorder: false }
                 },
                 y: {
                     beginAtZero: true,
                     ticks: {
-                        font: { family: 'Vazirmatn', size: 10 },
+                        font: { family: 'Estedad, Vazirmatn, Tahoma, sans-serif', size: 10 },
                         color: '#94a3b8',
                         callback: v => new Intl.NumberFormat((typeof getNumberSystem === 'function' && getNumberSystem() === 'en') ? 'en-US' : 'fa-IR').format(v)
                     },
@@ -12058,12 +12058,14 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
 
     // نوع و اندازهٔ فونت (اختیاری از تنظیمات)
     var _fontMap = {
-        vazirmatn: "'Vazirmatn', Tahoma, Arial, sans-serif",
-        tahoma: "Tahoma, 'Vazirmatn', Arial, sans-serif",
-        arial: "Arial, 'Vazirmatn', Helvetica, sans-serif",
-        times: "'Times New Roman', 'Vazirmatn', serif",
-        courier: "'Courier New', 'Vazirmatn', monospace",
-        nazanin: "'B Nazanin', 'Nazanin', 'Vazirmatn', Tahoma, serif"
+        // «vazirmatn» نامِ قدیمیِ گزینهٔ پیش‌فرض است (در تنظیماتِ ذخیره‌شده همین مقدار هست)؛
+        // اکنون فونتِ پیش‌فرضِ برنامه Estedad است، پس همین کلید Estedad را می‌دهد.
+        vazirmatn: "'Estedad', 'Vazirmatn', Tahoma, Arial, sans-serif",
+        tahoma: "Tahoma, 'Estedad', 'Vazirmatn', Arial, sans-serif",
+        arial: "Arial, 'Estedad', 'Vazirmatn', Helvetica, sans-serif",
+        times: "'Times New Roman', 'Estedad', 'Vazirmatn', serif",
+        courier: "'Courier New', 'Estedad', 'Vazirmatn', monospace",
+        nazanin: "'B Nazanin', 'Nazanin', 'Estedad', 'Vazirmatn', Tahoma, serif"
     };
     var fontFamily = _fontMap[S.billFontFamily] || _fontMap.vazirmatn;
     var baseFont = parseFloat(S.billBaseFontSize) || (isThermal ? 10 : 12);   // px
@@ -12942,7 +12944,7 @@ function __jouyaAndShowDiag(headline) {
         ov.id = 'jouya-and-diag';
         ov.setAttribute('dir', 'rtl');
         ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,.86);' +
-            'display:flex;align-items:center;justify-content:center;padding:12px;font-family:Vazirmatn,monospace;';
+            'display:flex;align-items:center;justify-content:center;padding:12px;font-family:Estedad,Vazirmatn,monospace;';
         ov.innerHTML = '<div style="width:100%;max-width:520px;max-height:94vh;overflow:auto;color:#fff;">' +
             '<div style="font-size:15px;font-weight:800;color:#ffd166;margin-bottom:8px;">تشخیصِ ارسال — ' + String(headline || '') + '</div>' +
             '<div style="font-size:12.5px;line-height:2;white-space:pre-wrap;word-break:break-word;">' +
@@ -13102,7 +13104,7 @@ function __jouyaShowDiagOnScreen(txt, fname, reason) {
         ov.setAttribute('dir', 'rtl');
         ov.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(15,23,42,.97);' +
             'display:flex;align-items:center;justify-content:center;padding:14px;' +
-            'font-family:Vazirmatn,inherit;color:#e2e8f0;';
+            'font-family:Estedad,Vazirmatn,inherit;color:#e2e8f0;';
         var canSave  = __jouyaAndIsNative();
         var canShare = __jouyaAndIsNative();
         ov.innerHTML =
@@ -13476,12 +13478,21 @@ function __jouyaHtmlToPdfBlob(html) {
         // رفعِ «شکستنِ حروفِ فارسی» در خروجیِ اشتراک: تضمینِ فونتِ شکل‌دهندهٔ فارسی روی متن‌ها
         // هنگامِ رستر شدن. اگر فونت به یک فونتِ بدونِ اتصالِ حروف fallback شود، حروف جدا و
         // با فاصله («ف ر و ش گ ا ه») دیده می‌شوند؛ اینجا روی عناصرِ متنی (نه آیکن‌ها) فونتِ
-        // Vazirmatn/Tahoma را الزام می‌کنیم و letter-spacing را عادی نگه می‌داریم.
+        // Estedad (و در نبودش Vazirmatn/Tahoma) را الزام می‌کنیم و letter-spacing را عادی نگه می‌داریم.
+        // فونتِ اصلیِ برنامه (Estedad) اگر در این سند نیست، در ابتدای <head> افزوده می‌شود
+        // (ابتدا، تا تعریفِ فونتِ رقم‌ها همچنان آخرین بماند).
+        try {
+            if (!doc.querySelector('link[href*="estedad.css"]')) {
+                var _fl = doc.createElement('link'); _fl.rel = 'stylesheet'; _fl.href = 'assets/fonts/estedad.css';
+                var _hd = doc.head || doc.documentElement;
+                _hd.insertBefore(_fl, _hd.firstChild);
+            }
+        } catch (e) {}
         try {
             var _fst = doc.createElement('style');
             _fst.textContent =
                 'body,div,span,p,td,th,h1,h2,h3,h4,h5,h6,a,label,strong,b,em,small,li,input,select,textarea{' +
-                "font-family:'Vazirmatn','Tahoma','Segoe UI',Arial,sans-serif !important;letter-spacing:normal !important;}";
+                "font-family:'Estedad','Vazirmatn','Tahoma','Segoe UI',Arial,sans-serif !important;letter-spacing:normal !important;}";
             (doc.head || doc.documentElement).appendChild(_fst);
         } catch (e) {}
         var started = false;
@@ -13807,6 +13818,7 @@ function __jouyaMaybeMobilePreview(rawHtml, titleName) {
     try { bh = (location && location.href) ? location.href.replace(/[?#].*$/, '').replace(/[^\/]*$/, '') : ''; } catch (e) { bh = ''; }
     var ah = (bh ? ('<base href="' + bh + '">') : '')
         + '<link rel="stylesheet" href="assets/css/all.min.css">'
+        + '<link rel="stylesheet" href="assets/fonts/estedad.css">'
         + '<link rel="stylesheet" href="assets/fonts/vazirmatn.css">';
     try {
         __ppOpenMobileOverlay(rawHtml, ah, '', { title: titleName || 'گزارش', pdfName: titleName || 'گزارش', shareText: titleName || 'گزارش' });
@@ -13833,7 +13845,7 @@ function __openPrintPreview(rawHtml, opts) {
     var icoWa    = useFA ? '<i class="fab fa-whatsapp"></i>' : '📱';
     var icoMail  = useFA ? '<i class="fas fa-envelope"></i>' : '✉️';
 
-    var bar = '<div id="__ppbar" class="no-print" style="display:flex;gap:14px;justify-content:center;align-items:center;padding:18px 12px 24px;font-family:Vazirmatn,Tahoma,sans-serif;direction:rtl;">'
+    var bar = '<div id="__ppbar" class="no-print" style="display:flex;gap:14px;justify-content:center;align-items:center;padding:18px 12px 24px;font-family:Estedad,Vazirmatn,Tahoma,sans-serif;direction:rtl;">'
         + '<button onclick="window.print()" style="cursor:pointer;border:1px solid #c7d2e8;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:bold;font-family:inherit;background:#eef3fb;color:#1b2a4a;display:inline-flex;align-items:center;gap:7px;box-shadow:0 1px 3px rgba(26,47,94,0.12);">' + icoPrint + ' چاپ</button>'
         + '<button onclick="__ppToggleShare()" style="cursor:pointer;border:1px solid #bfe3cd;border-radius:8px;padding:8px 18px;font-size:13px;font-weight:bold;font-family:inherit;background:#eaf7f0;color:#0f7a43;display:inline-flex;align-items:center;gap:7px;box-shadow:0 1px 3px rgba(15,122,67,0.12);">' + icoShare + ' اشتراک‌گذاری</button>'
         + '</div>';
@@ -13850,6 +13862,7 @@ function __openPrintPreview(rawHtml, opts) {
         try { baseHref = (location && location.href) ? location.href.replace(/[?#].*$/, '').replace(/[^\/]*$/, '') : ''; } catch (e) { baseHref = ''; }
         assetsHead = (baseHref ? ('<base href="' + baseHref + '">') : '')
             + '<link rel="stylesheet" href="assets/css/all.min.css">'
+            + '<link rel="stylesheet" href="assets/fonts/estedad.css">'
             + '<link rel="stylesheet" href="assets/fonts/vazirmatn.css">';
     }
 
@@ -13866,7 +13879,7 @@ function __openPrintPreview(rawHtml, opts) {
         +   'if(ex){ex.parentNode.removeChild(ex);return;}'
         +   'var t=encodeURIComponent(__ppText);var s=encodeURIComponent(__ppTitle);'
         +   'var m=document.createElement("div");m.id="__ppmenu";m.className="no-print";'
-        +   'm.setAttribute("style","position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:100000;background:#fff;border:1px solid #d0d5dd;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.2);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:240px;font-family:Vazirmatn,Tahoma,sans-serif;direction:rtl;");'
+        +   'm.setAttribute("style","position:fixed;bottom:70px;left:50%;transform:translateX(-50%);z-index:100000;background:#fff;border:1px solid #d0d5dd;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.2);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:240px;font-family:Estedad,Vazirmatn,Tahoma,sans-serif;direction:rtl;");'
         +   'var html="";'
         +   'html+=\'<button onclick="__ppSharePdf()" style="cursor:pointer;border:none;padding:11px 12px;border-radius:8px;background:#1b2a4a;color:#fff;font-weight:bold;font-family:inherit;text-align:right;display:flex;align-items:center;gap:8px;">' + icoPdf + ' اشتراک‌گذاری به صورت PDF</button>\';'
         +   'html+=\'<button onclick="__ppShareWaFile()" style="cursor:pointer;border:none;padding:11px 12px;border-radius:8px;background:#0f7a43;color:#fff;font-weight:bold;font-family:inherit;text-align:right;display:flex;align-items:center;gap:8px;">' + icoWa + ' ارسال به واتساپ</button>\';'
@@ -13883,7 +13896,7 @@ function __openPrintPreview(rawHtml, opts) {
     // ---- حالتِ بل خرید/فروش: نوارِ چاپ/اشتراک در «بالای» پیش‌نمایش + منوی «دانلود PDF بل» و «ارسال فایل بل به واتساپ» ----
     var pdfName = opts.pdfName || title;
     if (opts.billShare) {
-        bar = '<div id="__ppbar" class="no-print" style="display:flex;gap:14px;justify-content:center;align-items:center;padding:14px 12px;background:#f5f8fd;border-bottom:1px solid #dfe6f2;font-family:Vazirmatn,Tahoma,sans-serif;direction:rtl;position:sticky;top:0;z-index:9999;box-shadow:0 2px 6px rgba(26,47,94,0.06);">'
+        bar = '<div id="__ppbar" class="no-print" style="display:flex;gap:14px;justify-content:center;align-items:center;padding:14px 12px;background:#f5f8fd;border-bottom:1px solid #dfe6f2;font-family:Estedad,Vazirmatn,Tahoma,sans-serif;direction:rtl;position:sticky;top:0;z-index:9999;box-shadow:0 2px 6px rgba(26,47,94,0.06);">'
             + '<button onclick="window.print()" style="cursor:pointer;border:1px solid #c7d2e8;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:bold;font-family:inherit;background:#eef3fb;color:#1b2a4a;display:inline-flex;align-items:center;gap:7px;box-shadow:0 1px 3px rgba(26,47,94,0.12);">' + icoPrint + ' چاپ</button>'
             + '<button id="__ppsharebtn" onclick="__ppToggleShare(event)" style="cursor:pointer;border:1px solid #bfe3cd;border-radius:8px;padding:9px 20px;font-size:13px;font-weight:bold;font-family:inherit;background:#eaf7f0;color:#0f7a43;display:inline-flex;align-items:center;gap:7px;box-shadow:0 1px 3px rgba(15,122,67,0.12);">' + icoShare + ' اشتراک‌گذاری</button>'
             + '</div>';
@@ -13898,7 +13911,7 @@ function __openPrintPreview(rawHtml, opts) {
             +   'try{ var a=document.createElement("a"); a.href="whatsapp://send"; document.body.appendChild(a); a.click(); document.body.removeChild(a); }catch(e){} }'
             + 'function __ppToggleShare(ev){ if(ev){ev.stopPropagation();} var ex=document.getElementById("__ppmenu"); if(ex){ __ppCloseMenu(); return; }'
             +   'var m=document.createElement("div"); m.id="__ppmenu"; m.className="no-print";'
-            +   'm.setAttribute("style","position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:100000;background:#fff;border:1px solid #d0d5dd;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.2);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:270px;font-family:Vazirmatn,Tahoma,sans-serif;direction:rtl;");'
+            +   'm.setAttribute("style","position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:100000;background:#fff;border:1px solid #d0d5dd;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.2);padding:10px;display:flex;flex-direction:column;gap:8px;min-width:270px;font-family:Estedad,Vazirmatn,Tahoma,sans-serif;direction:rtl;");'
             +   'var html="";'
             +   'html+=\'<button onclick="__ppDownloadBillPdf()" style="cursor:pointer;border:none;padding:11px 12px;border-radius:8px;background:#b91c1c;color:#fff;font-weight:bold;font-family:inherit;text-align:right;display:flex;align-items:center;gap:8px;">' + icoPdf + ' دانلود PDF بل</button>\';'
             +   'html+=\'<button onclick="__ppShareBillWa()" style="cursor:pointer;border:none;padding:11px 12px;border-radius:8px;background:#0f7a43;color:#fff;font-weight:bold;font-family:inherit;text-align:right;display:flex;align-items:center;gap:8px;">' + icoWa + ' ارسال فایل بل به واتساپ</button>\';'
@@ -14097,6 +14110,12 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
     if (doc.indexOf('</head>') !== -1) doc = doc.replace('</head>', headInject + '</head>');
     else if (doc.indexOf('<head>') !== -1) doc = doc.replace('<head>', '<head>' + headInject);
     else doc = '<!DOCTYPE html><head>' + headInject + '</head>' + doc;
+    // فونتِ رقم‌ها (apex-digit-faces) باید آخرین تعریفِ فونت در <head> بماند تا بر فایل‌های
+    // فونتی که همین حالا (assetsHead) افزوده شدند برتری داشته باشد.
+    try {
+        var _dgm = doc.match(/<style id="apex-digit-faces">[\s\S]*?<\/style>/);
+        if (_dgm && doc.indexOf('</head>') !== -1) { doc = doc.replace(_dgm[0], ''); doc = doc.replace('</head>', _dgm[0] + '</head>'); }
+    } catch (e) {}
 
     var esc = function (s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
 
@@ -14440,12 +14459,14 @@ function generatePersonReport(personId) {
     var onPrimary = _contrastOn(navy);
     var navyDark = _shade(navy, -18);
     var _fontMap = {
-        vazirmatn: "'Vazirmatn', Tahoma, Arial, sans-serif",
-        tahoma: "Tahoma, 'Vazirmatn', Arial, sans-serif",
-        arial: "Arial, 'Vazirmatn', Helvetica, sans-serif",
-        times: "'Times New Roman', 'Vazirmatn', serif",
-        courier: "'Courier New', 'Vazirmatn', monospace",
-        nazanin: "'B Nazanin', 'Nazanin', 'Vazirmatn', Tahoma, serif"
+        // «vazirmatn» نامِ قدیمیِ گزینهٔ پیش‌فرض است (در تنظیماتِ ذخیره‌شده همین مقدار هست)؛
+        // اکنون فونتِ پیش‌فرضِ برنامه Estedad است، پس همین کلید Estedad را می‌دهد.
+        vazirmatn: "'Estedad', 'Vazirmatn', Tahoma, Arial, sans-serif",
+        tahoma: "Tahoma, 'Estedad', 'Vazirmatn', Arial, sans-serif",
+        arial: "Arial, 'Estedad', 'Vazirmatn', Helvetica, sans-serif",
+        times: "'Times New Roman', 'Estedad', 'Vazirmatn', serif",
+        courier: "'Courier New', 'Estedad', 'Vazirmatn', monospace",
+        nazanin: "'B Nazanin', 'Nazanin', 'Estedad', 'Vazirmatn', Tahoma, serif"
     };
     var fontFamily = _fontMap[S.billFontFamily] || _fontMap.vazirmatn;
     var baseFont = parseFloat(S.billBaseFontSize) || 12;
@@ -14856,6 +14877,7 @@ function generatePersonReport(personId) {
     <title>گزارش معاملات - ${esc(person.name)}</title>
     ${baseHref ? `<base href="${baseHref}">` : ''}
     <link rel="stylesheet" href="assets/css/all.min.css">
+    <link rel="stylesheet" href="assets/fonts/estedad.css">
     <link rel="stylesheet" href="assets/fonts/vazirmatn.css">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -15206,12 +15228,14 @@ function generateCashboxReport(cashboxId) {
     var onPrimary = _contrastOn(navy);
     var navyDark = _shade(navy, -18);
     var _fontMap = {
-        vazirmatn: "'Vazirmatn', Tahoma, Arial, sans-serif",
-        tahoma: "Tahoma, 'Vazirmatn', Arial, sans-serif",
-        arial: "Arial, 'Vazirmatn', Helvetica, sans-serif",
-        times: "'Times New Roman', 'Vazirmatn', serif",
-        courier: "'Courier New', 'Vazirmatn', monospace",
-        nazanin: "'B Nazanin', 'Nazanin', 'Vazirmatn', Tahoma, serif"
+        // «vazirmatn» نامِ قدیمیِ گزینهٔ پیش‌فرض است (در تنظیماتِ ذخیره‌شده همین مقدار هست)؛
+        // اکنون فونتِ پیش‌فرضِ برنامه Estedad است، پس همین کلید Estedad را می‌دهد.
+        vazirmatn: "'Estedad', 'Vazirmatn', Tahoma, Arial, sans-serif",
+        tahoma: "Tahoma, 'Estedad', 'Vazirmatn', Arial, sans-serif",
+        arial: "Arial, 'Estedad', 'Vazirmatn', Helvetica, sans-serif",
+        times: "'Times New Roman', 'Estedad', 'Vazirmatn', serif",
+        courier: "'Courier New', 'Estedad', 'Vazirmatn', monospace",
+        nazanin: "'B Nazanin', 'Nazanin', 'Estedad', 'Vazirmatn', Tahoma, serif"
     };
     var fontFamily = _fontMap[S.billFontFamily] || _fontMap.vazirmatn;
     var baseFont = parseFloat(S.billBaseFontSize) || 12;
@@ -18462,7 +18486,7 @@ function _rpPersonsPdf(kind) {
             return '<tr' + cls + '>' + r.map(function (c) { return '<' + tag + '>' + esc(c) + '</' + tag + '>'; }).join('') + '</tr>';
         }).join('');
         var html = '<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="utf-8"><title>' + esc(title) + '</title>' +
-            '<style>@page{size:A4;margin:12mm;} body{font-family:Vazirmatn,Tahoma,sans-serif;direction:rtl;color:#1e293b;} ' +
+            '<style>@page{size:A4;margin:12mm;} body{font-family:Estedad,Vazirmatn,Tahoma,sans-serif;direction:rtl;color:#1e293b;} ' +
             'h2{color:#1e3a5f;margin:0 0 4px;} .rp-meta{color:#64748b;font-size:12px;margin-bottom:12px;} ' +
             'table{width:100%;border-collapse:collapse;font-size:12px;} td,th{border:1px solid #cbd5e1;padding:6px 8px;text-align:right;} ' +
             'th.rp-pdf-head,tr.rp-pdf-head th,tr.rp-pdf-head td{background:#1e3a5f;color:#fff;font-weight:bold;} ' +
@@ -18765,7 +18789,7 @@ function downloadPersonReportFile(personId, fromDate, toDate) {
     var html = '<!DOCTYPE html>\n<html dir="rtl" lang="fa">\n<head>\n<meta charset="UTF-8">\n'
         + '<title>گزارش - ' + person.name + '</title>\n<style>\n'
         + '@page{size:A4 landscape;margin:10mm;}\n'
-        + 'body{font-family:Tahoma,"Vazirmatn",sans-serif;direction:rtl;padding:24px;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;}\n'
+        + 'body{font-family:Estedad,Tahoma,"Vazirmatn",sans-serif;direction:rtl;padding:24px;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;}\n'
         + 'h2{color:#1e3a5f;margin-bottom:4px;}\n'
         + 'table{width:100%;border-collapse:collapse;margin:20px 0;}\n'
         + 'th{background:#1e3a5f;color:#fff;padding:9px 12px;text-align:right;}\n'
@@ -18866,7 +18890,7 @@ function downloadCategoryReportFile(categoryName, fromDate, toDate) {
     var html = '<!DOCTYPE html>\n<html dir="rtl" lang="fa">\n<head>\n<meta charset="UTF-8">\n'
         + '<title>گزارش مصارف - ' + categoryName + '</title>\n<style>\n'
         + '@page{size:A4 landscape;margin:10mm;}\n'
-        + 'body{font-family:Tahoma,"Vazirmatn",sans-serif;direction:rtl;padding:24px;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;}\n'
+        + 'body{font-family:Estedad,Tahoma,"Vazirmatn",sans-serif;direction:rtl;padding:24px;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;}\n'
         + 'h2{color:#1e3a5f;margin-bottom:4px;}\n'
         + 'table{width:100%;border-collapse:collapse;margin:20px 0;}\n'
         + 'th{background:#1e3a5f;color:#fff;padding:9px 12px;text-align:right;}\n'
@@ -19383,7 +19407,7 @@ function downloadProductsReport(reportType, scope, scopeValue, fromDate, toDate)
     var html = '<!DOCTYPE html>\n<html dir="rtl" lang="fa">\n<head>\n<meta charset="UTF-8">\n'
         + '<title>' + title + '</title>\n<style>\n'
         + '@page{size:A4 landscape;margin:8mm;}\n'
-        + 'body{font-family:Tahoma,"Vazirmatn",sans-serif;direction:rtl;padding:24px;color:#222;background:#f8fafc;-webkit-print-color-adjust:exact;print-color-adjust:exact;}\n'
+        + 'body{font-family:Estedad,Tahoma,"Vazirmatn",sans-serif;direction:rtl;padding:24px;color:#222;background:#f8fafc;-webkit-print-color-adjust:exact;print-color-adjust:exact;}\n'
         + 'h2{color:#1e3a5f;margin-bottom:4px;font-size:1.4rem;}\n'
         + '.summary{display:flex;gap:14px;margin:16px 0;flex-wrap:wrap;}\n'
         + '.sum-item{flex:1;min-width:150px;padding:14px;border-radius:12px;text-align:center;}\n'
@@ -19994,7 +20018,7 @@ function downloadProfitReport(reportType, fromDate, toDate) {
     var html = '<!DOCTYPE html>\n<html dir="rtl" lang="fa">\n<head>\n<meta charset="UTF-8">\n'
         + '<title>گزارش سود و سرمایه</title>\n<style>\n'
         + '@page{size:A4 landscape;margin:8mm;}\n'
-        + 'body{font-family:Tahoma,"Vazirmatn",sans-serif;direction:rtl;padding:24px;color:#222;background:#f8fafc;-webkit-print-color-adjust:exact;print-color-adjust:exact;}\n'
+        + 'body{font-family:Estedad,Tahoma,"Vazirmatn",sans-serif;direction:rtl;padding:24px;color:#222;background:#f8fafc;-webkit-print-color-adjust:exact;print-color-adjust:exact;}\n'
         + 'h2{color:#1e3a5f;margin-bottom:4px;font-size:1.4rem;}\n'
         + 'h3{color:#334155;font-size:1rem;margin-bottom:8px;}\n'
         + '.summary-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:14px;margin:16px 0;}\n'
@@ -20126,7 +20150,7 @@ function downloadAllPersonsReport(fromDate, toDate) {
     var html = '<!DOCTYPE html>\n<html dir="rtl" lang="fa">\n<head>\n<meta charset="UTF-8">'
         + '<title>گزارش کامل همه افراد</title>\n<style>\n'
         + '@page{size:A4 landscape;margin:10mm;}\n'
-        + 'body{font-family:Tahoma,"Vazirmatn",sans-serif;direction:rtl;padding:20px;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;}\n'
+        + 'body{font-family:Estedad,Tahoma,"Vazirmatn",sans-serif;direction:rtl;padding:20px;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;}\n'
         + 'h2{color:#1e3a5f;margin-bottom:4px;}\n'
         + 'h3{color:#1e3a5f;font-size:1rem;margin-bottom:6px;}\n'
         + 'table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px;}\n'
@@ -20240,7 +20264,7 @@ function downloadAllFinanceReport(fromDate, toDate) {
     var html = '<!DOCTYPE html>\n<html dir="rtl" lang="fa">\n<head>\n<meta charset="UTF-8">'
         + '<title>گزارش کامل مصارف</title>\n<style>\n'
         + '@page{size:A4 landscape;margin:10mm;}\n'
-        + 'body{font-family:Tahoma,"Vazirmatn",sans-serif;direction:rtl;padding:20px;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;}\n'
+        + 'body{font-family:Estedad,Tahoma,"Vazirmatn",sans-serif;direction:rtl;padding:20px;color:#222;-webkit-print-color-adjust:exact;print-color-adjust:exact;}\n'
         + 'h2{color:#1e3a5f;margin-bottom:4px;}\n'
         + 'h3{color:#1e3a5f;font-size:1rem;margin-bottom:6px;}\n'
         + 'table{width:100%;border-collapse:collapse;margin:12px 0;font-size:12px;}\n'
@@ -20556,7 +20580,7 @@ function generateInvoiceContent(transaction, settings, printSettings) {
                 }
             }
             body {
-                font-family: Tahoma, sans-serif;
+                font-family: Estedad, Tahoma, sans-serif;
                 margin: 0;
                 padding: 20px;
             }
@@ -20746,7 +20770,7 @@ function formatCurrency(amount, currencyCode) {
                 <meta charset="UTF-8">
                 <title>فاکتور فروش ${transaction.billNumber || ''}</title>
                 <style>
-                    body { font-family: Tahoma, sans-serif; font-size: 14px; padding: 20px; }
+                    body { font-family: Estedad, Tahoma, sans-serif; font-size: 14px; padding: 20px; }
                     .invoice { width: 100%; max-width: 800px; margin: 0 auto; }
                     .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 20px; margin-bottom: 30px; }
                     .store-name { font-size: 24px; font-weight: bold; }
@@ -23702,7 +23726,7 @@ function showToast(message, type = 'info') {
     var iconColor = colors[type] || colors.info;
     var toast = document.createElement('div');
     toast.id = 'app-toast';
-    toast.style.cssText = 'position:fixed;bottom:75px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;align-items:center;gap:8px;padding:0;background:none;border:none;box-shadow:none;opacity:0;transition:opacity 0.3s;direction:rtl;max-width:90%;font-family:Vazirmatn,sans-serif;pointer-events:none;';
+    toast.style.cssText = 'position:fixed;bottom:75px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;align-items:center;gap:8px;padding:0;background:none;border:none;box-shadow:none;opacity:0;transition:opacity 0.3s;direction:rtl;max-width:90%;font-family:Estedad,Vazirmatn,sans-serif;pointer-events:none;';
     toast.innerHTML = '<i class="fas ' + (icons[type] || icons.info) + '" style="font-size:20px;color:' + iconColor + ';filter:drop-shadow(0 1px 3px rgba(0,0,0,0.35));"></i><span style="font-size:14px;font-weight:700;color:' + iconColor + ';text-shadow:0 1px 3px rgba(0,0,0,0.4);letter-spacing:0.2px;">' + message + '</span>';
     document.body.appendChild(toast);
     setTimeout(function() { toast.style.opacity = '1'; }, 10);
@@ -27977,7 +28001,7 @@ function ssbLoadSubContent(key) {
                 <h4><i class="fas fa-font"></i> فونت بل</h4>
                 <label>نوع فونت</label>
                 <select id="ssb-bill-font-family">
-                    <option value="vazirmatn">وزیرمتن (پیش‌فرض)</option>
+                    <option value="vazirmatn">استعداد (پیش‌فرض)</option>
                     <option value="tahoma">Tahoma</option>
                     <option value="nazanin">B Nazanin / نازنین</option>
                     <option value="arial">Arial</option>
@@ -30086,7 +30110,7 @@ function printReport() {
     if (!table) return;
     var html = `<html dir="rtl"><head><meta charset="UTF-8"><title>گزارش</title>
     <style>
-        body { font-family: Tahoma, sans-serif; }
+        body { font-family: Estedad, Tahoma, sans-serif; }
         table { width: 100%; border-collapse: collapse; }
         th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
         th { background: #2c3e50; color: white; }
@@ -30400,7 +30424,7 @@ function _generateReceiptSlipHTML(tx, settings) {
     body { margin: 0; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .no-print { display: none !important; }
 }
-body { font-family: 'Vazirmatn', Tahoma, Arial, sans-serif; font-size: 12px; color: #1a2533; background: #eef2f7; direction: rtl; padding: 10mm; }
+body { font-family: 'Estedad', 'Vazirmatn', Tahoma, Arial, sans-serif; font-size: 12px; color: #1a2533; background: #eef2f7; direction: rtl; padding: 10mm; }
 .slp-wrap { background: #fff; border-radius: 10px; overflow: hidden; max-width: 210mm; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.08); }
 
 /* ---- هدر ---- */
@@ -45158,6 +45182,14 @@ function _apexDigitCss(mode) {
     var fams = ['Vazirmatn', 'Tahoma', 'Segoe UI', 'Arial', 'Helvetica', 'Times New Roman', 'Courier New', 'B Nazanin', 'Nazanin'];
     var range = 'U+0030-0039, U+0660-0669, U+06F0-06F9';
     var css = '';
+    // Estedad (فونتِ اصلیِ برنامه، assets/fonts/estedad.css) برای هر وزن یک فایلِ جدا دارد؛ رقمِ
+    // جایگزین باید با «همان وزن» تعریف شود تا مرورگر آن را با همان فایل یک خانواده‌ی ترکیبی
+    // بداند (با بازهٔ ۱۰۰ تا ۹۰۰ مرورگر یکی از دو را کامل برمی‌دارد و شکلِ رقم عوض نمی‌شود).
+    var b64e = _apexDigitFontDataEstedad(mode === 'fa' ? 'fa' : 'en');
+    for (var w = 100; w <= 900; w += 100) {
+        css += "@font-face{font-family:'Estedad';src:url(data:font/woff2;base64," + b64e + ") format('woff2');" +
+               'font-weight:' + w + ';font-style:normal;font-display:block;unicode-range:' + range + ';}';
+    }
     for (var i = 0; i < fams.length; i++) {
         css += "@font-face{font-family:'" + fams[i] + "';src:url(data:font/woff2;base64," + b64 + ") format('woff2');" +
                'font-weight:100 900;font-style:normal;font-display:block;unicode-range:' + range + ';}';
@@ -45190,7 +45222,7 @@ function _apexDigitApply() {
         _bfcFitAll();
     };
     try {
-        if (document.fonts && document.fonts.load) document.fonts.load("16px 'Vazirmatn'", '0123456789').then(redraw, redraw);
+        if (document.fonts && document.fonts.load) document.fonts.load("16px 'Estedad'", '0123456789').then(redraw, redraw);
         else setTimeout(redraw, 60);
     } catch (e) { setTimeout(redraw, 60); }
 }
@@ -45198,7 +45230,8 @@ function _apexDigitApply() {
 function _apexDigitHtml(html) {
     html = String(html == null ? '' : html);
     if (html.indexOf('id="apex-digit-faces"') !== -1) return html;
-    var tag = '<style id="apex-digit-faces">' + _apexDigitCss(_apexDigitMode()) + '</style>';
+    var tag = '<link rel="stylesheet" href="assets/fonts/estedad.css">' +
+              '<style id="apex-digit-faces">' + _apexDigitCss(_apexDigitMode()) + '</style>';
     var i = html.search(/<\/head>/i);
     if (i !== -1) return html.slice(0, i) + tag + html.slice(i);
     var j = html.search(/<body[\s>]/i);
@@ -45206,6 +45239,12 @@ function _apexDigitHtml(html) {
     return tag + html;
 }
 
+/** فونتِ «فقط رقم» برای خانوادهٔ Estedad (woff2، متغیر ۱۰۰ تا ۹۰۰) — برگرفته از Estedad 8.5
+ *  (SIL OFL 1.1، https://github.com/aminabedi68/Estedad). en: هر سه نوع رقم → 0-9 ؛ fa: → ۰-۹ */
+function _apexDigitFontDataEstedad(kind) {
+    if (kind === 'fa') return 'd09GMgABAAAAAA3AABUAAAAAF7AAAA1NAAiAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGyAcMD9IVkFSYz9NVkFSgQAGYD9TVEFUgR4/VlZBUlUARC9+EQgKiSCHeTCOfAE2AiQDRAskAAQgBYp2ByAXJBhAG3wVUVSy8tF8cWATma7AN9xQhhpvvmiIoZbVCsPxgjv8Eb6PohgSiRyMkGT253HO3k9SIRVLlUqqTvECbVHr7GCi2u58onYmCpwoG3LGbY7X/1hbD5O4mfkV9QRNLTGzIhYvt+MJ/2Dv7ra/IMBEQ2iF5ZhoqP1oV5+9+2AplGbTwW3zuwrAZMcZvGG85tW2MK+BSq/UznSi/fueiv/f2qvdGwSVlZPT84LGFISp8DVmM/thfuZMgScAsCkEgFVPVIUkULMusgj7Wxamp8bWuAqnC7XJ7nUQNIKC0Iasle8bm6TYSS38V0KaKmLbDpd9MCAAIEFNCxWXHp8oAwEAkEoBAAAAB1w8cBPz8FgOjTcbWMdsMEAiArWy9qDkEtQXsbfhAqAojiABAAMA9HFr54h6hUPZWtqhpJ8LQJCAg+jCQBgAkwiX4WksAOZFYmx7seqnowQAELOn+DwA2OxpBrsBoRpmv5jjzH+QaqGJsWKhQIVo9Ww5WD8eXArrvb8MSEoqp+QQa5gZ+AGBtaBdYABgW7JfAFTRzdFEGMViejQdeNYpH9XCP/jOAIFGuQAEQrcBAGLob2wnxtIIQICAfbiakmatFLZqlhJkXgDEtBwylbr70UT+9ULTperFPt7Jp+ICPhUDDO0CYK+zyxX69aqOc8vVUIF2dD29B2oMRWJ0wXVOxDwIoOprmi1AFlgIoLBAayl49LUE+CrN2e6cM4c5cKt1+M5k5vX80FSHvqjlgEKQwgvxzFWSWWuCAHG7oQ8FBEgIDpYWRQzg49KSUAC5qqWR4YWA5FGMvQ2AlFGB+ur0qDNeL62JFuB0vi40HhirhwClIgisQNQFYAAHSqExAHQXptoMkI3IzMJkauruJKHXIAiu5k5RcoHw6rrJbPESjzmVx+K+MifZrvxHY9sUomHxZ955hbO1Y2wU39tNd215VUWdPu4003tjj56Uxw8dglNtT5+3UPKMauzhNki872jXkse+Dk0XZNRhScnriW+y5yGng5D7pB/Ex/RTjzkvMh42C7LMc58n9e6tXzR+WLzbhsuef5/c0j428YYGfGSVn2l/cxz6+tNjt7S3V9DKNr3T3z9S55yAxXCAnsPPPKPknD2p45Oc5isvThu+b77c9mz6yBl/2Z70RKMnfRp2fpaKsuNLLXns8+Ceu+vxgVfHJRJsQYgD655ke/uj7783ve2uLID/AOGiK5+SWz5/G51ui2996aMseZw69/Hnrnv5o94Xva1+1wMueHYK91j6dvdOurGepuOeg+oDvAvT4elJ/DPqfe7t2oo6Wls3ru4VXShUg9UyIjVMxhzTgxUFBepdN2Nf8VewVpfBc5O4R1Xb3NvphjqrpnnCRQMdZxYJTbxyBq5mqcwRp+Z5v3R1aaW4lhlVjamryvfEXA8x902hBf/AvaPCZu4c5vI8YPCWFXw++bXo+PJ8QfOx8JP8Fha/Jfxk8zFBWX5kwpRXw5/zlkFLvTwcHT/51YIveataeasKvpz8amR8WdhX1Hw8/DJ/Jos/s+DlphOQcSninVNf6Pf8YK1RLGSVkBP0Z0zRcleNcTerrrS8VBlvqCid6OjOUFi7Q7Oo5pMW9TdX4KcxrojVGHU4jNGI2eWOmI0R584fa3WV2Wt02hq7rVWra4XLU7gnVDtcO3QNdbo3j77yH3OFv77K7VFdc9GxB36jsirjeO2qmMqm3/mMJra6WmbOHRtI+d8WLyEfqINP6/yxtsrw3LmRqdopwVxjPOJxW85exW+u9rLq1qos5+IJ62NlvxRWPuIo7r9XvV9UJvLXG60hn9M4tnF6cd6YMRP2w2ZhaSg2Y96aRxieRn0gFsgJTWnJz3VUGPELD4c0lrMKGqq75SBomLF/N6Px1K2lKyPR+lkfkCYmYOAS8UQikQGm/9UEQC4AYmK7ICuhz8ovhT2CHQAqrxHbl5661bkdQqnBBblPNhGp7GcA8n8VF4KwHneQF81C721wMBVmx7Kxk7gEX4Zvxnfjp4rgbUhgwAUGIGAAwNZHUY+8zyqVDGjQ8eYJhWJKKvnjzyyJItSXTKQNcfxvxBlvTjejHrn3Gs3TNL8aDOWGC0C7YGCJ5Go6nOVUc4jIIYposFoeTyASi/5oS2TnbsbnML6P0rKW2xhbHiGoM5lQMdGdTyMe/Wn8Pkv69TBXY+QhRRJKxlcM9vjff8uyoDfKcp1q4dBfzVFlUa7fmFnV2FhdGo1CIJlQ3U2JDXRY4Gu4TyUrDEUhuzAlut+uKRNpCUux9PEzxWJKKqM6fynrg5GMIDDshyAMSdEaHWfBb7iaFqvXajSbkvnG//8WiQDQ1WQiMNLPGd27V1182PDOh6nhkP/spphRKmOp9YQlJrFYBKRXa7fb1AI8hbe50dmZA6RXw0ETxRpSyvg5nJcXztBQBOU1NjW8dqHdHnQ6jLTRXVxbWxEtyM8HbzIRYPJEUmlY4anExyeiTNkeik3QPrDA6/e4Qlal8W+xO47T1o0oIVVPLVKGD5mfVUrA8GjxHag6p2nRHH7wD//5jj5OJkQiBQ914FdHtmw58tKXHRW+QmT4H9h3L8XCB5awzeT2ZAV1wmnj4y3TofUvwbxG9CLWuCIG2+AReAS2MVc0xoZrhKvCn+B/ou+IUZcQ7//5/+/H8L8ipbymgKeUsH+1f/0Pw/+/7GSHyJJTWJhjESf7T1Q1sMlKjae3NI+fJtQFszxukz3MK0puZldPGltUNHZSdfbNqx9PHDx44s1rSUXEEQ/aKpEISQYT9SNoaX1IrdcbdGKuUNLTM2Ly1GaTUS9jpTo96E7SfOffjJz7uG4sev/kFVIq5HHYGKH3Z2wYVdsq1mJOM2+ZCvrkH3/w9migEChUaqu14/s/f34ZRYPnJ3Rp18/q528//0athVgHkqRZqMuKaZ+KirBDYgiN9KVCNbvYia2wuURdVW0QdW4bSI0jgkiH5vZAwVEJYoD9KTDaGgzm9iD7cXML9SbTSRK7Bwp8hoFsjzHytzScnCA19YNMTXYco8j+r0pMOJTak8e8Goo9ZDeUzm3WgS2Z/v//M366La8UY541nT8IN7Mc6bwRrhvTHVmGwAZ7WBL6kptRz5UE7a7KL/nkziMHkq8e7MVkTD7pFrolGP5bWe9eB1nQLWDfzAomUzeIqOCC2omqpxgbFoki1J1M2DE0TH+A37345pvvfxOKQbRbwD/dfzawIwy3k1x5aLfbZ+Tetvp8d1f/ieKWT69QpduDXntGWV12ptuRUx6L+Fweh68622bKbWpqrispLAJHMmEfHqnldLhp2fqFC6fXRYzlFfzXo027PVklxcWRolvtOjcwXr749Ht/3eBYgAXDgop+GWcQf2Xsj8TRVAohRPDkmLRGg0bZ3T2CNCVWn71mi+nHUvKwOzcikn6i48P7nzsp7wynsDSZjI1MwwibOJTC//C+Mcjhvs+dOMor6iuBkvtfk4dd/UX8Z7/U5jOjQcTlppFsBj7yDTFZf7EHp+0aAbqHNdno1hE/VjlkKO1AJv39sUXT4+U5bhVjBGaFkN5UKeVsYMNgRukMBtWVZWeX1doDygJ6ottvnrghMB7jDfZfOWK9xWyUpVnAeD/6iHzST0DnALGe9nMQkguWhSRA/Ukrp7s34i37Nbs9QGBRXmGS5eBGLziudyebRWAYKynD6dz//vj7+ct36MhsJ5XJkcHlyzXWUBhhya8lVDsdHqc3J1IWBW7S2ueQsZlpUoNe6QiXiEVCqXvXS6TptoLKClF53+7NHtPeyxs6+ePE1kXkk+8kSWxAAD8oAXvNI69NEuTfYTPG8V4AgK5OfiYA0MM9dcT8F9kjOfr4u36hP2Insfc9jZS7mVN/UW5DIIVy65W11p3fWcAsbi4TyouoYB+lESY9gJJ6QNdet0gI1l0N/W16EQQA2iyEHCAiDQAugB1CwIcLwJKfJxx83iUCtG4SA2QREhO0sVAaUCkmHjJkHPEhs2uXKdUuQwBc7GkiITb2Ooko+j6JUf2FJEy9ThQSp0hKNe0yWQLnkNwcd6TAxbNJSb1iUhFuMqWjt5jU2Pgu0lDsEGmJ9zTpGPYu0Uj8Wnz0VOuDGJsj5VHJFAES4BOQidZcQdQl/JmfSMASkPof2qaZ5Ec6IkxaYU+6fcQmpQPOqFe8V/UsKuIX4vRMYzNrPYW5aQsrLt+hmsm22RRXax4w3YlkIQOrKRY8QvLEVlvjq3SHs7nVaFj9JiahVbYpkl+ApNpo15NIIrx0Ui2GLJXiZYo1ZUgy9qsVERKbnzRPXJO+vyYrBgjweNmk6MbuHJE6DjxDemW1BDqzJgI/X7hNnVs5YkdPEblUk6vmGJxa1T7Oc+XqjduOU2I1a7PVIotKGsyiJHu3yVbIfvUf4q0aSmVVqz3TGSR9HtbRa1Z4Tmieo+mkTo3eM2SOZrKxh8HM37JXFeBZgfmBEYoanhc6FyK3zdybp8NRrloOpsdMNRj5S0gI3R7dg/cy7sCfQ33EJwCAoCMEh2OtAGjJAvOwAMs7FgCwzX8dDzmXsChhQUUhFqydRgsAAA==';
+    return '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';
+}
 function _apexDigitFontData(kind) {
     // فونتِ «فقط رقم» (woff2، متغیر ۱۰۰ تا ۹۰۰) — برگرفته از Vazirmatn 33.0.3 (SIL OFL 1.1)
     if (kind === 'fa') return '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';
