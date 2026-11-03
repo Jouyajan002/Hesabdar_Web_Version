@@ -12182,7 +12182,10 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
         return '';
     }
     var _itemDetailArr = (_printItems || []).map(_itemDetailText);
-    var hasDetails = _itemDetailArr.some(function (d) { return !!d; });
+    // (APEX) ستونِ «جزئیات» وابسته به «تنظیمات بل › نمایش»: اگر خاموش باشد، حتی با وجودِ
+    // جزئیاتِ تایپ‌شده نمایش داده نمی‌شود؛ اگر روشن باشد (پیش‌فرض)، مثلِ قبل فقط وقتی می‌آید
+    // که دست‌کم یک قلم جزئیات داشته باشد.
+    var hasDetails = (S.billShowDetails !== false) && _itemDetailArr.some(function (d) { return !!d; });
 
     // ---- ردیف‌های اقلام ----
     var rowsHtml = '';
@@ -12204,18 +12207,9 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
             '</tr>';
         rowCount++;
     });
-    // ردیف‌های خالی برای رسیدن به حداقل تعداد (فقط برای A4/A5)
-    if (!isThermal) {
-        for (var r = rowCount; r < minRows; r++) {
-            rowsHtml +=
-                '<tr class="empty-row">' +
-                    '<td class="c-num">' + fn(r + 1) + '</td>' +
-                    '<td class="c-desc">&nbsp;</td><td class="c-qty">&nbsp;</td><td class="c-price">&nbsp;</td><td class="c-total">&nbsp;</td>' +
-                    (hasDetails ? '<td class="c-details">&nbsp;</td>' : '') +
-                '</tr>';
-        }
-    }
-    if (rowCount === 0 && isThermal) {
+    // (APEX) سطرهای خالیِ اضافه دیگر ساخته نمی‌شوند: جدول دقیقاً به تعدادِ اقلامِ بل سطر دارد
+    // (در همهٔ بل‌ها: فروش، خرید، برگشت از فروش و برگشت از خرید).
+    if (rowCount === 0) {
         rowsHtml = '<tr><td colspan="' + (hasDetails ? 6 : 5) + '" style="text-align:center;padding:10px;color:#888;">قلمی ثبت نشده است</td></tr>';
     }
 
@@ -12302,6 +12296,35 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
             '.items .c-details { width: ' + (isThermal ? '28%' : '25%') + '; }';
     }
 
+    // ---- سطرهای مجموع (APEX) ----
+    //  «جمع مبلغ»، «مجموع ضایعات» و «تخفیف» فقط وقتی چاپ می‌شوند که تخفیف یا ضایعات واقعاً
+    //  رقمی داشته باشد؛ در غیرِ آن فقط «مجموع، پرداختی، باقیمانده» می‌آید (بلِ خلوت‌تر).
+    //  «بیلانس قبلی» (از «تنظیمات بل › نمایش») پیش از پرداختی می‌آید و باقیماندهٔ نهاییِ شخص را
+    //  در همین بل حساب می‌کند: باقیمانده = بیلانس قبلی ± (مجموع − پرداختی).
+    // مقدارها مثلِ قبل بدونِ گردکردن نمایش داده می‌شوند؛ فقط خطای اعشاریِ جمع‌های محاسبه‌شده حذف می‌شود
+    var _r6 = function (v) { return Math.round((parseFloat(v) || 0) * 1e6) / 1e6; };
+    var _totRow = function (lbl, val, hl) { return '<div class="tot-row' + (hl ? ' hl' : '') + '"><span class="t-lbl">' + lbl + '</span><span class="t-val">' + fn(_r6(val)) + '</span></div>'; };
+    var _hasAdj = (_wsPrintAmount > 0.000001) || (_totalDiscount > 0.000001);
+    var _prevBal = null;
+    if (S.billShowPrevBalance === true) {
+        if (typeof printSettings.samplePrevBalance === 'number') _prevBal = printSettings.samplePrevBalance;
+        else { try { _prevBal = _apexBillPrevBalance(transaction, isPurchase); } catch (e) { _prevBal = null; } }
+    }
+    var _dir = isReturn ? -1 : 1;   // برگشت، حسابِ شخص را برعکسِ فروش/خرید تغییر می‌دهد
+    var _totRowsHtml = '';
+    if (_hasAdj) {
+        _totRowsHtml += _totRow('جمع مبلغ', _printGoodsSum);
+        if (_wsPrintAmount > 0.000001) _totRowsHtml += _totRow('مجموع ضایعات', _wsPrintAmount);
+        if (_totalDiscount > 0.000001) _totRowsHtml += _totRow('تخفیف', _totalDiscount);
+    }
+    _totRowsHtml += _totRow('مجموع', _grandTotal, true);
+    if (_prevBal !== null) {
+        _totRowsHtml += _totRow('بیلانس قبلی', _prevBal);
+        if (Math.abs(_prevBal) > 0.000001) _totRowsHtml += _totRow('مجموع کل', _prevBal + _dir * _grandTotal);
+    }
+    _totRowsHtml += _totRow('پرداختی', _paid);
+    _totRowsHtml += _totRow('باقیمانده', (_prevBal !== null) ? (_prevBal + _dir * (_grandTotal - _paid)) : _remaining);
+
     // ---- HTML ----
     var html = '<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="UTF-8"><title>' + docTitle + ' ' + esc(billNum) + '</title><style>' + css + '</style></head><body>' +
     '<div class="bill">' +
@@ -12344,16 +12367,7 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
                 (showNote ? ('<div class="note-txt"><span class="sig-ico"><i class="fas fa-file-signature"></i></span><span>' + esc(billNote) + '</span></div>') : '') +
                 '<div class="sig-line">مهر و امضاء</div>' +
             '</div>' +
-            '<div class="totals">' +
-                '<div class="tot-row"><span class="t-lbl">جمع مبلغ</span><span class="t-val">' + fn(_printGoodsSum) + '</span></div>' +
-                (_wsPrintAmount > 0
-                    ? ('<div class="tot-row"><span class="t-lbl">مجموع ضایعات</span><span class="t-val">' + fn(_wsPrintAmount) + '</span></div>')
-                    : '') +
-                '<div class="tot-row"><span class="t-lbl">تخفیف</span><span class="t-val">' + fn(_totalDiscount) + '</span></div>' +
-                '<div class="tot-row hl"><span class="t-lbl">مجموع</span><span class="t-val">' + fn(_grandTotal) + '</span></div>' +
-                '<div class="tot-row"><span class="t-lbl">پرداختی</span><span class="t-val">' + fn(_paid) + '</span></div>' +
-                '<div class="tot-row"><span class="t-lbl">باقیمانده</span><span class="t-val">' + fn(_remaining) + '</span></div>' +
-            '</div>' +
+            '<div class="totals">' + _totRowsHtml + '</div>' +
         '</div>' +
 
         '<div class="bill-ft">' +
@@ -12364,6 +12378,30 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
     '</div></body></html>';
 
     return html;
+}
+
+/**
+ * (APEX) «بیلانس قبلی»ِ شخصِ یک بل برای چاپ: بیلانسِ لحظه‌ایِ همان شخص در ارزِ بل، منهای اثرِ
+ * خودِ همین بل (از همان دفترِ حسابِ برنامه buildPersonLedger)، با جهتِ «بدهیِ طرفِ حساب»:
+ *  فروش/برگشت از فروش → مثبت یعنی مشتری به ما بدهکار است؛
+ *  خرید/برگشت از خرید → مثبت یعنی ما به فروشنده بدهکاریم.
+ * اگر بل شخصِ ثبت‌شده نداشته باشد (مشتریِ گذری)، null برمی‌گردد و سطر چاپ نمی‌شود.
+ */
+function _apexBillPrevBalance(tx, isPurchaseSide) {
+    if (!tx || typeof buildPersonLedger !== 'function' || typeof db === 'undefined' || !db || !db.getPersons) return null;
+    var pid = isPurchaseSide ? (tx.supplierId != null ? tx.supplierId : tx.personId) : (tx.customerId != null ? tx.customerId : tx.personId);
+    if (pid == null || pid === '') return null;
+    var person = (db.getPersons() || []).find(function (p) { return p && p.id == pid; });
+    if (!person) return null;
+    var L = buildPersonLedger(person);
+    var cur = tx.currency || ((typeof _baseCur === 'function') ? _baseCur() : 'AFN');
+    var bal = parseFloat((L.balances || {})[cur]) || 0;
+    var own = 0;
+    (L.rows || []).forEach(function (r) {
+        if (r && r.kind === 'tx' && tx.id != null && r.id == tx.id && r.currency === cur) own += (parseFloat(r.effect) || 0);
+    });
+    var prev = (bal - own) * (isPurchaseSide ? -1 : 1);
+    return Math.round(prev * 100) / 100;
 }
 
 // ==================== پیش‌نمایش یکپارچه چاپ (چاپ + اشتراک‌گذاری) ====================
@@ -13104,7 +13142,7 @@ function __jouyaShowDiagOnScreen(txt, fname, reason) {
         ov.setAttribute('dir', 'rtl');
         ov.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(15,23,42,.97);' +
             'display:flex;align-items:center;justify-content:center;padding:14px;' +
-            'font-family:Estedad,Vazirmatn,inherit;color:#e2e8f0;';
+            'font-family:Estedad,Vazirmatn,Tahoma,sans-serif;color:#e2e8f0;';
         var canSave  = __jouyaAndIsNative();
         var canShare = __jouyaAndIsNative();
         ov.innerHTML =
@@ -27698,8 +27736,10 @@ document.addEventListener('click', function(e) {
 /** سازگاری با کدهای قدیمی که closeSettingsSidebar صدا می‌زنند */
 function closeSettingsSidebar() { closeSidebar(); }
 
-/** برگشت به لیست اصلی از زیربخش */
+/** برگشت از زیربخش: به والدِ آن (گروهِ «تنظیمات» / «تنظیمات اطلاعات») یا به لیستِ اصلی */
 function ssbGoBack() {
+    var parent = _ssbParentOf(window.__ssbCurKey);
+    if (parent) { ssbOpenSub(parent); return; }
     ssbResetList();
 }
 
@@ -27713,10 +27753,15 @@ function ssbResetList() {
     if (subCont)   { subCont.style.display = 'none'; subCont.innerHTML = ''; }
     if (backBtn)   backBtn.classList.remove('visible');
     if (title)     title.innerHTML = '<i class="fas fa-cog"></i> تنظیمات';
+    window.__ssbCurKey = null;
 }
 
 /** باز کردن یک زیربخش */
 function ssbOpenSub(key) {
+    // (APEX) «تنظیمات بل» و «مرکز اعلانات» حالا صفحهٔ تمام‌صفحه (اورلی) دارند
+    if (key === 'invoice') { apexBillSettingsOpen(); return; }
+    if (key === 'announcements') { apexNotifOpen(); return; }
+    window.__ssbCurKey = key;
     const mainList = document.getElementById('ssb-main-list');
     const subCont  = document.getElementById('ssb-sub-content');
     const backBtn  = document.getElementById('ssb-back-btn');
@@ -27901,6 +27946,7 @@ function ssbGetTitle(key) {
         datasettings: '<i class="fas fa-cogs"></i> تنظیمات اطلاعات',
         serversync: '<i class="fas fa-right-left"></i> ارسال و دریافت اطلاعات',
         update:   '<i class="fas fa-cloud-arrow-down"></i> بروزرسانی',
+        settingsgroup: '<i class="fas fa-sliders-h"></i> تنظیمات',
     };
     return titles[key] || '<i class="fas fa-cog"></i> تنظیمات';
 }
@@ -27908,6 +27954,9 @@ function ssbGetTitle(key) {
 /** محتوای HTML هر زیربخش */
 function ssbLoadSubContent(key) {
     switch (key) {
+
+        case 'settingsgroup':
+            return _ssbGroupHtml();
 
         case 'update':
             return (typeof ndUpdPanelHtml === 'function') ? ndUpdPanelHtml() : '';
@@ -28423,6 +28472,8 @@ function ssbPopulateForm(key) {
             _ck('ssb-bill-show-address', settings.billShowAddress !== false);
             _ck('ssb-bill-show-barcode', settings.billShowBarcode === true);
             _ck('ssb-bill-show-note', settings.billShowNote !== false);
+            _ck('ssb-bill-show-prevbal', settings.billShowPrevBalance === true);
+            _ck('ssb-bill-show-details', settings.billShowDetails !== false);
             // تصاویر (بازنشانی بافر آپلود موقت)
             window.__ssbBill = { billLogo: null, billSideImage: null, billBarcode: null };
             _img('ssb-bill-logo-preview', settings.billLogo || settings.storeLogo || '');
@@ -28755,7 +28806,7 @@ function ssbBillImgPreview(event, key, previewId) {
         reader.readAsDataURL(file);
     } catch (e) { console.error('ssbBillImgPreview error:', e); }
 }
-function ssbSaveBill() {
+function _ssbBillPayload() {
     var g = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
     var c = function (id) { var el = document.getElementById(id); return el ? !!el.checked : false; };
     var payload = {
@@ -28783,6 +28834,15 @@ function ssbSaveBill() {
         billShowBarcode: c('ssb-bill-show-barcode'),
         billShowNote: c('ssb-bill-show-note')
     };
+    // (APEX) دو گزینهٔ تازهٔ «نمایش» — فقط وقتی فرمشان باز است نوشته می‌شوند
+    if (document.getElementById('ssb-bill-show-prevbal')) payload.billShowPrevBalance = c('ssb-bill-show-prevbal');
+    if (document.getElementById('ssb-bill-show-details')) payload.billShowDetails = c('ssb-bill-show-details');
+    // (APEX) سطرهای خالیِ جدول حذف شدند؛ مقدارِ قبلیِ این تنظیم دست‌نخورده می‌ماند
+    if (!document.getElementById('ssb-bill-minrows')) delete payload.billMinRows;
+    return payload;
+}
+function ssbSaveBill() {
+    var payload = _ssbBillPayload();
     // تصاویر فقط در صورت آپلود جدید نوشته می‌شوند (وگرنه مقدار قبلی حفظ می‌ماند)
     var b = window.__ssbBill || {};
     if (b.billLogo) payload.billLogo = b.billLogo;
@@ -45761,3 +45821,351 @@ function __hbSaveJsonFilePick(text, fileName) {
     return __hbSaveJsonFile(text, name);
 }
 if (typeof window !== 'undefined') window.__hbSaveJsonFilePick = __hbSaveJsonFilePick;
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  (APEX) اورلی‌های تمام‌صفحه: «تنظیمات بل» و «مرکز اعلانات»                     ║
+// ║  ─────────────────────────────────────────────────────────────────────────── ║
+// ║  هم‌شکل پیش‌نمایش چاپ: نوار بالا با دکمهٔ «برگشت»، بدنهٔ تمام‌صفحه.          ║
+// ║  همه‌چیز «تابع declaration» است (throw عمدی سطح‌بالای این فایل).             ║
+// ║  دکمهٔ برگشت موبایل (mobile-fit.js) با window.__apexOvlBack اورلی رویی را     ║
+// ║  می‌بندد.                                                                     ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+function _apexOvlEsc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+/** ساخت یک اورلی؛ اگر از قبل باز بود همان برگردانده می‌شود */
+function _apexOvlCreate(id, title, icon, actionsHtml, onClose) {
+    var old = document.getElementById(id);
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var ov = document.createElement('div');
+    ov.id = id;
+    ov.className = 'apex-ovl';
+    ov.setAttribute('dir', 'rtl');
+    ov.innerHTML =
+        '<div class="apex-ovl-bar">' +
+            '<button type="button" class="apex-ovl-btn apex-ovl-back" title="برگشت"><i class="fas fa-arrow-right"></i><span>برگشت</span></button>' +
+            '<div class="apex-ovl-title"><i class="' + icon + '"></i><span>' + _apexOvlEsc(title) + '</span></div>' +
+            '<div class="apex-ovl-actions">' + (actionsHtml || '') + '</div>' +
+        '</div>' +
+        '<div class="apex-ovl-body"></div>';
+    document.body.appendChild(ov);
+    ov.__apexOnClose = onClose || null;
+    ov.querySelector('.apex-ovl-back').addEventListener('click', function () { _apexOvlClose(id); });
+    try { document.documentElement.classList.add('apex-ovl-open'); } catch (e) {}
+    window.__apexOvlBack = _apexOvlBackTop;
+    requestAnimationFrame(function () { ov.classList.add('open'); });
+    return ov;
+}
+function _apexOvlClose(id) {
+    var ov = document.getElementById(id);
+    if (!ov) return;
+    var cb = ov.__apexOnClose;
+    if (ov.parentNode) ov.parentNode.removeChild(ov);
+    if (!document.querySelector('.apex-ovl')) { try { document.documentElement.classList.remove('apex-ovl-open'); } catch (e) {} }
+    if (typeof cb === 'function') { try { cb(); } catch (e) {} }
+}
+/** برای دکمهٔ برگشت موبایل: رویی‌ترین اورلی را می‌بندد؛ اگر اورلی نبود false */
+function _apexOvlBackTop() {
+    var all = document.querySelectorAll('.apex-ovl');
+    if (!all.length) return false;
+    _apexOvlClose(all[all.length - 1].id);
+    return true;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  «تنظیمات بل» — تب‌های سمت راست (آکاردئونی) + بل نمونهٔ زنده
+//  فیلدها همان شناسه‌های قبلی ssb-bill-* را دارند، پس خواندن/ذخیره دقیقاً از همان
+//  ssbPopulateForm('invoice') و ssbSaveBill() انجام می‌شود (منطق ذخیره دست‌نخورده).
+// ════════════════════════════════════════════════════════════════════════════
+function _apexBsetTabs() {
+    var chk = function (id, label, hint) {
+        return '<label class="apex-bset-check"><input type="checkbox" id="' + id + '"><span class="apex-bset-cbx"></span>' +
+               '<span class="apex-bset-cl"><b>' + label + '</b>' + (hint ? '<small>' + hint + '</small>' : '') + '</span></label>';
+    };
+    var fld = function (label, inner) { return '<div class="apex-bset-field"><label>' + label + '</label>' + inner + '</div>'; };
+    var img = function (label, fileId, prevId, key) {
+        return '<div class="apex-bset-img">' +
+                   '<div class="apex-bset-imgbox"><img id="' + prevId + '" alt=""><i class="fas fa-image"></i></div>' +
+                   '<div class="apex-bset-imgside"><b>' + label + '</b>' +
+                       '<label class="apex-bset-filebtn"><i class="fas fa-upload"></i> انتخاب تصویر' +
+                       '<input type="file" id="' + fileId + '" accept="image/*" onchange="ssbBillImgPreview(event,\'' + key + '\',\'' + prevId + '\'); _apexBsetSchedule(400);"></label>' +
+                   '</div>' +
+               '</div>';
+    };
+    return [
+        { key: 'store', icon: 'fas fa-store', title: 'مشخصات فروشگاه', sub: 'نام، نام انگلیسی و شعار روی بل', html:
+            fld('نام فروشگاه (روی بل)', '<input type="text" id="ssb-bill-store-name" placeholder="نام فروشگاه">') +
+            fld('نام انگلیسی (اختیاری)', '<input type="text" id="ssb-bill-store-name-en" placeholder="Store Name (English)" dir="ltr">') +
+            fld('شعار / معرفی فروشگاه', '<input type="text" id="ssb-bill-slogan" placeholder="عرضه کننده انواع کالاهای با کیفیت">') },
+        { key: 'paper', icon: 'fas fa-ruler-combined', title: 'اندازه و رنگ بل', sub: 'اندازهٔ ورق، جهت و رنگ‌ها', html:
+            fld('اندازهٔ ورق', '<select id="ssb-bill-size"><option value="A4">A4 (بزرگ)</option><option value="A5">A5 (متوسط)</option><option value="80mm">۸۰ میلی‌متر (حرارتی)</option><option value="58mm">۵۸ میلی‌متر (حرارتی کوچک)</option></select>') +
+            fld('جهت صفحه (برای A4 و A5)', '<select id="ssb-bill-orientation"><option value="portrait">عمودی</option><option value="landscape">افقی</option></select>') +
+            '<div class="apex-bset-row2">' +
+                fld('رنگ اصلی', '<input type="color" id="ssb-bill-primary" value="#1b2a4a">') +
+                fld('رنگ تأکید', '<input type="color" id="ssb-bill-accent" value="#c8963c">') +
+            '</div>' },
+        { key: 'font', icon: 'fas fa-font', title: 'قلم بل', sub: 'نوع و اندازهٔ قلم', html:
+            fld('نوع قلم', '<select id="ssb-bill-font-family"><option value="vazirmatn">استعداد (پیش‌فرض)</option><option value="tahoma">Tahoma</option><option value="nazanin">B Nazanin / نازنین</option><option value="arial">Arial</option><option value="times">Times New Roman</option><option value="courier">Courier New</option></select>') +
+            '<div class="apex-bset-row2">' +
+                fld('اندازهٔ متن بدنه (px)', '<input type="number" id="ssb-bill-base-font" min="7" max="24" placeholder="12">') +
+                fld('اندازهٔ نام فروشگاه (px)', '<input type="number" id="ssb-bill-title-font" min="10" max="48" placeholder="26">') +
+            '</div>' },
+        { key: 'show', icon: 'fas fa-eye', title: 'نمایش', sub: 'چه چیزهایی روی بل چاپ شود', html:
+            chk('ssb-bill-show-prevbal', 'نمایش بیلانس قبلی', 'بیلانس لحظه‌ای شخص پیش از پرداختی می‌آید و باقیماندهٔ نهایی را حساب می‌کند') +
+            chk('ssb-bill-show-details', 'نمایش ستون جزئیات', 'فقط اقلامی که جزئیات دارند؛ خاموش = هرگز چاپ نمی‌شود') +
+            chk('ssb-bill-show-logo', 'نمایش لوگوی فروشگاه') +
+            chk('ssb-bill-show-side', 'نمایش تصویر کناری') +
+            chk('ssb-bill-show-ftitle', 'نمایش عنوان تشکر') +
+            chk('ssb-bill-show-phone', 'نمایش شماره تماس') +
+            chk('ssb-bill-show-address', 'نمایش آدرس') +
+            chk('ssb-bill-show-barcode', 'نمایش بارکد / QR') +
+            chk('ssb-bill-show-note', 'نمایش یادداشت اعتبار') },
+        { key: 'footer', icon: 'fas fa-shoe-prints', title: 'پاورقی بل', sub: 'تشکر، تماس، آدرس و یادداشت', html:
+            fld('عنوان تشکر', '<input type="text" id="ssb-bill-ftitle" placeholder="از اعتماد شما سپاسگزاریم">') +
+            fld('زیرعنوان', '<input type="text" id="ssb-bill-fsub" placeholder="کیفیت بهتر، قیمت مناسب، خدمت صادقانه">') +
+            fld('شماره تماس', '<input type="text" id="ssb-bill-phone" placeholder="۰۷۹۹۷۳۰۰۱۱">') +
+            fld('آدرس', '<input type="text" id="ssb-bill-address" placeholder="آدرس فروشگاه">') +
+            fld('یادداشت اعتبار', '<input type="text" id="ssb-bill-note" placeholder="این بل بدون مهر و امضا مدار اعتبار نمی‌باشد.">') },
+        { key: 'images', icon: 'fas fa-stamp', title: 'لوگو، تصویر و بارکد', sub: 'تصاویر روی بل', html:
+            img('لوگوی فروشگاه', 'ssb-bill-logo-file', 'ssb-bill-logo-preview', 'billLogo') +
+            img('تصویر کناری', 'ssb-bill-side-file', 'ssb-bill-side-preview', 'billSideImage') +
+            img('بارکد / QR', 'ssb-bill-barcode-file', 'ssb-bill-barcode-preview', 'billBarcode') }
+    ];
+}
+function apexBillSettingsOpen() {
+    var fromSidebar = false;
+    try { fromSidebar = !!document.querySelector('.settings-sidebar.open'); } catch (e) {}
+    var ov = _apexOvlCreate('apex-bset', 'تنظیمات بل', 'fas fa-file-invoice-dollar',
+        '<button type="button" class="apex-ovl-btn apex-ovl-primary" id="apex-bset-save"><i class="fas fa-check"></i><span>ثبت تغییرات</span></button>',
+        function () {
+            window.__ssbBill = { billLogo: null, billSideImage: null, billBarcode: null };
+            if (fromSidebar) { try { ssbOpenSub('settingsgroup'); } catch (e) {} }
+        });
+    var tabs = _apexBsetTabs();
+    var body = ov.querySelector('.apex-ovl-body');
+    body.classList.add('apex-bset-body');
+    body.innerHTML =
+        '<aside class="apex-bset-tabs">' +
+            tabs.map(function (t) {
+                return '<section class="apex-bset-tab" data-tab="' + t.key + '">' +
+                    '<button type="button" class="apex-bset-tabhead">' +
+                        '<span class="apex-bset-tabico"><i class="' + t.icon + '"></i></span>' +
+                        '<span class="apex-bset-tabtxt"><b>' + t.title + '</b><small>' + t.sub + '</small></span>' +
+                        '<i class="fas fa-chevron-down apex-bset-chev"></i>' +
+                    '</button>' +
+                    '<div class="apex-bset-tabbody">' + t.html + '</div>' +
+                '</section>';
+            }).join('') +
+        '</aside>' +
+        '<main class="apex-bset-preview">' +
+            '<div class="apex-bset-prevhead"><i class="fas fa-receipt"></i><span>بل نمونه</span><small>هر تغییر همین‌جا دیده می‌شود؛ با «ثبت تغییرات» روی همهٔ بل‌ها اعمال می‌شود</small></div>' +
+            '<div class="apex-bset-prevwrap" id="apex-bset-prevwrap"><div class="apex-bset-holder" id="apex-bset-holder"><iframe id="apex-bset-frame" title="بل نمونه"></iframe></div></div>' +
+        '</main>';
+    // مقادیر ذخیره‌شده — همان تابع قبلی سایدبار
+    try { ssbPopulateForm('invoice'); } catch (e) { console.error('bill settings populate:', e); }
+    // آکاردئون: باز شدن یک تب، تب باز قبلی را می‌بندد
+    Array.prototype.forEach.call(body.querySelectorAll('.apex-bset-tabhead'), function (h) {
+        h.addEventListener('click', function () {
+            var sec = h.parentNode, isOpen = sec.classList.contains('open');
+            Array.prototype.forEach.call(body.querySelectorAll('.apex-bset-tab.open'), function (x) { x.classList.remove('open'); });
+            if (!isOpen) sec.classList.add('open');
+        });
+    });
+    var first = body.querySelector('.apex-bset-tab'); if (first) first.classList.add('open');
+    // پیش‌نمایش زنده
+    var onEdit = function () { _apexBsetSchedule(220); };
+    body.addEventListener('input', onEdit);
+    body.addEventListener('change', onEdit);
+    document.getElementById('apex-bset-save').addEventListener('click', _apexBsetSave);
+    if (!window.__apexBsetResize) {
+        window.__apexBsetResize = true;
+        window.addEventListener('resize', function () { if (document.getElementById('apex-bset')) _apexBsetFit(); });
+    }
+    _apexBsetRender();
+}
+function _apexBsetSchedule(ms) {
+    clearTimeout(window.__apexBsetT);
+    window.__apexBsetT = setTimeout(_apexBsetRender, ms || 200);
+}
+/** بل نمونه — به ارز پایه، با دو قلم (یکی با جزئیات) تا اثر هر تنظیم دیده شود */
+function _apexBsetSample() {
+    var cur = (typeof _baseCur === 'function') ? _baseCur() : 'AFN';
+    var date = '';
+    try { date = (typeof getTodayJalali === 'function') ? getTodayJalali() : ((db && db.getCurrentDate) ? db.getCurrentDate() : ''); } catch (e) {}
+    var items = [
+        { productName: 'جنس نمونهٔ اول', quantity: 2, unit: 'عدد', price: 1500, discount: 0, details: 'رنگ سیاه' },
+        { productName: 'جنس نمونهٔ دوم', quantity: 1, unit: 'عدد', price: 2400, discount: 0 },
+        { productName: 'جنس نمونهٔ سوم', quantity: 4, unit: 'کیلو', price: 250, discount: 0 }
+    ];
+    var total = items.reduce(function (s, it) { return s + it.quantity * it.price; }, 0);
+    return { id: '__apex_sample__', type: 'فروش', billNumber: 'BL-0001', date: date, customerName: 'مشتری نمونه',
+             currency: cur, items: items, totalAmount: total, totalDiscount: 0, remaining: total - 3000 };
+}
+/** تنظیمات «فعلی فرم» (ذخیره‌نشده) روی تنظیمات ذخیره‌شده — فقط برای پیش‌نمایش */
+function _apexBsetDraft() {
+    var base = {};
+    try { base = (db && db.getSettings) ? (db.getSettings() || {}) : {}; } catch (e) {}
+    var d = Object.assign({}, base, _ssbBillPayload());
+    var b = window.__ssbBill || {};
+    if (b.billLogo) d.billLogo = b.billLogo;
+    if (b.billSideImage) d.billSideImage = b.billSideImage;
+    if (b.billBarcode) d.billBarcode = b.billBarcode;
+    return d;
+}
+function _apexBsetRender() {
+    var frame = document.getElementById('apex-bset-frame');
+    if (!frame) return;
+    var st = _apexBsetDraft();
+    var html = '';
+    try { html = generateProfessionalInvoiceHTML(_apexBsetSample(), st, { paperSize: st.billSize || 'A4', samplePrevBalance: 2500 }); }
+    catch (e) { console.error('bill sample:', e); return; }
+    try { if (typeof _apexDigitHtml === 'function') html = _apexDigitHtml(html); } catch (e) {}
+    var bh = '';
+    try { bh = location.href.replace(/[?#].*$/, '').replace(/[^\/]*$/, ''); } catch (e) {}
+    var head = (bh ? '<base href="' + bh + '">' : '') + '<link rel="stylesheet" href="assets/css/all.min.css">' +
+               '<style>html,body{overflow:hidden!important;}body{margin:0!important;}</style>';
+    html = html.indexOf('<head>') !== -1 ? html.replace('<head>', '<head>' + head) : (head + html);
+    // فونت رقم‌ها باید آخرین تعریف بماند
+    try {
+        var dg = html.match(/<style id="apex-digit-faces">[\s\S]*?<\/style>/);
+        if (dg && html.indexOf('</head>') !== -1) { html = html.replace(dg[0], ''); html = html.replace('</head>', dg[0] + '</head>'); }
+    } catch (e) {}
+    frame.onload = function () { setTimeout(_apexBsetFit, 30); };
+    try { var d = frame.contentWindow.document; d.open(); d.write(html); d.close(); }
+    catch (e) { try { frame.srcdoc = html; } catch (_) {} }
+    setTimeout(_apexBsetFit, 120);
+    setTimeout(_apexBsetFit, 600);
+}
+/** بل نمونه با عرض واقعی خودش رندر و یکنواخت کوچک می‌شود تا کاملاً در قاب جا شود */
+function _apexBsetFit() {
+    var frame = document.getElementById('apex-bset-frame');
+    var wrap = document.getElementById('apex-bset-prevwrap');
+    var holder = document.getElementById('apex-bset-holder');
+    if (!frame || !wrap || !holder) return;
+    try {
+        var d = frame.contentWindow.document, b = d && d.body;
+        if (!b) return;
+        frame.style.width = '900px';
+        var nat = Math.max(b.scrollWidth || 0, (d.documentElement ? d.documentElement.scrollWidth : 0) || 0, 200);
+        frame.style.width = nat + 'px';
+        var h = Math.max(b.scrollHeight || 0, (d.documentElement ? d.documentElement.scrollHeight : 0) || 0, 200);
+        frame.style.height = (h + 4) + 'px';
+        var cs = window.getComputedStyle(wrap);
+        var avail = (wrap.clientWidth || 0) - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+        var sc = avail > 0 ? Math.min(1, avail / nat) : 1;
+        frame.style.transformOrigin = 'top right';
+        frame.style.transform = 'scale(' + sc + ')';
+        holder.style.width = Math.ceil(nat * sc) + 'px';
+        holder.style.height = Math.ceil((h + 4) * sc) + 'px';
+    } catch (e) {}
+}
+function _apexBsetSave() {
+    try { ssbSaveBill(); } catch (e) { console.error('ssbSaveBill:', e); }
+    try { var t = document.getElementById('ssb-toast'); if (t) t.style.zIndex = '2147483646'; } catch (e) {}
+    // پس از ذخیره، تصاویر تازه بخشی از تنظیمات شده‌اند؛ پیش‌نمایش از تنظیمات ذخیره‌شده ساخته می‌شود
+    _apexBsetRender();
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  «مرکز اعلانات» — اورلی تمام‌صفحه با کارت‌های تاریخ‌وار
+//  داده و منطق همان قبلی است (_jouyaAnnGet + jouyaAnnMarkSeen)؛ فقط نمایش تازه شد.
+// ════════════════════════════════════════════════════════════════════════════
+function apexNotifOpen() {
+    try { if (document.querySelector('.settings-sidebar.open')) closeSidebar(); } catch (e) {}
+    var ov = _apexOvlCreate('apex-notif', 'مرکز اعلانات', 'fas fa-bullhorn',
+        '<button type="button" class="apex-ovl-btn apex-ovl-icon" id="apex-notif-refresh" title="تازه‌سازی"><i class="fas fa-rotate-right"></i></button>');
+    var body = ov.querySelector('.apex-ovl-body');
+    body.classList.add('apex-nt-body');
+    body.innerHTML = '<div class="apex-nt-list" id="apex-nt-list"></div>';
+    document.getElementById('apex-notif-refresh').addEventListener('click', _apexNotifLoad);
+    _apexNotifLoad();
+}
+function _apexNotifDayKey(d) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+function _apexNotifDayLabel(d) {
+    var now = new Date(), y = new Date(now.getTime() - 86400000);
+    if (_apexNotifDayKey(d) === _apexNotifDayKey(now)) return 'امروز';
+    if (_apexNotifDayKey(d) === _apexNotifDayKey(y)) return 'دیروز';
+    var days = ['یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه', 'شنبه'];
+    var months = ['حمل', 'ثور', 'جوزا', 'سرطان', 'اسد', 'سنبله', 'میزان', 'عقرب', 'قوس', 'جدی', 'دلو', 'حوت'];
+    try {
+        if (typeof gregorianToJalali === 'function') {
+            var j = gregorianToJalali(d.getFullYear(), d.getMonth() + 1, d.getDate());
+            return days[d.getDay()] + '، ' + j[2] + ' ' + months[j[1] - 1] + ' ' + j[0];
+        }
+    } catch (e) {}
+    return d.toLocaleDateString();
+}
+function _apexNotifTime(d) { return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+function _apexNotifLoad() {
+    var el = document.getElementById('apex-nt-list');
+    if (!el) return;
+    el.innerHTML = '<div class="apex-nt-state"><span class="apex-nt-spin"></span><span>در حال دریافت اعلانات…</span></div>';
+    var seenBefore = '';
+    try { seenBefore = localStorage.getItem('jouya_ann_last_seen') || ''; } catch (e) {}
+    _jouyaAnnGet('announcements?select=title,body,created_at,is_active&is_active=eq.true&order=created_at.desc&limit=50')
+        .catch(function () { return _jouyaAnnGet('announcements?select=*&order=created_at.desc&limit=50'); })
+        .then(function (rows) {
+            jouyaAnnMarkSeen(rows);
+            if (!document.getElementById('apex-nt-list')) return;
+            if (!Array.isArray(rows) || !rows.length) {
+                el.innerHTML = '<div class="apex-nt-state apex-nt-empty"><i class="far fa-bell-slash"></i><b>اعلان جدیدی وجود ندارد</b><small>هر پیامی که تیم APEX بفرستد این‌جا نمایش داده می‌شود.</small></div>';
+                return;
+            }
+            var out = '', lastDay = '';
+            rows.forEach(function (a) {
+                var d = a.created_at ? new Date(a.created_at) : null;
+                var ok = d && !isNaN(d.getTime());
+                var dayKey = ok ? _apexNotifDayKey(d) : '—';
+                if (dayKey !== lastDay) {
+                    out += '<div class="apex-nt-day"><span>' + (ok ? _apexNotifDayLabel(d) : 'بدون تاریخ') + '</span></div>';
+                    lastDay = dayKey;
+                }
+                var isNew = !!(seenBefore && a.created_at && String(a.created_at) > String(seenBefore)) || (!seenBefore && rows.indexOf(a) === 0);
+                var title = _apexOvlEsc(a.title || '');
+                var bodyTxt = _apexOvlEsc(a.body || a.message || '').replace(/\n/g, '<br>');
+                out += '<article class="apex-nt-card' + (isNew ? ' is-new' : '') + '">' +
+                    '<div class="apex-nt-ico"><i class="fas fa-bullhorn"></i></div>' +
+                    '<div class="apex-nt-main">' +
+                        '<div class="apex-nt-top">' + (title ? '<b class="apex-nt-title">' + title + '</b>' : '<b class="apex-nt-title">اعلان</b>') +
+                            (isNew ? '<span class="apex-nt-new">جدید</span>' : '') + '</div>' +
+                        (bodyTxt ? '<div class="apex-nt-text">' + bodyTxt + '</div>' : '') +
+                        (ok ? '<div class="apex-nt-meta"><i class="far fa-clock"></i><span>' + _apexNotifDayLabel(d) + ' — ' + _apexNotifTime(d) + '</span></div>' : '') +
+                    '</div>' +
+                '</article>';
+            });
+            el.innerHTML = out;
+        })
+        .catch(function (err) {
+            if (!document.getElementById('apex-nt-list')) return;
+            el.innerHTML = '<div class="apex-nt-state apex-nt-error"><i class="fas fa-wifi"></i><b>دریافت اعلانات ممکن نشد</b>' +
+                '<small>' + _apexOvlEsc((err && err.message) || 'اتصال اینترنت را بررسی کنید.') + '</small>' +
+                '<button type="button" class="apex-nt-retry" onclick="_apexNotifLoad()"><i class="fas fa-rotate-right"></i> تلاش دوباره</button></div>';
+        });
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+//  سایدبار › «تنظیمات»: گروه گزینه‌های نمایش … تنظیمات اطلاعات
+// ════════════════════════════════════════════════════════════════════════════
+function _ssbGroupHtml() {
+    var li = function (key, icon, label) {
+        return '<li onclick="ssbOpenSub(\'' + key + '\')"><span class="ssb-item-icon"><i class="' + icon + '"></i></span>' +
+               '<span class="ssb-item-label">' + label + '</span><i class="fas fa-chevron-left ssb-arrow"></i></li>';
+    };
+    return '<ul class="ssb-main-list ssb-group-list" style="display:block;padding:6px 4px;">' +
+        li('display', 'fas fa-eye', 'نمایش') +
+        li('invoice', 'fas fa-file-invoice-dollar', 'تنظیمات بل') +
+        li('numsys', 'fas fa-sort-numeric-down', 'سیستم اعداد') +
+        li('currency', 'fas fa-coins', 'واحد پول') +
+        li('notes', 'fas fa-bell', 'هشدار های داخل سیستم') +
+        li('security', 'fas fa-lock', 'امنیت') +
+        li('datasettings', 'fas fa-cogs', 'تنظیمات اطلاعات') +
+    '</ul>';
+}
+/** والد هر زیربخش برای «برگشت» (گروه تنظیمات و زیرگروه تنظیمات اطلاعات) */
+function _ssbParentOf(key) {
+    var g = { display: 1, invoice: 1, numsys: 1, currency: 1, notes: 1, security: 1, datasettings: 1 };
+    var ds = { excel: 1, importpersons: 1, serversync: 1, dbinit: 1, 'delete': 1 };
+    if (g[key]) return 'settingsgroup';
+    if (ds[key]) return 'datasettings';
+    return null;
+}

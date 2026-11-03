@@ -248,6 +248,10 @@
 
     function handleMobileBack() {
         try {
+            // (APEX) صفحه‌های تمام‌صفحهٔ «تنظیمات بل» / «مرکز اعلانات» → اول همان بسته شود
+            if (document.querySelector('.apex-ovl') && typeof window.__apexOvlBack === 'function') {
+                if (window.__apexOvlBack()) return true;
+            }
             // ۰) پیش‌نمایشِ چاپ/گزارش/بلِ باز (اورلیِ درون‌برنامه‌ای) → اول همان بسته شود
             //    تا کاربر به همان صفحه‌ای که از آن گزارش/بل باز کرده برگردد (اشخاص/صندوق/…).
             if (document.getElementById('jouya-pp-overlay') && typeof window.__jouyaPreviewOverlayClose === 'function') {

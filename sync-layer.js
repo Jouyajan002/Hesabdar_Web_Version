@@ -1478,7 +1478,10 @@
         signUp: signUp,
         signOut: function () { SESSION = null; sessWrite(null); stopLoops(); log('خروج'); },
         claimLicense: function (code, ws) { return Sb.rpc('claim_license', { p_code: code, p_workspace: ws || workspaceId }); },
-        licenseStatus: function (ws) { return Sb.rpc('license_status', { p_workspace: ws || workspaceId }); },
+        licenseStatus: function (ws) {
+            // پیش از پرسیدن، اگر توکنِ نشست رو به پایان است تازه شود (وگرنه سرور «not_member» می‌گوید)
+            return ensureToken().then(function () { return Sb.rpc('license_status', { p_workspace: ws || workspaceId }); });
+        },
         migrate: migrate,
         bootstrap: bootstrap,
 

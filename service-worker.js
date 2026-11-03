@@ -15,9 +15,11 @@
 // (v1.0.7) موتورِ حافظهٔ IndexedDB: index.html و jouya-store.js باید با هم عوض شوند؛ هر دو در
 // CORE پیش‌ذخیره می‌شوند تا نسخهٔ وب/آفلاین هرگز یکی را بدونِ دیگری نداشته باشد.
 // (v1.0.8) script.js / style.css / mobile-fit.js تازه شدند؛ کشِ قبلی یک‌جا عوض می‌شود تا نسخهٔ وب فایل‌های کهنه و تازه را باهم ترکیب نکند.
-// (v1.0.9) فونتِ اصلیِ برنامه Estedad شد: assets/fonts/estedad.css و ۹ فایلِ وزن‌ها در CORE پیش‌ذخیره می‌شوند
-// تا نسخهٔ وب/آفلاین هم همیشه همان فونت را داشته باشد.
-var SW_VERSION = 'jouya-v1.0.9';
+// (v1.0.9) فونتِ اصلیِ برنامه Estedad شد (assets/fonts/estedad.css).
+// (v1.0.10) هر ۹ وزنِ Estedad درونِ خودِ estedad.css جاسازی شد (دیگر فایلِ فونتِ جدا لازم نیست).
+// (v1.0.11) تنظیمات بل/مرکز اعلانات (اورلی)، چاپِ بل، سایدبار، نسخهٔ آزمایشی و قفلِ لایسنس.
+// (v1.0.12) قفلِ لیسنس با زمانِ یکنواخت (ضدِ عقب‌بردنِ تاریخ) و نسخهٔ آزمایشیِ یک‌هفته‌ای.
+var SW_VERSION = 'jouya-v1.0.12';
 var CACHE = SW_VERSION;
 
 // فهرستِ هستهٔ اپ — پیش‌ذخیره (best-effort؛ نبودِ یک فایل نصب را خراب نمی‌کند)
@@ -27,15 +29,6 @@ var CORE = [
   './manifest.webmanifest',
   // CSS
   './assets/fonts/estedad.css',
-  './assets/fonts/estedad/Estedad-Thin.ttf',
-  './assets/fonts/estedad/Estedad-ExtraLight.ttf',
-  './assets/fonts/estedad/Estedad-Light.ttf',
-  './assets/fonts/estedad/Estedad-Regular.ttf',
-  './assets/fonts/estedad/Estedad-Medium.ttf',
-  './assets/fonts/estedad/Estedad-SemiBold.ttf',
-  './assets/fonts/estedad/Estedad-Bold.ttf',
-  './assets/fonts/estedad/Estedad-ExtraBold.ttf',
-  './assets/fonts/estedad/Estedad-Black.ttf',
   './assets/fonts/vazirmatn.css',
   './assets/css/all.min.css',
   './assets/css/persian-datepicker.min.css',

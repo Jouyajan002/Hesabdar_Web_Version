@@ -748,6 +748,14 @@
             if (!idb) return Promise.resolve(null);
             return getMany(idb, 'originals', [id]).then(function (r) { return r[id] ? r[id].data : null; });
         },
+        // پاک‌کردنِ نسخه‌های پشتیبانِ داخلی و اصلِ تصاویر (فقط برای «پاک‌سازیِ کاملِ دستگاه»،
+        // مثلاً پایانِ نسخهٔ آزمایشی). دادهٔ اصلیِ برنامه از مسیرِ عادیِ removeItem پاک می‌شود.
+        wipeExtras: function () {
+            if (!idb) return Promise.resolve(false);
+            return runTx(idb, ['backup', 'originals'], function (tx) {
+                tx.objectStore('backup').clear(); tx.objectStore('originals').clear();
+            }).then(function () { return true; }, function () { return false; });
+        },
         listBackups: function () {
             if (!idb) return Promise.resolve([]);
             return readStore(idb, 'backup').then(function (all) {

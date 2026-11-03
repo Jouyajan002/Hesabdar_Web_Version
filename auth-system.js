@@ -2028,6 +2028,8 @@
         // setTimeout(setupAutoBackup, 3000);
         // ذخیره اکانت در Drive در پس‌زمینه (اگر متصل)
         setTimeout(syncAccountToDriveIfConnected, 5000);
+        // (APEX) پس از ورود هم اعتبارِ لایسنس با سرور سنجیده می‌شود
+        setTimeout(function () { try { licenseGuardStart(); } catch (e) {} }, 1200);
     }
 
     async function syncAccountToDriveIfConnected() {
@@ -2638,6 +2640,337 @@
     };
 
     // =========================================================================
+    // (APEX) نگهبان اعتبار کد فعال‌سازی (لایسنس)
+    // -------------------------------------------------------------------------
+    //  منبع حقیقت: سرور (RPC license_status برای workspace همین کاربر).
+    //  • اگر سرور بگوید لایسنس این فروشگاه تاریخش گذشته یا غیرفعال است → برنامه قفل می‌شود
+    //    (صفحهٔ فعال‌سازی، با پیام بالای صفحه). هیچ داده‌ای پاک یا تغییر داده نمی‌شود.
+    //  • نتیجه با تاریخ پایانش در این دستگاه نگه داشته می‌شود تا آفلاین هم پس از گذشتن تاریخ
+    //    قفل شود.
+    //  • هر وقت سرور بگوید لایسنس دوباره معتبر است (تمدید یا برداشتن تاریخ)، قفل همان لحظه
+    //    برداشته می‌شود و کاربر مستقیم به برنامهٔ خودش برمی‌گردد.
+    //  • حسابی که لایسنس ابری ندارد (فعال‌سازی قدیمی) هرگز قفل نمی‌شود.
+    // =========================================================================
+    const LIC_STATE_KEY = 'apex_license_state';   // { ws, status, expires_at, activated_at, checkedAt, sig }
+    const LIC_CLOCK_KEY = 'apex_license_clock';   // { seen, sig } — «زمان یکنواخت دستگاه»، هرگز عقب نمی‌رود
+    const LIC_MIRROR_DB = 'apex_lic_mark';        // نسخهٔ دوم در IndexedDB جدا (اگر localStorage پاک/دستکاری شود)
+    const LIC_SALT = 'APEX::lic::v2::7c1e';
+    const LIC_CLOCK_TOL = 36 * 3600 * 1000;       // تحمل اختلاف ساعت با سرور (منطقهٔ زمانی/تابستانی)
+    function _licHash(str) {
+        let h = 5381, i = str.length;
+        while (i) { h = (h * 33) ^ str.charCodeAt(--i); }
+        return (h >>> 0).toString(36);
+    }
+    function _licStateSig(o) { return _licHash([o.ws, o.status, o.expires_at || '', o.activated_at || '', LIC_SALT].join('|')); }
+    function _licClockSig(seen) { return _licHash('clock|' + String(seen) + '|' + LIC_SALT); }
+    function _licDateOf(ms) {
+        const d = new Date(ms);
+        return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+    }
+    function _licWs() { try { return localStorage.getItem('jouya_sync_workspace') || ''; } catch (e) { return ''; } }
+    function _licEligible() {
+        const account = AuthDB.getAccount();
+        return !!(account && account.email && !AuthDB.isLoggedOut());
+    }
+
+    // ── زمان یکنواخت (ضد عقب‌بردن تاریخ دستگاه) ──────────────────────────────────
+    //  seen = بیشترین زمانی که برنامه تا حالا دیده است. فقط جلو می‌رود:
+    //   • با ساعت دستگاه (اگر جلوتر باشد)،
+    //   • با زمان واقعی سپری‌شده در حالی که برنامه باز است (performance.now — مستقل از
+    //     ساعت دستگاه؛ عقب‌بردن ساعت در حین کار هم اثری ندارد)،
+    //   • با ساعت سرور هنگام اتصال (و اگر seen به‌اشتباه از سرور جلوتر بود، با سرور اصلاح می‌شود).
+    //  تاریخ «امروز» لیسنس همیشه از seen گرفته می‌شود، نه از ساعت دستگاه؛ پس عقب‌بردن
+    //  تاریخ مهلت را تمدید نمی‌کند.
+    let _licSeen = null, _licPerfBase = 0, _licRestored = false, _licClockWasMissing = false, _licSrvSeen = false;
+    function _licClockRead() {
+        try {
+            const o = JSON.parse(localStorage.getItem(LIC_CLOCK_KEY) || 'null');
+            if (o && typeof o.seen === 'number' && o.sig === _licClockSig(o.seen)) return o.seen;
+        } catch (e) {}
+        return null;
+    }
+    function _licPerfNow() { try { return performance.now(); } catch (e) { return 0; } }
+    function _licClockTick(serverNowMs) {
+        const wall = Date.now(), perf = _licPerfNow();
+        let seen = _licSeen;
+        if (seen === null) { const st = _licClockRead(); seen = (st !== null) ? st : 0; }
+        else seen = seen + Math.max(0, perf - _licPerfBase);
+        const stored = _licClockRead();
+        if (stored !== null) seen = Math.max(seen, stored);
+        seen = Math.max(seen, wall);
+        if (typeof serverNowMs === 'number' && isFinite(serverNowMs)) {
+            // سرور معتبرترین ساعت است: اگر seen به‌اشتباه خیلی جلوتر رفته بود (ساعت دستگاه قبلاً
+            // جلو بوده)، به ساعت سرور برگردانده می‌شود؛ وگرنه فقط جلو می‌رود.
+            seen = (seen > serverNowMs + LIC_CLOCK_TOL) ? serverNowMs : Math.max(seen, serverNowMs);
+            _licSrvSeen = true;
+        }
+        _licSeen = seen; _licPerfBase = perf;
+        try { localStorage.setItem(LIC_CLOCK_KEY, JSON.stringify({ seen: seen, sig: _licClockSig(seen) })); } catch (e) {}
+        // نسخهٔ دوم ساعت فقط پس از خواندن آن نوشته می‌شود تا هرگز با زمانی کوچک‌تر بازنویسی نشود
+        if (_licRestored) _licMirrorPut('clock', { seen: seen, sig: _licClockSig(seen) });
+        return seen;
+    }
+
+    // ── وضعیت امضاشدهٔ لیسنس (+ نسخهٔ دوم در IndexedDB) ─────────────────────────────
+    function _licRead() {
+        try {
+            const o = JSON.parse(localStorage.getItem(LIC_STATE_KEY) || 'null');
+            if (!o) return null;
+            if (!o.sig) return Object.assign({}, o, { _unsigned: true });   // وضعیت نسخهٔ قبلی (بی‌امضا)
+            if (o.sig !== _licStateSig(o)) return Object.assign({}, o, { _tampered: true });
+            return o;
+        } catch (e) { return { _tampered: true }; }
+    }
+    function _licWrite(o) {
+        const s = Object.assign({}, o); delete s._unsigned; delete s._tampered;
+        s.sig = _licStateSig(s);
+        try { localStorage.setItem(LIC_STATE_KEY, JSON.stringify(s)); } catch (e) {}
+        // تا وقتی نسخهٔ دوم خوانده نشده، روی آن نوشته نمی‌شود (وگرنه وضعیت واقعی با وضعیت
+        // ساخته‌شده از اطلاعات قابل‌ویرایش جای‌گزین می‌شد)
+        if (_licRestored) _licMirrorPut('state', s);
+        return s;
+    }
+    // یک اتصال مشترک به پایگاه نسخهٔ دوم؛ نوشتن‌ها پشت‌سرهم روی همان اتصال انجام می‌شوند
+    // (بازکردن هم‌زمان چند اتصال روی پایگاه تازه ممکن بود یکی از نوشتن‌ها را گم کند).
+    let _licMirrorDbP = null;
+    function _licMirrorOpen() {
+        if (_licMirrorDbP) return _licMirrorDbP;
+        _licMirrorDbP = new Promise(function (resolve) {
+            try {
+                const rq = indexedDB.open(LIC_MIRROR_DB, 1);
+                rq.onupgradeneeded = function () { try { rq.result.createObjectStore('kv'); } catch (e) {} };
+                rq.onsuccess = function () {
+                    const d = rq.result;
+                    d.onversionchange = function () { try { d.close(); } catch (e) {} _licMirrorDbP = null; };
+                    resolve(d);
+                };
+                rq.onerror = function () { _licMirrorDbP = null; resolve(null); };
+                rq.onblocked = function () { /* منتظر آزادشدن */ };
+            } catch (e) { _licMirrorDbP = null; resolve(null); }
+        });
+        return _licMirrorDbP;
+    }
+    function _licMirrorPut(key, val) {
+        _licMirrorOpen().then(function (d) {
+            if (!d) return;
+            try { const tx = d.transaction('kv', 'readwrite'); tx.objectStore('kv').put(JSON.stringify(val), key); }
+            catch (e) { _licMirrorDbP = null; }
+        });
+    }
+    function _licMirrorGet() {
+        return _licMirrorOpen().then(function (d) {
+            return new Promise(function (resolve) {
+                if (!d) { resolve({}); return; }
+                try {
+                    const tx = d.transaction('kv', 'readonly'), st = tx.objectStore('kv'), out = {};
+                    const a = st.get('state'), b = st.get('clock');
+                    a.onsuccess = function () { try { out.state = a.result ? JSON.parse(a.result) : null; } catch (e) {} };
+                    b.onsuccess = function () { try { out.clock = b.result ? JSON.parse(b.result) : null; } catch (e) {} };
+                    tx.oncomplete = function () { resolve(out); };
+                    tx.onerror = function () { resolve({}); };
+                } catch (e) { resolve({}); }
+            });
+        });
+    }
+    // بازگرداندن از نسخهٔ دوم: اگر localStorage پاک یا دستکاری شده باشد، وضعیت امضاشدهٔ
+    // IndexedDB برمی‌گردد؛ ساعت هم همیشه «بیشترین» دو نسخه می‌شود.
+    function _licMirrorRestore() {
+        // اگر IndexedDB در یک WebViewِ خاص جواب ندهد، پس از ۴ ثانیه بدونِ نسخهٔ دوم ادامه داده می‌شود
+        const timed = new Promise(function (resolve) { setTimeout(function () { resolve({}); }, 4000); });
+        return Promise.race([_licMirrorGet(), timed]).then(function (m) {
+            try {
+                // اگر در همین اجرا ساعت سرور دیده شده، همان معتبر است و نسخهٔ قدیمی‌تر جایش را نمی‌گیرد
+                if (!_licSrvSeen && m.clock && typeof m.clock.seen === 'number' && m.clock.sig === _licClockSig(m.clock.seen)) {
+                    const cur = _licClockRead();
+                    if (cur === null || m.clock.seen > cur) localStorage.setItem(LIC_CLOCK_KEY, JSON.stringify(m.clock));
+                    if (_licSeen === null || m.clock.seen > _licSeen) _licSeen = m.clock.seen;
+                }
+                if (m.state && m.state.sig && m.state.sig === _licStateSig(m.state)) {
+                    const cur = _licRead();
+                    if (!cur || cur._tampered || cur._unsigned ||
+                        (cur.ws === m.state.ws && m.state.checkedAt && (!cur.checkedAt || m.state.checkedAt > cur.checkedAt))) {
+                        localStorage.setItem(LIC_STATE_KEY, JSON.stringify(m.state));
+                    }
+                }
+            } catch (e) {}
+        });
+    }
+
+    // وضعیت فعلی این فروشگاه (یا null اگر لیسنس ابری‌ای برایش شناخته نیست)
+    function _licCurrent() {
+        const ws = _licWs();
+        if (!ws) return null;
+        let st = _licRead();
+        if (st && st._unsigned && st.ws === ws && _licRestored) st = _licWrite(st);          // ارتقای وضعیت نسخهٔ قبلی
+        if (st && st._tampered) return { ws: ws, status: 'tampered' };
+        if (st && st.ws === ws) return st;
+        // هنوز پاسخی از سرور نیامده: اگر لیسنس با سرور Supabase فعال شده و تاریخ پایان دارد،
+        // همان تاریخ ثبت‌شده هنگام فعال‌سازی روی دستگاه مبنا قرار می‌گیرد (آفلاین هم).
+        const lic = AuthDB.getLicense();
+        if (lic && /^supabase/.test(String(lic.source || '')) && lic.expires) {
+            const init = { ws: ws, status: 'ok', expires_at: String(lic.expires).slice(0, 10),
+                           activated_at: lic.activatedAt || null, checkedAt: null };
+            return _licRestored ? _licWrite(init) : init;
+        }
+        return null;
+    }
+    // آیا برنامه باید قفل شود؟ «امروز» از زمان یکنواخت گرفته می‌شود، نه از ساعت دستگاه.
+    function _licBlocked(st) {
+        if (!st) return false;
+        if (st.status === 'expired' || st.status === 'inactive' || st.status === 'tampered') return true;
+        if (!st.expires_at) return false;                      // لیسنس بی‌تاریخ = نامحدود
+        const today = _licDateOf(_licClockTick());
+        return today > String(st.expires_at).slice(0, 10);   // روز آخر هنوز معتبر است (مثل سرور)
+    }
+    function licenseGuardCheckServer() {
+        const S = window.JouyaSync;
+        let ws = null;
+        try { ws = localStorage.getItem('jouya_sync_workspace'); } catch (e) {}
+        if (!S || typeof S.licenseStatus !== 'function' || !ws || !(S.session && S.session())) return Promise.resolve(null);
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return Promise.resolve(null);
+        return Promise.resolve(S.licenseStatus(ws)).then(function (res) {
+            if (!res || res.ok !== true) return null;
+            _licRestored = true;   // پاسخ سرور معتبرترین منبع است
+            // ساعت سرور (اگر SQL تازهٔ license_status نصب باشد) زمان یکنواخت را تصحیح می‌کند
+            const srv = res.server_now ? Date.parse(res.server_now) : NaN;
+            _licClockTick(isFinite(srv) ? srv : undefined);
+            const hasRow = Object.prototype.hasOwnProperty.call(res, 'max_devices') || Object.prototype.hasOwnProperty.call(res, 'expires_at');
+            if (!hasRow) return null;   // workspace لیسنس ابری ندارد → تصمیمی گرفته نمی‌شود
+            const exp = res.expires_at ? String(res.expires_at).slice(0, 10) : null;
+            let status = 'ok';
+            if (res.active === false) status = 'inactive';
+            else if (res.expired === true) status = 'expired';                       // حکم خود سرور با تاریخ سرور
+            else if (exp && _licDateOf(_licClockTick()) > exp) status = 'expired';   // SQL قدیمی: با زمان یکنواخت
+            const lic = AuthDB.getLicense() || {};
+            _licWrite({ ws: ws, status: status, expires_at: exp,
+                        activated_at: res.claimed_at || lic.activatedAt || null, checkedAt: new Date(_licClockTick()).toISOString() });
+            // تاریخ پایان لیسنس محلی هم با سرور هم‌گام می‌شود
+            try { if (lic && lic.code && lic.expires !== exp) { lic.expires = exp; AuthDB.saveLicense(lic); } } catch (e) {}
+            return status;
+        }).catch(function () { return null; });
+    }
+    function _licFmtDate(iso) {
+        if (!iso) return '';
+        try {
+            const p = String(iso).slice(0, 10).split('-').map(Number);
+            if (typeof window.gregorianToJalali === 'function' && p.length === 3) {
+                const j = window.gregorianToJalali(p[0], p[1], p[2]);
+                const m = ['حمل','ثور','جوزا','سرطان','اسد','سنبله','میزان','عقرب','قوس','جدی','دلو','حوت'][j[1] - 1] || '';
+                return j[2] + ' ' + m + ' ' + j[0];
+            }
+        } catch (e) {}
+        return String(iso).slice(0, 10);
+    }
+    // تا نسخهٔ دوم خوانده نشده و اطلاعات لیسنس روی localStorage نیست، برنامه باز نمی‌شود
+    // (صفحهٔ کوتاه «در حال بررسی») — تا پاک‌کردن کلیدها راهی برای دور زدن قفل نباشد.
+    function licenseGuardShowPending() {
+        if (document.getElementById('apex-license-lock')) return;
+        const ov = document.createElement('div');
+        ov.id = 'apex-license-lock';
+        ov.setAttribute('data-pending', '1');
+        ov.style.cssText = 'position:fixed;inset:0;z-index:2147483500;background:#0f172a;display:flex;align-items:center;justify-content:center;font-family:inherit;color:#cbd5e1;font-size:14px;';
+        ov.innerHTML = '<span><i class="fas fa-circle-notch fa-spin"></i> در حال بررسی اعتبار لیسنس…</span>';
+        try { document.body.appendChild(ov); } catch (e) {}
+    }
+    function licenseGuardShowLock(st) {
+        try { document.body.style.overflow = 'hidden'; } catch (e) {}
+        let ov = document.getElementById('apex-license-lock');
+        if (ov && ov.getAttribute('data-pending')) { ov.remove(); ov = null; }
+        const lic = AuthDB.getLicense() || {};
+        const acc = AuthDB.getAccount() || {};
+        const code = String(lic.code || '');
+        const masked = code.length > 6 ? (code.slice(0, 4) + '••••' + code.slice(-3)) : code;
+        const statusTxt = (st && st.status === 'inactive') ? 'لایسنس این فروشگاه غیرفعال شده است'
+            : (st && st.status === 'tampered') ? 'اطلاعات لیسنس روی این دستگاه معتبر نیست؛ برای بررسی به اینترنت وصل شوید'
+            : ('تاریخ اعتبار' + (st && st.expires_at ? ' (' + _licFmtDate(st.expires_at) + ')' : '') + ' به پایان رسیده است');
+        const actDate = (st && st.activated_at) || lic.activatedAt || '';
+        if (!ov) {
+            ov = document.createElement('div');
+            ov.id = 'apex-license-lock';
+            ov.setAttribute('dir', 'rtl');
+            ov.style.cssText = 'position:fixed;inset:0;z-index:2147483500;background:#0f172a;display:flex;flex-direction:column;font-family:inherit;color:#e2e8f0;';
+            document.body.appendChild(ov);
+        }
+        ov.innerHTML =
+            '<div style="flex:0 0 auto;background:#b91c1c;color:#fff;padding:12px 18px;padding-top:calc(12px + env(safe-area-inset-top,0px));display:flex;align-items:center;gap:10px;font-weight:700;font-size:14px;line-height:1.8;box-shadow:0 2px 12px rgba(0,0,0,.35);">' +
+                '<i class="fas fa-triangle-exclamation" style="font-size:18px;flex:0 0 auto;"></i>' +
+                '<span>مدت اعتبار کد فعال‌سازی شما تکمیل است. لطفاً با تیم APEX تماس بگیرید و لیسنس فعال‌سازی خود را تجدید نمائید.</span>' +
+            '</div>' +
+            '<div style="flex:1 1 auto;overflow:auto;display:flex;align-items:center;justify-content:center;padding:22px 16px;">' +
+                '<div style="width:100%;max-width:460px;background:#1e293b;border:1px solid #334155;border-radius:18px;padding:30px 24px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.45);">' +
+                    '<div style="width:74px;height:74px;margin:0 auto 14px;border-radius:20px;background:rgba(245,158,11,.14);color:#f59e0b;display:flex;align-items:center;justify-content:center;font-size:32px;"><i class="fas fa-key"></i></div>' +
+                    '<h2 style="margin:0 0 6px;font-size:19px;color:#fff;">فعال‌سازی برنامه</h2>' +
+                    '<p style="margin:0 0 16px;font-size:13px;color:#fca5a5;font-weight:700;">' + statusTxt + '</p>' +
+                    '<div style="text-align:right;background:#0f172a;border:1px solid #334155;border-radius:12px;padding:12px 14px;font-size:13px;line-height:2.1;margin-bottom:14px;">' +
+                        (acc.storeName ? '<div><span style="color:#94a3b8;">فروشگاه: </span><b>' + escapeHtml(acc.storeName) + '</b></div>' : '') +
+                        (acc.email ? '<div><span style="color:#94a3b8;">حساب: </span><b dir="ltr">' + escapeHtml(acc.email) + '</b></div>' : '') +
+                        (masked ? '<div><span style="color:#94a3b8;">کد فعال‌سازی: </span><b dir="ltr">' + escapeHtml(masked) + '</b></div>' : '') +
+                        (actDate ? '<div><span style="color:#94a3b8;">تاریخ فعال‌سازی: </span><b>' + escapeHtml(_licFmtDate(String(actDate).slice(0, 10))) + '</b></div>' : '') +
+                        (st && st.expires_at ? '<div><span style="color:#94a3b8;">اعتبار تا: </span><b>' + escapeHtml(_licFmtDate(st.expires_at)) + '</b></div>' : '') +
+                    '</div>' +
+                    '<p style="margin:0 0 18px;font-size:12.5px;line-height:2;color:#94a3b8;">' +
+                        '<i class="fas fa-shield-halved" style="color:#34d399;"></i> همهٔ اطلاعات شما روی این دستگاه محفوظ است و پاک نمی‌شود. ' +
+                        'به‌محض تجدید لیسنس از طرف تیم APEX، برنامه خودکار باز می‌شود؛ یا دکمهٔ زیر را بزنید.' +
+                    '</p>' +
+                    '<button type="button" id="apex-license-recheck" style="width:100%;background:#2563eb;border:none;color:#fff;border-radius:11px;padding:13px 18px;font-family:inherit;font-weight:700;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;">' +
+                        '<i class="fas fa-rotate-right"></i><span>بررسی دوبارهٔ اعتبار</span></button>' +
+                    '<div id="apex-license-msg" style="min-height:22px;margin-top:10px;font-size:12.5px;color:#94a3b8;"></div>' +
+                '</div>' +
+            '</div>';
+        const btn = document.getElementById('apex-license-recheck');
+        if (btn) btn.onclick = function () {
+            const msg = document.getElementById('apex-license-msg');
+            btn.disabled = true; btn.style.opacity = '.7';
+            if (msg) { msg.style.color = '#94a3b8'; msg.textContent = 'در حال بررسی با سرور…'; }
+            licenseGuardCheckServer().then(function (status) {
+                btn.disabled = false; btn.style.opacity = '';
+                licenseGuardApply();
+                if (!document.getElementById('apex-license-lock')) return;
+                if (!msg) return;
+                if (status === null) { msg.style.color = '#fbbf24'; msg.textContent = 'اتصال به سرور برقرار نشد؛ اینترنت را بررسی و دوباره تلاش کنید.'; }
+                else { msg.style.color = '#fca5a5'; msg.textContent = 'لیسنس هنوز تجدید نشده است.'; }
+            });
+        };
+    }
+    function licenseGuardHideLock() {
+        const ov = document.getElementById('apex-license-lock');
+        if (!ov) return;
+        ov.remove();
+        try { if (!document.getElementById('auth-screen-overlay') && !document.getElementById('jouya-demo-lock')) document.body.style.overflow = ''; } catch (e) {}
+    }
+    function licenseGuardApply() {
+        if (!_licEligible()) { licenseGuardHideLock(); return; }
+        if (!_licRestored && _licWs()) {
+            const lic0 = AuthDB.getLicense();
+            const raw = _licRead();
+            if (lic0 && /^supabase/.test(String(lic0.source || '')) && (!raw || raw._tampered || _licClockWasMissing)) {
+                licenseGuardShowPending();
+                return;
+            }
+        }
+        const st = _licCurrent();
+        // نسخهٔ دوم همیشه با وضعیت معتبر فعلی هم‌گام می‌ماند
+        if (_licRestored && st && st.sig && !st._tampered && !st._unsigned) _licMirrorPut('state', st);
+        if (_licBlocked(st)) licenseGuardShowLock(st); else licenseGuardHideLock();
+    }
+    function licenseGuardStart() {
+        if (!window.__apexLicGuardStarted) _licClockWasMissing = (_licClockRead() === null);
+        _licClockTick();
+        licenseGuardApply();
+        if (window.__apexLicGuardStarted) return;
+        window.__apexLicGuardStarted = true;
+        // نسخهٔ دوم IndexedDB (اگر localStorage پاک/دستکاری شده باشد) → دوباره بسنج
+        _licMirrorRestore().then(function () { _licRestored = true; licenseGuardApply(); });
+        const run = function () { licenseGuardCheckServer().then(function () { licenseGuardApply(); }); };
+        setTimeout(run, 2500);
+        setTimeout(run, 12000);
+        setInterval(run, 10 * 60 * 1000);
+        setInterval(licenseGuardApply, 60 * 1000);   // گذشتن تاریخ در حالی که برنامه باز است (آفلاین هم)
+        try { window.addEventListener('online', function () { setTimeout(run, 1500); }); } catch (e) {}
+    }
+    window.APEXLicenseGuard = { check: licenseGuardCheckServer, apply: licenseGuardApply, start: licenseGuardStart };
+
+    // =========================================================================
     // ۱۴. Bootstrap
     // =========================================================================
     function bootstrap() {
@@ -2667,6 +3000,8 @@
             setTimeout(setupSidebarUpdateHook, 1000);
             // بک‌آپ خودکار به‌طور کامل غیرفعال شد (طبق درخواست کاربر)
             // setTimeout(setupAutoBackup, 5000);
+            // (APEX) قفلِ پایانِ اعتبارِ لایسنس (بدونِ پاک‌شدنِ هیچ داده‌ای)
+            try { licenseGuardStart(); } catch (e) { console.error('license guard:', e); }
             return;
         }
 
