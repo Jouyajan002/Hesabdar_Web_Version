@@ -5165,6 +5165,13 @@ select.bill-inline-input { cursor: pointer; }
     flex: 1; padding: 8px 9px; border: 1px solid var(--bill-line); border-radius: 7px;
     background: #fff; min-width: 0;
 }
+/* فیلدِ «تاریخ» در فورمِ دریافتی/پرداختیِ بل — آیکنِ تقویم داخلِ فیلد (سمتِ چپ) */
+.bill-receive-edit .bill-receive-edit-date { flex: 1; min-width: 0; position: relative; display: flex; }
+.bill-receive-edit .bill-receive-edit-date input { width: 100%; padding-left: 32px; }
+.bill-receive-edit .bill-receive-edit-date-ic {
+    position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+    color: var(--bill-navy-2, #1e3a5f); cursor: pointer; font-size: .9rem; z-index: 1;
+}
 .bill-more-toggle {
     background: var(--bill-card); border: 1px solid var(--bill-line); border-radius: 12px;
     padding: 12px 16px; font-weight: 700; color: var(--bill-navy-2); cursor: pointer;
@@ -9346,6 +9353,17 @@ body.dark-mode {
 #dashboard .nd-qa-amber { --nd-qa-c: #f59e0b; }
 #dashboard .nd-qa-red   { --nd-qa-c: #dc2626; }
 #dashboard .nd-qa-slate { --nd-qa-c: #64748b; }
+/* آیکنِ پول برای دریافتی/پرداختی جدید: بانک‌نوت + نشانِ جهت (پایین = دریافت، بالا = پرداخت) */
+#dashboard .nd-qa i.nd-qa-money { position: relative; display: inline-block; }
+#dashboard .nd-qa i.nd-qa-money::after {
+    position: absolute; left: -1.05em; bottom: -.5em;
+    font-size: .42em; width: 1.5em; height: 1.5em; line-height: 1.5em;
+    text-align: center; border-radius: 50%;
+    background: var(--nd-qa-c, #16a34a); color: #fff;
+    box-shadow: 0 0 0 2px var(--nd-card, #fff);
+}
+#dashboard .nd-qa i.nd-qa-money-in::after  { content: "\f063"; }
+#dashboard .nd-qa i.nd-qa-money-out::after { content: "\f062"; }
 
 /* ── نرخ ارز (کارتِ ماژولِ ارز داخلِ این ظرف) ───────────────────────────────── */
 #dashboard .nd-fx-body { padding: 6px 8px; }
@@ -9401,6 +9419,10 @@ body.dark-mode {
 }
 #dashboard .nd-donut-val { font-size: 1.15rem; font-weight: 900; color: var(--nd-text); line-height: 1.1; }
 #dashboard .nd-donut-cur { font-size: .66rem; font-weight: 700; color: var(--nd-text-soft); }
+/* (APEX) چند ارز در وسطِ نمودارِ کتگوری: هر ارز یک سطر */
+#dashboard .nd-donut-val.nd-donut-multi { font-size: .78rem !important; line-height: 1.25; }
+#dashboard .nd-donut-line { white-space: nowrap; }
+#dashboard .nd-donut-line small { font-size: .6rem; font-weight: 700; color: var(--nd-text-soft); }
 #dashboard .nd-cats-legend { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 #dashboard .nd-cat-row { display: flex; align-items: center; gap: 8px; font-size: .8rem; }
 #dashboard .nd-cat-dot { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 50%; }
@@ -10793,3 +10815,101 @@ body.dark-mode .apex-nt-text { color: #cbd5e1; }
 body.dark-mode .apex-nt-day::after { background: #334155; }
 body.dark-mode .apex-nt-card.is-new { border-color: #3b82f6; }
 body.dark-mode .apex-nt-new { background: #1e3a8a; color: #bfdbfe; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   (APEX) حاشیه‌های چهارطرفِ ورق — کادرِ مشترکِ «تنظیمات بل» و «طراحی بارکد»
+   ══════════════════════════════════════════════════════════════════════════════ */
+.apex-mg { margin-top: 12px; }
+.apex-mg-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.apex-mg-head label { font-size: 12px; font-weight: 700; color: #475569; }
+.apex-mg-presets { display: inline-flex; gap: 6px; }
+.apex-mg-presets button {
+    border: 1px solid #cbd5e1; background: #f8fafc; color: #1e3a5f; border-radius: 20px; padding: 4px 11px;
+    font-family: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
+}
+.apex-mg-presets button:hover { background: #e8eef7; border-color: #1e3a5f; }
+.apex-mg-box {
+    direction: ltr; display: grid; grid-template-columns: 1fr 64px 1fr; grid-template-rows: auto auto auto;
+    gap: 6px; align-items: center; justify-items: center;
+    background: #f8fafc; border: 1px dashed #c7d2e1; border-radius: 12px; padding: 10px;
+}
+.apex-mg-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; width: 100%; max-width: 108px; }
+.apex-mg-cell small { font-size: 10.5px; color: #64748b; font-weight: 700; }
+.apex-mg-cell input {
+    width: 100%; height: 34px; border: 1px solid #cbd5e1; border-radius: 9px; background: #fff; color: #0f172a;
+    text-align: center; font-family: inherit; font-size: 13px; outline: none; box-sizing: border-box; padding: 0 4px;
+}
+.apex-mg-cell input::placeholder { color: #a0aec0; font-size: 11px; }
+.apex-mg-cell input:focus { border-color: #1e3a5f; box-shadow: 0 0 0 3px rgba(30,58,95,.12); }
+.apex-mg-t { grid-column: 2; grid-row: 1; }
+.apex-mg-l { grid-column: 1; grid-row: 2; }
+.apex-mg-paper { grid-column: 2; grid-row: 2; width: 52px; height: 64px; border-radius: 6px; background: #fff; border: 2px solid #1e3a5f;
+    display: flex; align-items: center; justify-content: center; color: #1e3a5f; font-size: 20px; box-shadow: inset 0 0 0 5px #e8eef7; }
+.apex-mg-r { grid-column: 3; grid-row: 2; }
+.apex-mg-b { grid-column: 2; grid-row: 3; }
+.apex-mg-hint { display: block; margin-top: 7px; font-size: 11.5px; color: #64748b; line-height: 1.7; }
+body.dark-mode .apex-mg-head label { color: #cbd5e1; }
+body.dark-mode .apex-mg-box { background: #0f172a; border-color: #334155; }
+body.dark-mode .apex-mg-cell input { background: #0b1222; border-color: #334155; color: #e2e8f0; }
+body.dark-mode .apex-mg-paper { background: #1e293b; border-color: #60a5fa; color: #93c5fd; box-shadow: inset 0 0 0 5px #273449; }
+body.dark-mode .apex-mg-presets button { background: #1e293b; border-color: #334155; color: #cbd5e1; }
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   (APEX) طراحی بارکد — همان چیدمانِ «تنظیمات بل» + اجزای خودش
+   ══════════════════════════════════════════════════════════════════════════════ */
+.apex-bc-pick { position: relative; margin-top: 12px; }
+.apex-bc-pick-ic { position: absolute; right: 13px; top: 13px; color: #94a3b8; font-size: 14px; pointer-events: none; }
+.apex-bc-pick input {
+    width: 100%; height: 42px; border: 1px solid #cbd5e1; border-radius: 11px; padding: 0 38px 0 12px; background: #fff;
+    color: #0f172a; font-family: inherit; font-size: 13.5px; outline: none; box-sizing: border-box;
+}
+.apex-bc-pick input:focus { border-color: #1e3a5f; box-shadow: 0 0 0 3px rgba(30,58,95,.12); }
+.apex-bc-res { display: none; margin-top: 6px; max-height: 300px; overflow: auto; border: 1px solid #dde4ee; border-radius: 12px; background: #fff; box-shadow: 0 10px 26px rgba(15,23,42,.10); }
+.apex-bc-res.open { display: block; }
+.apex-bc-ri { display: flex; align-items: center; gap: 10px; padding: 9px 11px; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
+.apex-bc-ri:last-child { border-bottom: none; }
+.apex-bc-ri:hover, .apex-bc-ri.on { background: #f0f6ff; }
+.apex-bc-ri-ic { width: 32px; height: 32px; border-radius: 9px; background: #e8eef7; color: #1e3a5f; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; font-size: 13px; }
+.apex-bc-ri-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.apex-bc-ri-main b { font-size: 13.5px; font-weight: 800; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.apex-bc-ri-main mark { background: #fde68a; color: inherit; border-radius: 3px; padding: 0 1px; }
+.apex-bc-ri-sub { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: 11.5px; color: #64748b; align-items: center; }
+.apex-bc-ri-add { color: #10b981; font-size: 13px; flex: 0 0 auto; }
+.apex-bc-rempty { padding: 16px; text-align: center; color: #64748b; font-size: 13px; }
+.apex-bc-chip { direction: ltr; display: inline-block; font-family: Consolas, 'Lucida Console', 'DejaVu Sans Mono', monospace; font-size: 11.5px; font-weight: 700;
+    background: #eef2f7; color: #1e3a5f; border-radius: 6px; padding: 1px 7px; letter-spacing: .3px; }
+.apex-bc-chip-warn { direction: rtl; font-family: inherit; background: #fff7ed; color: #c2410c; letter-spacing: 0; }
+.apex-bc-chip-err { background: #fee2e2; color: #b91c1c; }
+.apex-bc-note { display: block; margin-top: 9px; font-size: 11.5px; color: #64748b; line-height: 1.8; }
+.apex-bc-note i { color: #8b5cf6; margin-left: 4px; }
+.apex-bc-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.apex-bc-lempty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 18px 10px; border: 1px dashed #cbd5e1; border-radius: 12px; color: #94a3b8; font-size: 12.5px; }
+.apex-bc-lempty i { font-size: 22px; }
+.apex-bc-row { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
+.apex-bc-row-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.apex-bc-row-main b { font-size: 13px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.apex-bc-row-sub { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.apex-bc-type { font-size: 11px; color: #64748b; font-weight: 700; }
+.apex-bc-qty { display: inline-flex; align-items: center; border: 1px solid #cbd5e1; border-radius: 10px; overflow: hidden; flex: 0 0 auto; }
+.apex-bc-qty button { width: 28px; height: 32px; border: none; background: #f1f5f9; color: #1e3a5f; cursor: pointer; font-size: 11px; }
+.apex-bc-qty input { width: 44px; height: 32px; border: none; text-align: center; font-family: inherit; font-size: 13px; font-weight: 700; outline: none; background: #fff; color: #0f172a; -moz-appearance: textfield; }
+.apex-bc-qty input::-webkit-outer-spin-button, .apex-bc-qty input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.apex-bc-del { width: 30px; height: 30px; border: none; border-radius: 9px; background: #fee2e2; color: #b91c1c; cursor: pointer; flex: 0 0 auto; }
+.apex-bc-body .apex-bc-sheet { display: none; }
+.apex-bc-body.apex-bc-is-sheet .apex-bc-sheet { display: block; }
+.apex-bc-body.apex-bc-is-sheet .apex-bc-roll { display: none; }
+.apex-bc-body.apex-bc-no-store .apex-bc-dep-store, .apex-bc-body.apex-bc-no-price .apex-bc-dep-price { display: none; }
+.apex-bc-body .apex-bset-field input:disabled { background: #f1f5f9; color: #64748b; }
+.apex-bc-body .apex-bset-holder { background: #e5e9f0; }
+.apex-bc-genbtn i { color: #8b5cf6; }
+body.dark-mode .apex-bc-pick input, body.dark-mode .apex-bc-res, body.dark-mode .apex-bc-row, body.dark-mode .apex-bc-qty input { background: #0f172a; border-color: #334155; color: #e2e8f0; }
+body.dark-mode .apex-bc-ri { border-bottom-color: #1e293b; }
+body.dark-mode .apex-bc-ri:hover, body.dark-mode .apex-bc-ri.on { background: #1e293b; }
+body.dark-mode .apex-bc-ri-main b { color: #f1f5f9; }
+body.dark-mode .apex-bc-ri-ic, body.dark-mode .apex-bc-qty button { background: #273449; color: #cbd5e1; }
+body.dark-mode .apex-bc-chip { background: #273449; color: #bfdbfe; }
+body.dark-mode .apex-bc-lempty { border-color: #334155; }
+@media (max-width: 520px) {
+    #apex-bcd .apex-ovl-actions .apex-ovl-btn span { display: none; }
+    #apex-bcd .apex-ovl-actions .apex-ovl-btn { width: 40px; height: 40px; padding: 0; justify-content: center; }
+}

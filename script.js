@@ -1270,7 +1270,11 @@ function _computeFifoProfitMaps() {
                     });
                     // (APEX) قطعاتِ قلمِ فروش (درآمدش از قبل در قیمتِ همین قلم است):
                     //  «افزودن» → بهای قطعه (FIFO) از مفادِ همین فروش کم می‌شود؛
-                    //  «کسری»  → قطعه با بهای خودش به انبار برمی‌گردد و همان بها از بهای فروش کم می‌شود.
+                    //  «کسری»  → قطعه با «همان قیمتی که در بل برایش حساب شد» به انبار برمی‌گردد و همان
+                    //            مبلغ از بهای فروش کم می‌شود. (قبلاً قیمتِ خریدِ کارتِ قطعه مبنا بود؛ اگر کارت
+                    //            قیمتِ خرید نداشت صفر می‌شد و کلِ مبلغِ کسری به‌اشتباه زیانِ همین بل حساب می‌شد.)
+                    //            این همان قیمتی است که کارتِ ورود/خروجِ قطعه هم نشان می‌دهد و در خریدِ دارای
+                    //            کسری هم همین قاعده برقرار است.
                     if (Array.isArray(it.parts)) it.parts.forEach(function (pt, pj) {
                         var _pq = parseFloat(pt && pt.quantity) || 0;
                         if (!pt || pt.productId == null || !(_pq > 0)) return;
@@ -1280,7 +1284,8 @@ function _computeFifoProfitMaps() {
                                 saleId: tx.id, itemIndex: idx + '#p' + pj, currency: cur, perBase: _z, discount: 0,
                                 costAcc: 0, costAccBase: 0, estAcc: false, saleTx: tx });
                         } else {
-                            var _uc = parseFloat(pt.unitCost);
+                            var _uc = parseFloat(pt.price);
+                            if (!(_uc >= 0)) _uc = parseFloat(pt.unitCost);
                             if (!(_uc > 0)) {
                                 var _pp = prodById[pt.productId];
                                 _uc = 0;
@@ -4217,6 +4222,7 @@ function saveSale() {
             baseCurrency: (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : 'AFN',
             profit: profit,
             cashboxId: _saleCashboxId,
+            cashDate: _billRecvDate(false),
             status: remaining > 0 ? 'باقی‌مانده' : 'تسویه‌شده'
         };
         
@@ -4244,6 +4250,7 @@ function saveSale() {
             baseCurrency: (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : 'AFN',
             profit: profit,
             cashboxId: _saleCashboxId,
+            cashDate: _billRecvDate(false),
             status: remaining > 0 ? 'باقی‌مانده' : 'تسویه‌شده',
             createdAt: new Date().toISOString()
         };
@@ -5421,6 +5428,7 @@ function savePurchase() {
         totalAmount: grandTotal,
         amount: grandTotal,
         expiryDate: _purchaseExpiryDate,
+        cashDate: _billRecvDate(true),
         status: remaining > 0 ? 'باقی‌مانده' : 'تسویه‌شده'
     };
     
@@ -12325,6 +12333,9 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
     _totRowsHtml += _totRow('پرداختی', _paid);
     _totRowsHtml += _totRow('باقیمانده', (_prevBal !== null) ? (_prevBal + _dir * (_grandTotal - _paid)) : _remaining);
 
+    // (APEX) حاشیه‌های چهارطرفِ ورق (تنظیمات بل › اندازه و رنگ بل) — خالی = حاشیهٔ استندردِ قبلی
+    try { css += _apexBillMarginCss(S, pageWidth, '.bill'); } catch (e) {}
+
     // ---- HTML ----
     var html = '<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="UTF-8"><title>' + docTitle + ' ' + esc(billNum) + '</title><style>' + css + '</style></head><body>' +
     '<div class="bill">' +
@@ -13987,7 +13998,9 @@ function __openPrintPreview(rawHtml, opts) {
     if (__jouyaUseInAppPreview()) {
         try {
             return __ppOpenMobileOverlay(rawHtml, assetsHead, css, {
-                title: title, pdfName: pdfName, shareText: shareText
+                title: title, pdfName: pdfName, shareText: shareText,
+                // (APEX) آیکنِ «تنظیمات بل» کنارِ چاپ — فقط برای بل‌ها/رسیدها (بازسازیِ همین پیش‌نمایش)
+                billRegen: (typeof opts.billRegen === 'function') ? opts.billRegen : null
             });
         } catch (e) {
             try { console.warn('[jouya-preview] overlay failed, fallback to window:', e && e.message); } catch (_) {}
@@ -14168,6 +14181,7 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
         '<button type="button" class="jouya-pp-btn jouya-pp-back" title="برگشت"><i class="fas fa-arrow-right"></i><span>برگشت</span></button>' +
         '<div class="jouya-pp-title">' + esc(title) + '</div>' +
         '<div class="jouya-pp-actions">' +
+            (meta.billRegen ? '<button type="button" class="jouya-pp-btn jouya-pp-settings" title="تنظیمات بل"><i class="fas fa-cog"></i></button>' : '') +
             '<button type="button" class="jouya-pp-btn jouya-pp-print" title="چاپ"><i class="fas fa-print"></i></button>' +
             '<button type="button" class="jouya-pp-btn jouya-pp-share" title="اشتراک‌گذاری"><i class="fas fa-share-alt"></i></button>' +
         '</div>';
@@ -14195,6 +14209,8 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
         fd.open(); fd.write(doc); fd.close();
         // نشانهٔ «پیش‌نمایشِ زنده» — حاشیهٔ دورِ محتوا فقط همین‌جا اعمال می‌شود، نه در PDF/چاپ
         try { fd.documentElement.className = (fd.documentElement.className || '') + ' jouya-pp-live'; } catch (_) {}
+        // (APEX) کلیک/لمس روی خودِ بل (داخلِ iframe) هم منوی اشتراک‌گذاری را می‌بندد
+        try { fd.addEventListener('pointerdown', function () { closeShareMenu(); }, true); } catch (_) {}
     } catch (e) {
         try { frame.srcdoc = doc; } catch (_) {}
     }
@@ -14406,6 +14422,18 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
     try { bar.querySelector('.jouya-pp-back').addEventListener('click', close); } catch (e) {}
     try { bar.querySelector('.jouya-pp-print').addEventListener('click', doPrint); } catch (e) {}
     try { bar.querySelector('.jouya-pp-share').addEventListener('click', doShareMenu); } catch (e) {}
+    // (APEX) ⚙ تنظیمات بل: همان اورلیِ «تنظیمات بل» روی پیش‌نمایش باز می‌شود؛ پس از «ثبت تغییرات»
+    //  همین پیش‌نمایش با تنظیماتِ تازه دوباره ساخته می‌شود و کاربر همین‌جا می‌ماند.
+    try {
+        var _setBtn = bar.querySelector('.jouya-pp-settings');
+        if (_setBtn && typeof meta.billRegen === 'function') {
+            _setBtn.addEventListener('click', function () {
+                closeShareMenu();
+                if (typeof apexBillSettingsOpen !== 'function') return;
+                apexBillSettingsOpen({ onSaved: function () { close(); try { meta.billRegen(); } catch (e) { console.error('[jouya-preview] regen:', e); } } });
+            });
+        }
+    } catch (e) {}
 
     // برای دکمهٔ برگشتِ سخت‌افزاریِ موبایل (mobile-fit.js اول این را می‌بندد)
     try { window.__jouyaPreviewOverlayClose = close; } catch (e) {}
@@ -14432,7 +14460,7 @@ function printInvoice(transactionId) {
     
     const html = generateProfessionalInvoiceHTML(transaction, settings, printSettings);
     
-    __openPrintPreview(html, { title: 'بل فروش ' + (transaction.billNumber || ''), text: 'بل فروش ' + (transaction.billNumber || ''), assets: true, topBar: true, billShare: true, pdfName: 'بل فروش ' + (transaction.billNumber || '') });
+    __openPrintPreview(html, { title: 'بل فروش ' + (transaction.billNumber || ''), text: 'بل فروش ' + (transaction.billNumber || ''), assets: true, topBar: true, billShare: true, pdfName: 'بل فروش ' + (transaction.billNumber || ''), billRegen: function () { printInvoice(transactionId); } });
 }
 
 // ==================== دکمه تست چاپ در تنظیمات چاپ ====================
@@ -16506,6 +16534,8 @@ function editTransaction(id) {
                 // پر کردن حساب (اصلاح شده - قبلاً پر نمی‌شد)
                 const salesCashbox = document.getElementById('sales-cashbox');
                 if (salesCashbox && tx.cashboxId) salesCashbox.value = String(tx.cashboxId);
+                var _sRecvDt = document.getElementById('sales-receive-edit-date');
+                if (_sRecvDt) _sRecvDt.value = tx.cashDate || '';
                 // بازگردانیِ تخفیف کلیِ بل (تفاوتِ تخفیف کل و تخفیف اقلام) تا در ویرایش حفظ شود
                 try {
                     var _txTotDisc = parseFloat(tx.totalDiscount || 0) || 0;
@@ -16600,6 +16630,8 @@ function editTransaction(id) {
                 // بلِ نسیه‌ای که فقط کرایه دارد، حسابش در shippingCashboxId نگه داشته شده است
                 var _cbForEdit = tx.cashboxId || tx.shippingCashboxId;
                 if (purchaseCashbox && _cbForEdit) purchaseCashbox.value = String(_cbForEdit);
+                var _pRecvDt = document.getElementById('purchase-receive-edit-date');
+                if (_pRecvDt) _pRecvDt.value = tx.cashDate || '';
                 // ═══ بازیابیِ کاملِ وضعیتِ پرداختیِ ذخیره‌شده (Hydration) ═══
                 //  همان اصلِ فروش: مقادیر از خودِ سند خوانده می‌شوند و ارزِ سند تعیین
                 //  می‌کند کدام فیلد پر شود — شاملِ ارزهای سوم به بعد.
@@ -20484,6 +20516,7 @@ const cashAfn = parseFloat(document.getElementById('sales-cash-afn').value) || 0
         items, subTotal, totalDiscount, totalAmount, cashAfn, cashUsd, remaining, notes,
         cashboxId: cashboxId ? parseInt(cashboxId) : null,
         paidAfn: cashAfn, // جهت ثبت در حساب در دیتابیس
+        cashDate: _billRecvDate(false),
         status: remaining > 0 ? 'باقی‌مانده' : 'تسویه‌شده', createdAt: new Date().toISOString()
     };
     
@@ -20582,7 +20615,7 @@ function printSalesBill(transactionId = null, transactionData = null) {
             printLogo, printBarcode, printCurrencyConversion: printCurrency
         });
 
-        const printWindow = __openPrintPreview(invoiceHTML, { title: 'بل فروش ' + (transaction.billNumber || ''), text: 'بل فروش ' + (transaction.billNumber || ''), assets: true, topBar: true, billShare: true, pdfName: 'بل فروش ' + (transaction.billNumber || '') });
+        const printWindow = __openPrintPreview(invoiceHTML, { title: 'بل فروش ' + (transaction.billNumber || ''), text: 'بل فروش ' + (transaction.billNumber || ''), assets: true, topBar: true, billShare: true, pdfName: 'بل فروش ' + (transaction.billNumber || ''), billRegen: function () { printSalesBill(transactionId, transactionData); } });
         if (!printWindow) {
             return;
         }
@@ -24940,7 +24973,7 @@ function printSaleReturnBill(tx) {
         var title = (isSale ? 'بل برگشت از فروش ' : 'بل برگشت از خرید ') + (tx.billNumber || '');
         var invoiceHTML = generateProfessionalInvoiceHTML(tx, settings, printSettings);
         if (typeof __openPrintPreview === 'function') {
-            __openPrintPreview(invoiceHTML, { title: title, text: title, assets: true, topBar: true, billShare: true, pdfName: title });
+            __openPrintPreview(invoiceHTML, { title: title, text: title, assets: true, topBar: true, billShare: true, pdfName: title, billRegen: function () { printSaleReturnBill(tx); } });
         } else {
             var w = window.open('', '_blank', 'width=950,height=900');
             if (w) { w.document.open(); w.document.write((typeof _apexDigitHtml === 'function') ? _apexDigitHtml(invoiceHTML) : invoiceHTML); w.document.close(); }
@@ -27761,6 +27794,7 @@ function ssbOpenSub(key) {
     // (APEX) «تنظیمات بل» و «مرکز اعلانات» حالا صفحهٔ تمام‌صفحه (اورلی) دارند
     if (key === 'invoice') { apexBillSettingsOpen(); return; }
     if (key === 'announcements') { apexNotifOpen(); return; }
+    if (key === 'barcode') { apexBarcodeOpen(); return; }
     window.__ssbCurKey = key;
     const mainList = document.getElementById('ssb-main-list');
     const subCont  = document.getElementById('ssb-sub-content');
@@ -27947,6 +27981,7 @@ function ssbGetTitle(key) {
         serversync: '<i class="fas fa-right-left"></i> ارسال و دریافت اطلاعات',
         update:   '<i class="fas fa-cloud-arrow-down"></i> بروزرسانی',
         settingsgroup: '<i class="fas fa-sliders-h"></i> تنظیمات',
+        tools:    '<i class="fas fa-toolbox"></i> ابزار ها',
     };
     return titles[key] || '<i class="fas fa-cog"></i> تنظیمات';
 }
@@ -27957,6 +27992,9 @@ function ssbLoadSubContent(key) {
 
         case 'settingsgroup':
             return _ssbGroupHtml();
+
+        case 'tools':
+            return _ssbToolsHtml();
 
         case 'update':
             return (typeof ndUpdPanelHtml === 'function') ? ndUpdPanelHtml() : '';
@@ -28474,6 +28512,11 @@ function ssbPopulateForm(key) {
             _ck('ssb-bill-show-note', settings.billShowNote !== false);
             _ck('ssb-bill-show-prevbal', settings.billShowPrevBalance === true);
             _ck('ssb-bill-show-details', settings.billShowDetails !== false);
+            // (APEX) حاشیه‌های ورق — خالی یعنی استندرد
+            _sv('ssb-bill-mg-t', settings.billMarginTop != null ? settings.billMarginTop : '');
+            _sv('ssb-bill-mg-r', settings.billMarginRight != null ? settings.billMarginRight : '');
+            _sv('ssb-bill-mg-b', settings.billMarginBottom != null ? settings.billMarginBottom : '');
+            _sv('ssb-bill-mg-l', settings.billMarginLeft != null ? settings.billMarginLeft : '');
             // تصاویر (بازنشانی بافر آپلود موقت)
             window.__ssbBill = { billLogo: null, billSideImage: null, billBarcode: null };
             _img('ssb-bill-logo-preview', settings.billLogo || settings.storeLogo || '');
@@ -28837,6 +28880,14 @@ function _ssbBillPayload() {
     // (APEX) دو گزینهٔ تازهٔ «نمایش» — فقط وقتی فرمشان باز است نوشته می‌شوند
     if (document.getElementById('ssb-bill-show-prevbal')) payload.billShowPrevBalance = c('ssb-bill-show-prevbal');
     if (document.getElementById('ssb-bill-show-details')) payload.billShowDetails = c('ssb-bill-show-details');
+    // (APEX) حاشیه‌های چهارطرفِ ورق (میلی‌متر) — خالی = استندرد
+    if (document.getElementById('ssb-bill-mg-t')) {
+        var _mg = function (id) { var v = parseFloat(String(g(id) || '').replace(/[۰-۹]/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); })); return isNaN(v) ? '' : Math.max(0, Math.min(60, v)); };
+        payload.billMarginTop = _mg('ssb-bill-mg-t');
+        payload.billMarginRight = _mg('ssb-bill-mg-r');
+        payload.billMarginBottom = _mg('ssb-bill-mg-b');
+        payload.billMarginLeft = _mg('ssb-bill-mg-l');
+    }
     // (APEX) سطرهای خالیِ جدول حذف شدند؛ مقدارِ قبلیِ این تنظیم دست‌نخورده می‌ماند
     if (!document.getElementById('ssb-bill-minrows')) delete payload.billMinRows;
     return payload;
@@ -30404,7 +30455,7 @@ function printReceiptSlip(transactionId) {
     const settings = db.getSettings ? db.getSettings() : {};
     const html = _generateReceiptSlipHTML(tx, settings);
     const _slipTitle = (tx.type === 'دریافت' ? 'رسید دریافتی' : 'رسید پرداختی') + (tx.billNumber ? ' ' + tx.billNumber : '');
-    __openPrintPreview(html, { title: _slipTitle, text: _slipTitle });
+    __openPrintPreview(html, { title: _slipTitle, text: _slipTitle, billRegen: function () { printReceiptSlip(transactionId); } });
 }
 
 function _generateReceiptSlipHTML(tx, settings) {
@@ -30521,6 +30572,7 @@ body { font-family: 'Estedad', 'Vazirmatn', Tahoma, Arial, sans-serif; font-size
 
 /* ---- فوتر ---- */
 .slp-foot { background: ${navy}; color: #fff; text-align: center; padding: 12px; font-size: 13px; font-weight: 800; }
+${_apexBillMarginCss(S, '210mm', '.slp-wrap')}
 </style>
 </head>
 <body>
@@ -30969,7 +31021,7 @@ function _buildBillEmbeddedPaymentRows(tbody, collector) {
         var paid = cur === 'USD'
             ? (parseFloat(tx.paidUsd || tx.cashUsd || 0) || 0)
             : (parseFloat(tx.paidAfn || tx.cashAfn || 0) || 0);
-        var rowDate = formatAfghanDateTime(tx.date, tx.createdAt);
+        var rowDate = formatAfghanDateTime(tx.cashDate || tx.date, tx.createdAt);
         var _sym = (cur === 'USD') ? '$' : 'AFN';
         var _amtText = '(' + _sym + ')' + formatNumber(paid);
         var _name = tx.supplierName || tx.personName || tx.customerName || '-';
@@ -31035,7 +31087,7 @@ function _buildBillEmbeddedReceiptRows(tbody, collector) {
         var recv = cur === 'USD'
             ? (parseFloat(tx.cashUsd || 0) || 0)
             : (parseFloat(tx.cashAfn || 0) || 0);
-        var rowDate = formatAfghanDateTime(tx.date, tx.createdAt);
+        var rowDate = formatAfghanDateTime(tx.cashDate || tx.date, tx.createdAt);
         var _sym = (cur === 'USD') ? '$' : 'AFN';
         var _amtText = '(' + _sym + ')' + formatNumber(recv);
         var _name = tx.customerName || tx.personName || '-';
@@ -35753,7 +35805,7 @@ function printPurchaseBill(purchaseId, purchaseData) {
                 paperSize: paperSize, orientation: orientation, margin: margin,
                 fontSize: fontSize, printLogo: printLogo, printBarcode: false, printCurrencyConversion: false
             });
-            var pw = __openPrintPreview(invoiceHTML, { title: 'بل خرید ' + (purchaseTx.billNumber || ''), text: 'بل خرید ' + (purchaseTx.billNumber || ''), assets: true, topBar: true, billShare: true, pdfName: 'بل خرید ' + (purchaseTx.billNumber || '') });
+            var pw = __openPrintPreview(invoiceHTML, { title: 'بل خرید ' + (purchaseTx.billNumber || ''), text: 'بل خرید ' + (purchaseTx.billNumber || ''), assets: true, topBar: true, billShare: true, pdfName: 'بل خرید ' + (purchaseTx.billNumber || ''), billRegen: function () { printPurchaseBill(purchaseId, purchaseData); } });
             if (!pw) { return; }
         } else {
             showMessage && showMessage('اطلاع', 'تابع چاپ در دسترس نیست.');
@@ -38735,8 +38787,33 @@ function billToggleReceiveEdit(isPurchase) {
         var src = document.getElementById(srcId);
         var amt = document.getElementById(which + '-receive-edit-amount');
         if (src && amt && src.value) amt.value = src.value;
+        // فیلدِ تاریخ: پیش‌فرض تاریخ و ساعتِ امروز (در ویرایشِ بلِ قدیمی: تاریخِ همان بل)
+        var dtEl = document.getElementById(which + '-receive-edit-date');
+        if (dtEl && !String(dtEl.value || '').trim()) {
+            var formEl = document.getElementById(isPurchase ? 'purchaseForm' : 'salesForm');
+            var billDt = document.getElementById(isPurchase ? 'purchase-date' : 'sales-date');
+            dtEl.value = (formEl && formEl.dataset && formEl.dataset.editId && billDt && billDt.value) ? billDt.value : _billRecvDateNow();
+        }
         if (amt) { try { amt.focus(); } catch (e) {} }
     }
+}
+
+// تاریخ و ساعتِ امروز با همان قالبِ فیلدهای تاریخ: «YYYY/MM/DD H:MM:SS AM/PM»
+function _billRecvDateNow() {
+    try {
+        var d = (typeof _getAfghNow === 'function') ? _getAfghNow() : new Date();
+        var h24 = d.getHours(), ap = h24 >= 12 ? 'PM' : 'AM', h12 = h24 % 12; if (h12 === 0) h12 = 12;
+        var p2 = function (n) { return n < 10 ? '0' + n : '' + n; };
+        return new PersianDate(d).format('YYYY/MM/DD') + ' ' + h12 + ':' + p2(d.getMinutes()) + ':' + p2(d.getSeconds()) + ' ' + ap;
+    } catch (e) { return ''; }
+}
+
+// تاریخِ دریافتی/پرداختیِ همین بل (فیلدِ «تاریخ» در فورمِ ویرایشِ دریافتی/پرداختی).
+// فقط وقتی کاربر آن را پر کرده باشد مقدار برمی‌گردد؛ وگرنه undefined (چیزی ذخیره نمی‌شود).
+function _billRecvDate(isPurchase) {
+    var el = document.getElementById((isPurchase ? 'purchase' : 'sales') + '-receive-edit-date');
+    var v = el ? String(el.value || '').trim() : '';
+    return v || undefined;
 }
 
 // ---- همگام‌سازی مبلغ فورم دریافتی با فیلد اصلی دریافتی/پرداختی (نظر به ارز) ----
@@ -41395,6 +41472,7 @@ function ndRenderCategorySales() {
     if (curEl) curEl.textContent = ndCurLabel(base);
 
     var byCat = {}, total = 0;
+    var perCur = {};   // (APEX) مبلغِ فروشِ امروز به ارزِ خودِ هر بل (بدونِ تبدیل) — فقط برای نمایشِ مبلغ
     try {
         var todayStr = '';
         try { todayStr = new PersianDate().format('YYYY/MM/DD'); } catch (e) { todayStr = ''; }
@@ -41411,6 +41489,8 @@ function ndRenderCategorySales() {
                 var line = (parseFloat(it.quantity) || 0) * (parseFloat(it.price) || 0) - (parseFloat(it.discount) || 0);
                 if (!line) return;
                 var val = ndToBase(line, tx, tx.currency);
+                var _lc = tx.currency || base;
+                perCur[_lc] = (perCur[_lc] || 0) + line;
                 var cat = 'سایر';
                 if (it.isService) cat = 'خدمات';
                 else {
@@ -41423,7 +41503,24 @@ function ndRenderCategorySales() {
         });
     } catch (e) { try { console.warn('nd cats:', e && e.message); } catch (_) {} }
 
-    if (totEl) totEl.textContent = ndNum(Math.round(total));
+    // (APEX) مبلغِ وسطِ نمودار به ارزِ خودِ هر فروش؛ فیصدی‌ها مثلِ قبل از ارزشِ تبدیل‌شده به ارزِ پایه
+    if (totEl) {
+        var _r = function (c, v) { return (c === base) ? Math.round(v) : Math.round(v * 100) / 100; };
+        var _curs = Object.keys(perCur).filter(function (c) { return Math.abs(perCur[c]) > 0.000001; })
+            .sort(function (a, b) { return (a === base ? -1 : 0) - (b === base ? -1 : 0) || perCur[b] - perCur[a]; });
+        totEl.classList.remove('nd-donut-multi');
+        if (_curs.length > 1) {
+            totEl.classList.add('nd-donut-multi');
+            totEl.innerHTML = _curs.map(function (c) {
+                return '<div class="nd-donut-line">' + ndNum(_r(c, perCur[c])) + ' <small>' + ndEsc(ndCurLabel(c)) + '</small></div>';
+            }).join('');
+            if (curEl) curEl.textContent = '';
+        } else {
+            var _c1 = _curs[0] || base;
+            totEl.textContent = ndNum(_r(_c1, perCur[_c1] || 0));
+            if (curEl) curEl.textContent = ndCurLabel(_c1);
+        }
+    }
 
     var cats = Object.keys(byCat).map(function (k) { return { name: k, val: byCat[k] }; })
                      .filter(function (c) { return c.val > 0; })
@@ -41936,7 +42033,7 @@ function ndCloseAllMenus() {
     try { if (typeof closeCashboxMenus === 'function') closeCashboxMenus(); } catch (e) {}
     try { if (typeof closeProductActionBar === 'function') closeProductActionBar(); } catch (e) {}
     try {
-        var kill = document.querySelectorAll('.floating-action-toolbar, .clog-action-bar, .person-actions-menu');
+        var kill = document.querySelectorAll('.floating-action-toolbar, .clog-action-bar, .person-actions-menu, #jouya-pp-sharemenu');
         for (var i = 0; i < kill.length; i++) { try { kill[i].parentNode.removeChild(kill[i]); } catch (e) {} }
         var open = document.querySelectorAll('.person-row-menu.open');
         for (var j = 0; j < open.length; j++) open[j].classList.remove('open');
@@ -45426,7 +45523,7 @@ function _apexImgNormalize() {
 // ║  (mode: 'add' | 'remove'). جمعِ بل همان تعداد × قیمتِ قلم است؛ قطعات فقط روی     ║
 // ║  موجودی (Rebuilderِ stock)، بهای تمام‌شده/مفاد (FIFO) و ورود/خروجِ جنس اثر دارند. ║
 // ║  مفادِ فروش: افزودن → (قیمتِ قطعه − بهای قطعه)×تعداد اضافه می‌شود؛ کسری →         ║
-// ║  همان مقدار کم می‌شود (قطعه با بهای خودش به انبار برمی‌گردد).                     ║
+// ║  مبلغِ قطعه (قیمتِ بل) از بها کم و قطعه با همان قیمت وارد انبار می‌شود.           ║
 // ╚══════════════════════════════════════════════════════════════════════════════╝
 function _apexPartsOf(row) {
     try { var a = JSON.parse((row && row.dataset && row.dataset.parts) || '[]'); return Array.isArray(a) ? a : []; }
@@ -45692,10 +45789,8 @@ function _apexPartsForSave(row, currency, isPurchase) {
     return parts.map(function (pt) {
         var o = { productId: pt.productId, name: pt.name, unit: pt.unit, quantity: _apexNum(pt.quantity), price: _apexNum(pt.price), mode: pt.mode === 'add' ? 'add' : 'remove' };
         if (!isPurchase && o.mode === 'remove') {
-            var pr = all.find(function (p) { return p.id == pt.productId; });
-            var uc = 0;
-            try { if (pr) uc = _resolveProductPrice(pr, currency, 'purchase', 'primary').price || 0; } catch (e) {}
-            o.unitCost = uc;
+            // (APEX) بهای قطعهٔ کسری = همان قیمتی که در بل برایش حساب شد (هماهنگ با موتورِ مفاد/FIFO)
+            o.unitCost = o.price;
         }
         return o;
     });
@@ -45868,7 +45963,16 @@ function _apexOvlClose(id) {
 function _apexOvlBackTop() {
     var all = document.querySelectorAll('.apex-ovl');
     if (!all.length) return false;
-    _apexOvlClose(all[all.length - 1].id);
+    var top = all[all.length - 1];
+    // اگر پیش‌نمایشِ چاپ (مثلاً چاپِ بارکد) روی این اورلی باز است، اول همان بسته شود
+    try {
+        var pp = document.getElementById('jouya-pp-overlay');
+        if (pp && (top.compareDocumentPosition(pp) & Node.DOCUMENT_POSITION_FOLLOWING) && typeof window.__jouyaPreviewOverlayClose === 'function') {
+            window.__jouyaPreviewOverlayClose();
+            return true;
+        }
+    } catch (e) {}
+    _apexOvlClose(top.id);
     return true;
 }
 
@@ -45897,9 +46001,10 @@ function _apexBsetTabs() {
             fld('نام فروشگاه (روی بل)', '<input type="text" id="ssb-bill-store-name" placeholder="نام فروشگاه">') +
             fld('نام انگلیسی (اختیاری)', '<input type="text" id="ssb-bill-store-name-en" placeholder="Store Name (English)" dir="ltr">') +
             fld('شعار / معرفی فروشگاه', '<input type="text" id="ssb-bill-slogan" placeholder="عرضه کننده انواع کالاهای با کیفیت">') },
-        { key: 'paper', icon: 'fas fa-ruler-combined', title: 'اندازه و رنگ بل', sub: 'اندازهٔ ورق، جهت و رنگ‌ها', html:
+        { key: 'paper', icon: 'fas fa-ruler-combined', title: 'اندازه و رنگ بل', sub: 'اندازهٔ ورق، جهت، حاشیه‌ها و رنگ‌ها', html:
             fld('اندازهٔ ورق', '<select id="ssb-bill-size"><option value="A4">A4 (بزرگ)</option><option value="A5">A5 (متوسط)</option><option value="80mm">۸۰ میلی‌متر (حرارتی)</option><option value="58mm">۵۸ میلی‌متر (حرارتی کوچک)</option></select>') +
             fld('جهت صفحه (برای A4 و A5)', '<select id="ssb-bill-orientation"><option value="portrait">عمودی</option><option value="landscape">افقی</option></select>') +
+            _apexMarginBox('ssb-bill-mg', 'حاشیه‌های ورق (میلی‌متر)', 'خالی = حاشیهٔ استندرد. محتوای بل خودش در فضای باقی‌مانده جا می‌شود.') +
             '<div class="apex-bset-row2">' +
                 fld('رنگ اصلی', '<input type="color" id="ssb-bill-primary" value="#1b2a4a">') +
                 fld('رنگ تأکید', '<input type="color" id="ssb-bill-accent" value="#c8963c">') +
@@ -45932,12 +46037,15 @@ function _apexBsetTabs() {
             img('بارکد / QR', 'ssb-bill-barcode-file', 'ssb-bill-barcode-preview', 'billBarcode') }
     ];
 }
-function apexBillSettingsOpen() {
+function apexBillSettingsOpen(opts) {
     var fromSidebar = false;
     try { fromSidebar = !!document.querySelector('.settings-sidebar.open'); } catch (e) {}
+    // (APEX) باز شدن از پیش‌نمایشِ چاپ: پس از «ثبت تغییرات» به همان پیش‌نمایش برمی‌گردد
+    window.__apexBsetOnSaved = (opts && typeof opts.onSaved === 'function') ? opts.onSaved : null;
     var ov = _apexOvlCreate('apex-bset', 'تنظیمات بل', 'fas fa-file-invoice-dollar',
         '<button type="button" class="apex-ovl-btn apex-ovl-primary" id="apex-bset-save"><i class="fas fa-check"></i><span>ثبت تغییرات</span></button>',
         function () {
+            window.__apexBsetOnSaved = null;
             window.__ssbBill = { billLogo: null, billSideImage: null, billBarcode: null };
             if (fromSidebar) { try { ssbOpenSub('settingsgroup'); } catch (e) {} }
         });
@@ -45974,6 +46082,7 @@ function apexBillSettingsOpen() {
     var first = body.querySelector('.apex-bset-tab'); if (first) first.classList.add('open');
     // پیش‌نمایش زنده
     var onEdit = function () { _apexBsetSchedule(220); };
+    body.addEventListener('click', function (e) { if (_apexMarginPreset(e)) _apexBsetSchedule(60); });
     body.addEventListener('input', onEdit);
     body.addEventListener('change', onEdit);
     document.getElementById('apex-bset-save').addEventListener('click', _apexBsetSave);
@@ -46062,6 +46171,13 @@ function _apexBsetFit() {
 function _apexBsetSave() {
     try { ssbSaveBill(); } catch (e) { console.error('ssbSaveBill:', e); }
     try { var t = document.getElementById('ssb-toast'); if (t) t.style.zIndex = '2147483646'; } catch (e) {}
+    var _back = window.__apexBsetOnSaved;
+    if (typeof _back === 'function') {
+        window.__apexBsetOnSaved = null;
+        _apexOvlClose('apex-bset');
+        try { _back(); } catch (e) { console.error('bill settings onSaved:', e); }
+        return;
+    }
     // پس از ذخیره، تصاویر تازه بخشی از تنظیمات شده‌اند؛ پیش‌نمایش از تنظیمات ذخیره‌شده ساخته می‌شود
     _apexBsetRender();
 }
@@ -46159,13 +46275,992 @@ function _ssbGroupHtml() {
         li('notes', 'fas fa-bell', 'هشدار های داخل سیستم') +
         li('security', 'fas fa-lock', 'امنیت') +
         li('datasettings', 'fas fa-cogs', 'تنظیمات اطلاعات') +
+        li('tools', 'fas fa-toolbox', 'ابزار ها') +
     '</ul>';
 }
 /** والد هر زیربخش برای «برگشت» (گروه تنظیمات و زیرگروه تنظیمات اطلاعات) */
 function _ssbParentOf(key) {
-    var g = { display: 1, invoice: 1, numsys: 1, currency: 1, notes: 1, security: 1, datasettings: 1 };
+    var g = { display: 1, invoice: 1, numsys: 1, currency: 1, notes: 1, security: 1, datasettings: 1, tools: 1 };
     var ds = { excel: 1, importpersons: 1, serversync: 1, dbinit: 1, 'delete': 1 };
     if (g[key]) return 'settingsgroup';
+    if (key === 'barcode') return 'tools';
     if (ds[key]) return 'datasettings';
     return null;
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  (APEX) حاشیه‌های چهارطرفِ ورق — مشترک بین «تنظیمات بل» و «طراحی بارکد»        ║
+// ║  همه‌چیز «تابع declaration» است (throw عمدی سطح‌بالای این فایل).             ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+/** کادرِ چهار حاشیه (بالا/راست/پایین/چپ) با دو دکمهٔ «استندرد» و «حداقل» */
+function _apexMarginBox(prefix, title, hint) {
+    var cell = function (side, label) {
+        return '<span class="apex-mg-cell apex-mg-' + side + '"><small>' + label + '</small>' +
+               '<input type="number" id="' + prefix + '-' + side + '" min="0" max="60" step="0.5" inputmode="decimal" placeholder="استندرد"></span>';
+    };
+    return '<div class="apex-mg" data-mg="' + prefix + '">' +
+        '<div class="apex-mg-head"><label>' + title + '</label>' +
+            '<span class="apex-mg-presets">' +
+                '<button type="button" data-mg-preset="std" data-mg-for="' + prefix + '">استندرد</button>' +
+                '<button type="button" data-mg-preset="min" data-mg-for="' + prefix + '">حداقل</button>' +
+            '</span></div>' +
+        '<div class="apex-mg-box">' +
+            cell('t', 'بالا') + cell('l', 'چپ') +
+            '<span class="apex-mg-paper"><i class="far fa-file-alt"></i></span>' +
+            cell('r', 'راست') + cell('b', 'پایین') +
+        '</div>' +
+        (hint ? '<small class="apex-mg-hint">' + hint + '</small>' : '') +
+    '</div>';
+}
+/** کلیک روی «استندرد»/«حداقل»؛ اگر رسیدگی شد true */
+function _apexMarginPreset(e) {
+    var b = (e && e.target && e.target.closest) ? e.target.closest('[data-mg-preset]') : null;
+    if (!b) return false;
+    var p = b.getAttribute('data-mg-for'), v = (b.getAttribute('data-mg-preset') === 'min') ? '0' : '';
+    ['t', 'r', 'b', 'l'].forEach(function (s) { var el = document.getElementById(p + '-' + s); if (el) el.value = v; });
+    return true;
+}
+/** حاشیه‌های ذخیره‌شدهٔ بل؛ null = استندرد (هیچ ضلعی پر نشده). ضلعِ خالی = مقدارِ استندرد */
+function _apexBillMargins(S, stdMm) {
+    S = S || {};
+    var k = [S.billMarginTop, S.billMarginRight, S.billMarginBottom, S.billMarginLeft];
+    var has = function (v) { return v !== '' && v != null && !isNaN(parseFloat(v)); };
+    if (!k.some(has)) return null;
+    var f = function (v) { return has(v) ? Math.max(0, Math.min(60, parseFloat(v))) : stdMm; };
+    return { t: f(k[0]), r: f(k[1]), b: f(k[2]), l: f(k[3]) };
+}
+/**
+ * CSSِ حاشیه‌های دلخواه برای بل/رسید. خالی بودنِ همه = رشتهٔ خالی (همان حاشیهٔ استندردِ قبلی).
+ * روی صفحه: بدنه همان «ورق» است (عرضِ واقعیِ کاغذ) و حاشیه‌ها درونِ آن؛ در چاپ: حاشیهٔ @page.
+ * پس محتوای بل در هر دو حالت دقیقاً در «عرضِ کاغذ − حاشیه‌ها» جا می‌شود.
+ * «html:not(#_)» فقط برای این است که بر قاعدهٔ حاشیهٔ پیش‌نمایشِ درون‌برنامه‌ای برتری داشته باشد.
+ */
+function _apexBillMarginCss(S, pageWidth, wrapSel) {
+    var std = /^(58|80)mm$/.test(String(pageWidth)) ? 2 : (wrapSel === '.slp-wrap' ? 16 : 12);
+    var m = _apexBillMargins(S, std);
+    if (!m) return '';
+    var mm = m.t + 'mm ' + m.r + 'mm ' + m.b + 'mm ' + m.l + 'mm';
+    return 'html{background:#eceff3;}' +
+        'html:not(#_) body{width:' + pageWidth + ';max-width:none;margin:0 auto !important;padding:' + mm + ' !important;background:#fff !important;box-sizing:border-box;}' +
+        'html:not(#_) ' + wrapSel + '{max-width:none !important;width:100% !important;margin:0 !important;}' +
+        '@media print{@page{margin:' + mm + ';}html,html:not(#_) body{background:#fff !important;}' +
+        'html:not(#_) body{width:auto;margin:0 !important;padding:0 !important;}}';
+}
+
+// ╔══════════════════════════════════════════════════════════════════════════════╗
+// ║  (APEX) طراحی و چاپِ بارکد                                                    ║
+// ║  ‑ رمزگذارهای استندرد (بدونِ کتابخانهٔ بیرونی، آفلاین): EAN-13، EAN-8، UPC-A،   ║
+// ║    CODE 128 (B/C خودکار) و CODE 39 — هر کدام با رقمِ کنترل و ناحیهٔ خاموشِ استندرد. ║
+// ║  ‑ کدِ تولیدیِ جنس: EAN-13 با پیشوندِ ۲۰ تا ۲۹ (بازهٔ «مصرفِ داخلیِ فروشگاه» GS1)   ║
+// ║    و یکتا در میانِ همهٔ اجناس؛ در فیلدِ «کد/بارکد»ِ همان جنس ذخیره می‌شود.         ║
+// ╚══════════════════════════════════════════════════════════════════════════════╝
+function _apexBc128Pat() {
+    return ['212222','222122','222221','121223','121322','131222','122213','122312','132212','221213',
+            '221312','231212','112232','122132','122231','113222','123122','123221','223211','221132',
+            '221231','213212','223112','312131','311222','321122','321221','312212','322112','322211',
+            '212123','212321','232121','111323','131123','131321','112313','132113','132311','211313',
+            '231113','231311','112133','112331','132131','113123','113321','133121','313121','211331',
+            '231131','213113','213311','213131','311123','311321','331121','312113','312311','332111',
+            '314111','221411','431111','111224','111422','121124','121421','141122','141221','112214',
+            '112412','122114','122411','142112','142211','241211','221114','413111','241112','134111',
+            '111242','121142','121241','114212','124112','124211','411212','421112','421211','212141',
+            '214121','412121','111143','111341','131141','114113','114311','411113','411311','113141',
+            '114131','311141','411131','211412','211214','211232','2331112'];
+}
+function _apexBc39Map() {
+    return { '0': '000110100', '1': '100100001', '2': '001100001', '3': '101100000', '4': '000110001',
+        '5': '100110000', '6': '001110000', '7': '000100101', '8': '100100100', '9': '001100100',
+        'A': '100001001', 'B': '001001001', 'C': '101001000', 'D': '000011001', 'E': '100011000',
+        'F': '001011000', 'G': '000001101', 'H': '100001100', 'I': '001001100', 'J': '000011100',
+        'K': '100000011', 'L': '001000011', 'M': '101000010', 'N': '000010011', 'O': '100010010',
+        'P': '001010010', 'Q': '000000111', 'R': '100000110', 'S': '001000110', 'T': '000010110',
+        'U': '110000001', 'V': '011000001', 'W': '111000000', 'X': '010010001', 'Y': '110010000',
+        'Z': '011010000', '-': '010000101', '.': '110000100', ' ': '011000100', '$': '010101000',
+        '/': '010100010', '+': '010001010', '%': '000101010', '*': '010010100' };
+}
+/** رقمِ کنترلِ GS1 (EAN-8/12/13، UPC-A) برای رقم‌های بدونِ رقمِ کنترل */
+function _apexBcCheck(s) {
+    var sum = 0;
+    for (var i = 0; i < s.length; i++) {
+        var d = +s.charAt(s.length - 1 - i);
+        sum += (i % 2 === 0) ? d * 3 : d;
+    }
+    return (10 - (sum % 10)) % 10;
+}
+function _apexBcValidGs1(code) {
+    code = String(code || '');
+    if (!/^\d{8}$|^\d{12}$|^\d{13}$/.test(code)) return false;
+    return _apexBcCheck(code.slice(0, -1)) === +code.slice(-1);
+}
+/** نوعِ مناسب برای یک کد (حالتِ «خودکار») */
+function _apexBcAuto(code) {
+    code = String(code || '').trim();
+    if (/^\d{13}$/.test(code) && _apexBcValidGs1(code)) return 'EAN13';
+    if (/^\d{12}$/.test(code) && _apexBcValidGs1(code)) return 'UPCA';
+    if (/^\d{8}$/.test(code) && _apexBcValidGs1(code)) return 'EAN8';
+    return 'CODE128';
+}
+function _apexBcTypeName(t) {
+    return { EAN13: 'EAN-13', EAN8: 'EAN-8', UPCA: 'UPC-A', CODE128: 'CODE 128', CODE39: 'CODE 39' }[t] || t;
+}
+/** ارقامِ فارسی/عربی → لاتین (بارکد همیشه با ارقامِ لاتین رمز می‌شود) */
+function _apexBcLatin(s) {
+    return String(s == null ? '' : s).replace(/[۰-۹]/g, function (d) { return '۰۱۲۳۴۵۶۷۸۹'.indexOf(d); })
+        .replace(/[٠-٩]/g, function (d) { return '٠١٢٣٤٥٦٧٨٩'.indexOf(d); }).trim();
+}
+/**
+ * رمزگذاری: { ok, type, code, bits('1'=میله), guards:[[شروع,طول]..], ql, qr, err }
+ *  ql/qr = ناحیهٔ خاموشِ استندرد (به مدول)
+ */
+function _apexBcEncode(type, raw) {
+    var code = _apexBcLatin(raw);
+    var fail = function (m) { return { ok: false, type: type, code: code, err: m }; };
+    if (!code) return fail('کد خالی است');
+    var L = ['0001101', '0011001', '0010011', '0111101', '0100011', '0110001', '0101111', '0111011', '0110111', '0001011'];
+    var R = L.map(function (p) { return p.replace(/./g, function (c) { return c === '1' ? '0' : '1'; }); });
+    var G = R.map(function (p) { return p.split('').reverse().join(''); });
+    if (type === 'EAN13' || type === 'UPCA') {
+        var d13 = code;
+        if (type === 'UPCA') {
+            if (/^\d{11}$/.test(code)) code = code + _apexBcCheck(code);
+            if (!/^\d{12}$/.test(code)) return fail('UPC-A باید ۱۲ رقم باشد');
+            if (!_apexBcValidGs1(code)) return fail('رقمِ کنترلِ UPC-A درست نیست');
+            d13 = '0' + code;
+        } else {
+            if (/^\d{12}$/.test(code)) code = code + _apexBcCheck(code);
+            if (!/^\d{13}$/.test(code)) return fail('EAN-13 باید ۱۳ رقم باشد');
+            if (!_apexBcValidGs1(code)) return fail('رقمِ کنترلِ EAN-13 درست نیست');
+            d13 = code;
+        }
+        var par = ['LLLLLL', 'LLGLGG', 'LLGGLG', 'LLGGGL', 'LGLLGG', 'LGGLLG', 'LGGGLL', 'LGLGLG', 'LGLGGL', 'LGGLGL'][+d13.charAt(0)];
+        var b = '101';
+        for (var i = 1; i <= 6; i++) b += (par.charAt(i - 1) === 'L' ? L : G)[+d13.charAt(i)];
+        b += '01010';
+        for (var j = 7; j <= 12; j++) b += R[+d13.charAt(j)];
+        b += '101';
+        var gd = [[0, 3], [45, 5], [92, 3]];
+        if (type === 'UPCA') gd = [[0, 10], [45, 5], [85, 10]];   // در UPC-A میله‌های رقمِ اول و آخر هم بلند است
+        return { ok: true, type: type, code: code, bits: b, guards: gd, ql: (type === 'UPCA' ? 9 : 11), qr: (type === 'UPCA' ? 9 : 7) };
+    }
+    if (type === 'EAN8') {
+        if (/^\d{7}$/.test(code)) code = code + _apexBcCheck(code);
+        if (!/^\d{8}$/.test(code)) return fail('EAN-8 باید ۸ رقم باشد');
+        if (!_apexBcValidGs1(code)) return fail('رقمِ کنترلِ EAN-8 درست نیست');
+        var b8 = '101';
+        for (var k = 0; k < 4; k++) b8 += L[+code.charAt(k)];
+        b8 += '01010';
+        for (var m = 4; m < 8; m++) b8 += R[+code.charAt(m)];
+        b8 += '101';
+        return { ok: true, type: type, code: code, bits: b8, guards: [[0, 3], [31, 5], [64, 3]], ql: 7, qr: 7 };
+    }
+    if (type === 'CODE39') {
+        var map = _apexBc39Map();
+        if (code.indexOf('*') !== -1) return fail('علامتِ * در CODE 39 مجاز نیست');
+        for (var q = 0; q < code.length; q++) if (!map[code.charAt(q)]) return fail('CODE 39 فقط حروفِ بزرگِ لاتین، رقم و - . $ / + % را می‌پذیرد');
+        var full = '*' + code + '*', b39 = '';
+        for (var c = 0; c < full.length; c++) {
+            var pat = map[full.charAt(c)];
+            for (var e = 0; e < 9; e++) {
+                var w = pat.charAt(e) === '1' ? 3 : 1;
+                b39 += new Array(w + 1).join(e % 2 === 0 ? '1' : '0');
+            }
+            if (c < full.length - 1) b39 += '0';
+        }
+        return { ok: true, type: type, code: code, bits: b39, guards: [], ql: 10, qr: 10 };
+    }
+    // CODE128 — زیرمجموعهٔ B برای متن و C برای دنبالهٔ رقم‌ها (کوتاه‌ترین خروجی)
+    for (var x = 0; x < code.length; x++) {
+        var cc = code.charCodeAt(x);
+        if (cc < 32 || cc > 126) return fail('CODE 128 فقط حروف و ارقامِ لاتین را می‌پذیرد');
+    }
+    var digitRun = function (from) { var n = 0; while (from + n < code.length && /\d/.test(code.charAt(from + n))) n++; return n; };
+    var vals = [], set;
+    var lead = digitRun(0);
+    if ((lead >= 4 && lead % 2 === 0) || (lead === code.length && lead % 2 === 0 && lead >= 2)) { set = 'C'; vals.push(105); }
+    else { set = 'B'; vals.push(104); }
+    var pos = 0;
+    while (pos < code.length) {
+        if (set === 'C') {
+            if (digitRun(pos) >= 2) { vals.push(parseInt(code.substr(pos, 2), 10)); pos += 2; }
+            else { vals.push(100); set = 'B'; }
+        } else {
+            var run = digitRun(pos);
+            if (run >= 4 && run % 2 === 0) { vals.push(99); set = 'C'; }
+            else { vals.push(code.charCodeAt(pos) - 32); pos++; }
+        }
+    }
+    var sum = vals[0];
+    for (var v = 1; v < vals.length; v++) sum += vals[v] * v;
+    vals.push(sum % 103);
+    vals.push(106);
+    var P = _apexBc128Pat(), b128 = '';
+    vals.forEach(function (val) {
+        var p = P[val];
+        for (var y = 0; y < p.length; y++) b128 += new Array(+p.charAt(y) + 1).join(y % 2 === 0 ? '1' : '0');
+    });
+    return { ok: true, type: 'CODE128', code: code, bits: b128, guards: [], ql: 10, qr: 10 };
+}
+/** ارتفاعِ متنِ زیرِ بارکد (mm) برای عرضِ مدولِ داده‌شده */
+function _apexBcTextMm(module) { return Math.max(1.5, Math.min(3.2, module * 8.5)); }
+/**
+ * SVGِ بارکد به میلی‌متر. availW: بیشترین عرضِ مجاز؛ مدول هرگز از cfg.module بزرگ‌تر نمی‌شود و
+ * اگر جا نشود کوچک می‌شود تا کاملاً در لیبل جا شود. خروجی: { ok, svg, w, h, module, type, err }
+ */
+function _apexBcSvg(code, cfg, availW, barH) {
+    var type = (!cfg.type || cfg.type === 'auto') ? _apexBcAuto(_apexBcLatin(code)) : cfg.type;
+    var enc = _apexBcEncode(type, code);
+    if (!enc.ok) return { ok: false, type: type, err: enc.err };
+    var total = enc.ql + enc.bits.length + enc.qr;
+    var mod = Math.min(parseFloat(cfg.module) || 0.33, availW / total);
+    var showTxt = cfg.showCode !== false;
+    var fs = showTxt ? _apexBcTextMm(mod) : 0;
+    var isGs1 = (type === 'EAN13' || type === 'EAN8' || type === 'UPCA');
+    var ext = (showTxt && isGs1) ? fs * 0.55 : 0;
+    var W = total * mod, H = barH + (showTxt ? fs * 1.12 : 0);
+    var r3 = function (n) { return Math.round(n * 1000) / 1000; };
+    var inGuard = function (i) { for (var g = 0; g < enc.guards.length; g++) { if (i >= enc.guards[g][0] && i < enc.guards[g][0] + enc.guards[g][1]) return true; } return false; };
+    var rects = '', i = 0, bits = enc.bits;
+    while (i < bits.length) {
+        if (bits.charAt(i) !== '1') { i++; continue; }
+        var st = i, g = inGuard(i);
+        while (i < bits.length && bits.charAt(i) === '1' && inGuard(i) === g) i++;
+        rects += '<rect x="' + r3((enc.ql + st) * mod) + '" y="0" width="' + r3((i - st) * mod) + '" height="' + r3(barH + (g ? ext : 0)) + '"/>';
+    }
+    var txt = '';
+    if (showTxt) {
+        var ty = r3(barH + fs * 0.98);
+        var t = function (x, s, anchor) { return '<text x="' + r3(x) + '" y="' + ty + '" text-anchor="' + (anchor || 'middle') + '">' + s + '</text>'; };
+        var c = enc.code, q = enc.ql;
+        if (type === 'EAN13') {
+            txt += t((q - 1.5) * mod, c.charAt(0), 'end');
+            for (var a = 0; a < 6; a++) txt += t((q + 3 + 7 * a + 3.5) * mod, c.charAt(1 + a));
+            for (var b2 = 0; b2 < 6; b2++) txt += t((q + 50 + 7 * b2 + 3.5) * mod, c.charAt(7 + b2));
+        } else if (type === 'UPCA') {
+            txt += t((q - 1.5) * mod, c.charAt(0), 'end');
+            for (var u = 1; u < 6; u++) txt += t((q + 3 + 7 * u + 3.5) * mod, c.charAt(u));
+            for (var u2 = 0; u2 < 5; u2++) txt += t((q + 50 + 7 * u2 + 3.5) * mod, c.charAt(6 + u2));
+            txt += t((q + 95 + 1.5) * mod, c.charAt(11), 'start');
+        } else if (type === 'EAN8') {
+            for (var e1 = 0; e1 < 4; e1++) txt += t((q + 3 + 7 * e1 + 3.5) * mod, c.charAt(e1));
+            for (var e2 = 0; e2 < 4; e2++) txt += t((q + 36 + 7 * e2 + 3.5) * mod, c.charAt(4 + e2));
+        } else {
+            var esc = c.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            txt += t(W / 2, esc);
+        }
+        txt = '<g font-family="Consolas,\'Lucida Console\',\'DejaVu Sans Mono\',\'Liberation Mono\',monospace" font-size="' + r3(fs) + '" fill="#000">' + txt + '</g>';
+    }
+    // direction=ltr: در صفحهٔ راست‌به‌چپ، text-anchor برعکس نشود (رقمِ اولِ EAN بیرونِ میله‌ها بماند)
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + r3(W) + 'mm" height="' + r3(H) + 'mm" viewBox="0 0 ' + r3(W) + ' ' + r3(H) + '" shape-rendering="crispEdges" direction="ltr" style="direction:ltr">' +
+              '<g fill="#000">' + rects + '</g>' + txt + '</svg>';
+    return { ok: true, svg: svg, w: W, h: H, module: mod, type: type };
+}
+/** همهٔ کدها/بارکدهای ثبت‌شدهٔ اجناس (برای یکتایی) */
+function _apexBcAllCodes() {
+    var set = {};
+    try {
+        var list = (db && db._getProductsRaw) ? db._getProductsRaw() : ((db && db.getProducts) ? db.getProducts() : []);
+        (list || []).forEach(function (p) {
+            if (!p) return;
+            if (p.code) set[_apexBcLatin(p.code)] = 1;
+            if (p.barcode) set[_apexBcLatin(p.barcode)] = 1;
+        });
+    } catch (e) {}
+    return set;
+}
+/** کدِ تازهٔ EAN-13 با پیشوندِ داخلیِ ۲۰…۲۹، یکتا در میانِ اجناس — آفلاین و آنی */
+function _apexBcNewCode(prefix) {
+    prefix = String(prefix || '20');
+    if (!/^2\d$/.test(prefix)) prefix = '20';
+    var used = _apexBcAllCodes();
+    var rnd = function () {
+        var s = '';
+        try {
+            var a = new Uint32Array(3); (window.crypto || window.msCrypto).getRandomValues(a);
+            s = String(a[0]) + String(a[1]) + String(a[2]);
+        } catch (e) { s = String(Math.random()).slice(2) + String(Date.now()); }
+        return s.replace(/\D/g, '').slice(-10);
+    };
+    for (var n = 0; n < 200; n++) {
+        var body = prefix + ('0000000000' + rnd()).slice(-10);
+        var code = body + _apexBcCheck(body);
+        if (!used[code]) return code;
+    }
+    var b2 = prefix + String(Date.now()).slice(-10);
+    return b2 + _apexBcCheck(b2);
+}
+/** بارکدِ مؤثرِ یک جنس (فیلدِ «کد» یا بارکدِ واردشده از اکسل) */
+function _apexBcOf(p) { return p ? _apexBcLatin(p.code || p.barcode || '') : ''; }
+/** تولید و ذخیرهٔ بارکد برای جنسی که بارکد ندارد؛ کدِ نهایی را برمی‌گرداند */
+function _apexBcEnsureProduct(p, prefix) {
+    if (!p) return '';
+    var cur = _apexBcOf(p);
+    if (cur) return cur;
+    var code = _apexBcNewCode(prefix);
+    try {
+        var r = db.saveProduct({ id: p.id, name: p.name, unit: p.unit || 'عدد', code: code });
+        if (r && r.success === false) { _apexToast('ذخیرهٔ بارکد ممکن نشد: ' + (r.error || ''), true); return ''; }
+        p.code = code;
+        try { if (typeof loadProductsList === 'function' && document.querySelector('#products-list.section.active')) loadProductsList(); } catch (e) {}
+    } catch (e) { console.error('barcode save:', e); return ''; }
+    return code;
+}
+function _apexToast(msg, isErr) {
+    try { ssbShowMsg(msg, isErr); var t = document.getElementById('ssb-toast'); if (t) t.style.zIndex = '2147483646'; } catch (e) {}
+}
+/** آیکنِ کنارِ فیلدِ «کد/بارکد» در فورمِ ثبتِ جنس — تولیدِ آنیِ بارکد (آفلاین/آنلاین یکسان) */
+function apexBarcodeGenForForm() {
+    var inp = document.getElementById('product-code');
+    if (!inp) return;
+    var cfg = _apexBcCfg();
+    var code = _apexBcNewCode(cfg.prefix);
+    inp.value = code;
+    try { inp.dispatchEvent(new Event('input', { bubbles: true })); inp.dispatchEvent(new Event('change', { bubbles: true })); } catch (e) {}
+    _apexToast('بارکد ' + code + ' تولید شد؛ با «ثبت» در مشخصات جنس ذخیره می‌شود ✓');
+}
+
+// ── تنظیماتِ چاپِ بارکد ─────────────────────────────────────────────────────
+function _apexBcDefaults() {
+    return {
+        type: 'auto', prefix: '20', module: 0.33, barH: 12,
+        showStore: true, storeText: '', showName: true, showPrice: true, priceCur: '', showCode: true, showBorder: false, fontPt: 7,
+        mode: 'roll', rollPreset: '40x30', labelW: 40, labelH: 30, rollCols: 1, rollGap: 2,
+        paper: 'A4', sheetPreset: '3x8', cols: 3, rows: 8, gapX: 0, gapY: 0, sheetW: 70, sheetH: 37, pad: 1.5, startPos: 1,
+        mT: '', mR: '', mB: '', mL: '',        // حاشیه‌های ورق (حالتِ ورق)
+        rmT: '', rmR: '', rmB: '', rmL: ''     // حاشیه‌های داخلِ هر لیبل (حالتِ رول)
+    };
+}
+function _apexBcCfg() {
+    var s = {};
+    try { s = (db && db.getSettings) ? (db.getSettings() || {}) : {}; } catch (e) {}
+    return Object.assign(_apexBcDefaults(), (s && typeof s.apexBarcode === 'object' && s.apexBarcode) || {});
+}
+function _apexBcRollPresets() {
+    return [['30x20', 30, 20], ['38x25', 38, 25], ['40x25', 40, 25], ['40x30', 40, 30], ['50x25', 50, 25], ['50x30', 50, 30], ['60x40', 60, 40], ['70x50', 70, 50], ['100x50', 100, 50]];
+}
+/** ورق‌های استندردِ لیبل: [کلید، ستون، سطر، عرض، ارتفاع، فاصلهٔ افقی، فاصلهٔ عمودی، کاغذ، عنوان] */
+function _apexBcSheetPresets() {
+    return [
+        ['2x7', 2, 7, 99.1, 38.1, 2.5, 0, 'A4', '۱۴ لیبل — ۹۹٫۱×۳۸٫۱'],
+        ['3x7', 3, 7, 63.5, 38.1, 2.5, 0, 'A4', '۲۱ لیبل — ۶۳٫۵×۳۸٫۱'],
+        ['3x8', 3, 8, 70, 37, 0, 0, 'A4', '۲۴ لیبل — ۷۰×۳۷'],
+        ['3x11', 3, 11, 70, 25.4, 0, 0, 'A4', '۳۳ لیبل — ۷۰×۲۵٫۴'],
+        ['4x10', 4, 10, 52.5, 29.7, 0, 0, 'A4', '۴۰ لیبل — ۵۲٫۵×۲۹٫۷'],
+        ['5x13', 5, 13, 38.1, 21.2, 2.5, 0, 'A4', '۶۵ لیبل — ۳۸٫۱×۲۱٫۲']
+    ];
+}
+function _apexBcPaper(name) {
+    return { A4: [210, 297], A5: [148, 210], Letter: [215.9, 279.4] }[name] || [210, 297];
+}
+function _apexBcNum(v, d, lo, hi) {
+    var n = parseFloat(_apexBcLatin(v));
+    if (isNaN(n)) n = d;
+    if (lo != null) n = Math.max(lo, n);
+    if (hi != null) n = Math.min(hi, n);
+    return n;
+}
+/**
+ * هندسهٔ چاپ از روی تنظیمات:
+ *  roll : هر سطر = یک صفحه؛ عرضِ صفحه = ستون‌ها × عرضِ لیبل + فاصله‌ها؛ حاشیه‌ها = فاصلهٔ محتوا از لبهٔ هر لیبل.
+ *  sheet: ورقِ A4/A5/Letter؛ حاشیه‌های استندرد = شبکه وسطِ ورق؛ حاشیهٔ دلخواه = لیبل‌ها خودشان
+ *         به اندازهٔ فضای باقی‌مانده بزرگ/کوچک می‌شوند تا دقیقاً جا شوند.
+ */
+function _apexBcGeom(cfg) {
+    var has = function (v) { return v !== '' && v != null && !isNaN(parseFloat(_apexBcLatin(v))); };
+    var mg = function (v, std) { return has(v) ? _apexBcNum(v, std, 0, 60) : std; };
+    var custom = has(cfg.mT) || has(cfg.mR) || has(cfg.mB) || has(cfg.mL);
+    if (cfg.mode === 'sheet') {
+        var pp = _apexBcPaper(cfg.paper), PW = pp[0], PH = pp[1];
+        var cols = Math.round(_apexBcNum(cfg.cols, 3, 1, 12)), rows = Math.round(_apexBcNum(cfg.rows, 8, 1, 30));
+        var gx = _apexBcNum(cfg.gapX, 0, 0, 30), gy = _apexBcNum(cfg.gapY, 0, 0, 30);
+        var lw = _apexBcNum(cfg.sheetW, 70, 10, PW), lh = _apexBcNum(cfg.sheetH, 37, 8, PH);
+        var sx = Math.max(0, (PW - cols * lw - (cols - 1) * gx) / 2), sy = Math.max(0, (PH - rows * lh - (rows - 1) * gy) / 2);
+        var m = { t: mg(cfg.mT, sy), r: mg(cfg.mR, sx), b: mg(cfg.mB, sy), l: mg(cfg.mL, sx) };
+        if (custom) {
+            lw = Math.max(5, (PW - m.l - m.r - (cols - 1) * gx) / cols);
+            lh = Math.max(5, (PH - m.t - m.b - (rows - 1) * gy) / rows);
+        }
+        return { mode: 'sheet', PW: PW, PH: PH, cols: cols, rows: rows, gx: gx, gy: gy, lw: lw, lh: lh, m: m, custom: custom,
+                 pad: _apexBcNum(cfg.pad, 1.5, 0, 10), per: cols * rows };
+    }
+    var rc = Math.round(_apexBcNum(cfg.rollCols, 1, 1, 4)), rg = _apexBcNum(cfg.rollGap, 2, 0, 20);
+    var w = _apexBcNum(cfg.labelW, 40, 10, 150), h = _apexBcNum(cfg.labelH, 30, 8, 150);
+    var mr = { t: mg(cfg.rmT, 1.5), r: mg(cfg.rmR, 1.5), b: mg(cfg.rmB, 1.5), l: mg(cfg.rmL, 1.5) };
+    custom = has(cfg.rmT) || has(cfg.rmR) || has(cfg.rmB) || has(cfg.rmL);
+    return { mode: 'roll', PW: rc * w + (rc - 1) * rg, PH: h, cols: rc, rows: 1, gx: rg, gy: 0, lw: w, lh: h, m: mr, custom: custom, pad: 0, per: rc };
+}
+function _apexBcEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function _apexBcFmt2(n) { return Math.round((parseFloat(n) || 0) * 100) / 100; }
+/** قیمتِ فروشِ جنس به ارزِ انتخابی (همان حل‌کنندهٔ مرکزیِ قیمت در بل‌ها) */
+function _apexBcPrice(p, cur) {
+    try {
+        if (typeof _resolveProductPrice === 'function') return parseFloat(_resolveProductPrice(p, cur, 'sale', 'primary').price) || 0;
+    } catch (e) {}
+    return parseFloat(p && (p.salePrice || p.salePriceAFN)) || 0;
+}
+/** یک لیبل (HTML) در جعبهٔ محتوای w×h میلی‌متر */
+function _apexBcLabelHtml(item, cfg, w, h, S) {
+    var PT = 0.3528, fs = _apexBcNum(cfg.fontPt, 7, 4, 16);
+    var lineMm = function (pt, k) { return pt * PT * (k || 1.25); };
+    var store = cfg.showStore ? (String(cfg.storeText || '').trim() || (S && (S.billStoreName || S.storeName)) || '') : '';
+    var name = cfg.showName ? (item.name || '') : '';
+    var cur = cfg.priceCur || ((typeof _baseCur === 'function') ? _baseCur() : 'AFN');
+    var price = cfg.showPrice ? _apexBcPrice(item.p, cur) : null;
+    var priceTxt = '';
+    if (cfg.showPrice && price) {
+        var lbl = (typeof getCurrencyLabel === 'function') ? getCurrencyLabel(cur) : cur;
+        priceTxt = ((typeof formatNumber === 'function') ? formatNumber(_apexBcFmt2(price)) : _apexBcFmt2(price)) + ' ' + lbl;
+    }
+    var gap = 0.5, used = 0, blocks = 0;
+    if (store) { used += lineMm(fs * 0.85, 1.2); blocks++; }
+    var nameLines = 0;
+    if (name) {
+        var cpl = Math.max(4, Math.floor(w / (fs * PT * 0.55)));
+        nameLines = Math.min(2, Math.ceil(name.length / cpl));
+        used += lineMm(fs) * nameLines; blocks++;
+    }
+    if (priceTxt) { used += lineMm(fs * 1.05, 1.2); blocks++; }
+    used += gap * blocks;
+    var maxBar = _apexBcNum(cfg.barH, 12, 3, 80);
+    var probe = _apexBcSvg(item.code, cfg, w, 10);
+    var txtH = (probe.ok && cfg.showCode !== false) ? (probe.h - 10) : 0;
+    var barH = Math.max(3, Math.min(maxBar, h - used - txtH));
+    var bc = _apexBcSvg(item.code, cfg, w, barH);
+    var r2 = function (n) { return Math.round(n * 100) / 100; };
+    return '<div class="bcl-in" style="width:' + r2(w) + 'mm;height:' + r2(h) + 'mm;font-size:' + fs + 'pt;">' +
+        (store ? '<div class="bcl-store">' + _apexBcEsc(store) + '</div>' : '') +
+        (name ? '<div class="bcl-name">' + _apexBcEsc(name) + '</div>' : '') +
+        '<div class="bcl-bar">' + (bc.ok ? bc.svg : '<div class="bcl-err">' + _apexBcEsc(bc.err || 'کد نامعتبر') + '</div>') + '</div>' +
+        (priceTxt ? '<div class="bcl-price">' + _apexBcEsc(priceTxt) + '</div>' : '') +
+    '</div>';
+}
+/**
+ * سندِ کاملِ چاپ (یا پیش‌نمایش). items: [{ p, name, code, copies }]
+ * opts.preview: فقط صفحهٔ اول (ورق) یا چند سطرِ اول (رول) برای پیش‌نمایشِ زنده
+ */
+function _apexBcDocHtml(items, cfg, opts) {
+    opts = opts || {};
+    var S = {};
+    try { S = (db && db.getSettings) ? (db.getSettings() || {}) : {}; } catch (e) {}
+    var G = _apexBcGeom(cfg);
+    var r2 = function (n) { return Math.round(n * 100) / 100; };
+    var seq = [];
+    (items || []).forEach(function (it) { var n = Math.max(0, Math.min(999, parseInt(it.copies, 10) || 0)); for (var i = 0; i < n; i++) seq.push(it); });
+    var skip = (G.mode === 'sheet') ? Math.max(0, Math.min(G.per - 1, (parseInt(cfg.startPos, 10) || 1) - 1)) : 0;
+    var cells = [];
+    for (var s = 0; s < skip; s++) cells.push(null);
+    cells = cells.concat(seq);
+    var pages = [];
+    for (var k = 0; k < cells.length; k += G.per) pages.push(cells.slice(k, k + G.per));
+    var totalPages = pages.length;
+    if (opts.preview) pages = pages.slice(0, G.mode === 'sheet' ? 1 : 4);
+    var labelCache = {};
+    var lbl = function (it, w, h) {
+        var key = it.code + '|' + it.name + '|' + (it.p && it.p.id);
+        if (!labelCache[key]) labelCache[key] = _apexBcLabelHtml(it, cfg, w, h, S);
+        return labelCache[key];
+    };
+    var out = '';
+    pages.forEach(function (pg) {
+        out += '<section class="bcp" style="width:' + r2(G.PW) + 'mm;height:' + r2(G.PH) + 'mm;">';
+        pg.forEach(function (it, idx) {
+            var c = idx % G.cols, r = Math.floor(idx / G.cols);
+            var x = (G.mode === 'sheet' ? G.m.r : 0) + c * (G.lw + G.gx);
+            var y = (G.mode === 'sheet' ? G.m.t : 0) + r * (G.lh + G.gy);
+            var padStyle = (G.mode === 'sheet')
+                ? ('padding:' + r2(G.pad) + 'mm;')
+                : ('padding:' + r2(G.m.t) + 'mm ' + r2(G.m.r) + 'mm ' + r2(G.m.b) + 'mm ' + r2(G.m.l) + 'mm;');
+            var iw = (G.mode === 'sheet') ? (G.lw - 2 * G.pad) : (G.lw - G.m.l - G.m.r);
+            var ih = (G.mode === 'sheet') ? (G.lh - 2 * G.pad) : (G.lh - G.m.t - G.m.b);
+            out += '<div class="bcl' + (it ? '' : ' bcl-skip') + '" style="right:' + r2(x) + 'mm;top:' + r2(y) + 'mm;width:' + r2(G.lw) + 'mm;height:' + r2(G.lh) + 'mm;' + padStyle + '">' +
+                   (it ? lbl(it, Math.max(4, iw), Math.max(4, ih)) : '') + '</div>';
+        });
+        out += '</section>';
+    });
+    if (!pages.length) out = '<div class="bcp-empty">برای پیش‌نمایش، یک جنس انتخاب کنید.</div>';
+    var css =
+        '*{box-sizing:border-box;margin:0;padding:0;}' +
+        '@page{size:' + r2(G.PW) + 'mm ' + r2(G.PH) + 'mm;margin:0;}' +
+        'html,body{background:#fff;}' +
+        'body{font-family:\'Estedad\',\'Vazirmatn\',Tahoma,sans-serif;color:#000;direction:rtl;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
+        '.bcp{position:relative;overflow:hidden;background:#fff;page-break-after:always;break-after:page;}' +
+        '.bcp:last-of-type{page-break-after:auto;break-after:auto;}' +
+        '.bcl{position:absolute;overflow:hidden;' + (cfg.showBorder ? 'outline:0.2mm dashed #555;outline-offset:-0.1mm;' : '') + '}' +
+        '.bcl-in{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5mm;text-align:center;overflow:hidden;line-height:1.2;}' +
+        '.bcl-store{font-size:0.85em;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}' +
+        '.bcl-name{font-weight:800;line-height:1.25;max-width:100%;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;word-break:break-word;}' +
+        '.bcl-bar{display:flex;justify-content:center;max-width:100%;}' +
+        '.bcl-bar svg{display:block;}' +
+        '.bcl-price{font-size:1.05em;font-weight:900;white-space:nowrap;}' +
+        '.bcl-err{font-size:7pt;color:#b91c1c;font-weight:700;padding:1mm;border:0.2mm dashed #b91c1c;border-radius:1mm;}' +
+        '.bcp-empty{padding:40px 20px;text-align:center;color:#64748b;font-size:14px;}' +
+        '@media screen{html{background:#e5e9f0;}body{background:#e5e9f0;padding:6mm;}' +
+            '.bcp{margin:0 auto 6mm;box-shadow:0 2px 10px rgba(15,23,42,.18);}' +
+            '.bcl{outline:' + (cfg.showBorder ? '0.2mm dashed #555' : '1px dashed #c5cdd9') + ';outline-offset:-0.1mm;}' +
+            '.bcl-skip{background:repeating-linear-gradient(45deg,#f1f5f9,#f1f5f9 4px,#fff 4px,#fff 8px);}}';
+    var html = '<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="UTF-8"><title>' + _apexBcEsc(opts.title || 'چاپ بارکد') + '</title>' +
+               '<style>' + css + '</style></head><body>' + out + '</body></html>';
+    return { html: html, pages: totalPages, labels: seq.length, geom: G };
+}
+
+// ── اورلیِ «طراحی بارکد» — هم‌شکلِ «تنظیمات بل» ─────────────────────────────────
+function _apexBcTabs() {
+    var chk = function (id, label, hint) {
+        return '<label class="apex-bset-check"><input type="checkbox" id="' + id + '"><span class="apex-bset-cbx"></span>' +
+               '<span class="apex-bset-cl"><b>' + label + '</b>' + (hint ? '<small>' + hint + '</small>' : '') + '</span></label>';
+    };
+    var fld = function (label, inner, cls) { return '<div class="apex-bset-field' + (cls ? ' ' + cls : '') + '"><label>' + label + '</label>' + inner + '</div>'; };
+    var num = function (id, min, max, step, ph) { return '<input type="number" id="' + id + '" min="' + min + '" max="' + max + '" step="' + step + '" inputmode="decimal"' + (ph ? ' placeholder="' + ph + '"' : '') + '>'; };
+    var curOpts = '';
+    try {
+        var seen = {}, sel = document.getElementById('sales-currency');
+        var base = (typeof _baseCur === 'function') ? _baseCur() : 'AFN';
+        var add = function (code, label) { if (!code || seen[code]) return; seen[code] = 1; curOpts += '<option value="' + _apexBcEsc(code) + '">' + _apexBcEsc(label || code) + '</option>'; };
+        add(base, (typeof getCurrencyLabel === 'function') ? getCurrencyLabel(base) : base);
+        if (sel) Array.prototype.forEach.call(sel.options, function (o) { add(o.value, o.textContent); });
+    } catch (e) {}
+    var rollOpts = _apexBcRollPresets().map(function (r) { return '<option value="' + r[0] + '">' + r[1] + ' × ' + r[2] + ' میلی‌متر</option>'; }).join('') + '<option value="custom">اندازهٔ دلخواه</option>';
+    var sheetOpts = _apexBcSheetPresets().map(function (r) { return '<option value="' + r[0] + '">' + r[8] + '</option>'; }).join('') + '<option value="custom">چیدمانِ دلخواه</option>';
+    return [
+        { key: 'items', icon: 'fas fa-box-open', title: 'انتخاب جنس', sub: 'جستجو در اجناس، تعداد لیبل و بارکد', html:
+            '<div class="apex-bc-pick">' +
+                '<i class="fas fa-search apex-bc-pick-ic"></i>' +
+                '<input type="text" id="apex-bc-q" placeholder="جستجوی جنس: نام، کد یا بارکد…" autocomplete="off">' +
+                '<div class="apex-bc-res" id="apex-bc-res"></div>' +
+            '</div>' +
+            '<small class="apex-bc-note"><i class="fas fa-wand-magic-sparkles"></i> جنسی که بارکد ندارد، با انتخاب همین‌جا برایش بارکدِ استندرد تولید و در مشخصاتِ جنس ثبت می‌شود.</small>' +
+            '<div class="apex-bc-list" id="apex-bc-list"></div>' },
+        { key: 'type', icon: 'fas fa-barcode', title: 'نوع بارکد', sub: 'استندرد، عرض میله و ارتفاع', html:
+            fld('نوع بارکد', '<select id="apex-bc-type"><option value="auto">خودکار (نظر به کدِ جنس)</option><option value="EAN13">EAN-13 (استندرد جهانیِ پرچون)</option><option value="EAN8">EAN-8 (اجناسِ کوچک)</option><option value="UPCA">UPC-A (امریکای شمالی)</option><option value="CODE128">CODE 128 (حروف و ارقام)</option><option value="CODE39">CODE 39 (صنعتی)</option></select>') +
+            '<div class="apex-bset-row2">' +
+                fld('عرض باریک‌ترین میله (mm)', num('apex-bc-module', 0.15, 1, 0.01, '0.33')) +
+                fld('بیشترین ارتفاع میله‌ها (mm)', num('apex-bc-barh', 3, 80, 0.5, '12')) +
+            '</div>' +
+            fld('پیشوندِ بارکدِ تولیدی (EAN-13 داخلی)', '<select id="apex-bc-prefix">' + ['20', '21', '22', '23', '24', '25', '26', '27', '28', '29'].map(function (x) { return '<option value="' + x + '">' + x + '</option>'; }).join('') + '</select>') +
+            '<small class="apex-bc-note">۰٫۳۳ میلی‌متر اندازهٔ استندرد (۱۰۰٪) برای EAN است؛ اگر لیبل کوچک باشد بارکد خودکار کوچک می‌شود تا جا شود. ناحیهٔ خاموشِ دو طرف و رقمِ کنترل نظر به استندرد GS1 رعایت می‌شود.</small>' },
+        { key: 'content', icon: 'fas fa-tag', title: 'محتوای لیبل', sub: 'نام فروشگاه، نام جنس، قیمت و کد', html:
+            chk('apex-bc-show-store', 'نام فروشگاه') +
+            fld('متن بالای لیبل (خالی = نام فروشگاه)', '<input type="text" id="apex-bc-store" placeholder="نام فروشگاه">', 'apex-bc-dep-store') +
+            chk('apex-bc-show-name', 'نام جنس', 'حداکثر دو سطر') +
+            chk('apex-bc-show-price', 'قیمت فروش') +
+            fld('ارز قیمت', '<select id="apex-bc-pricecur">' + curOpts + '</select>', 'apex-bc-dep-price') +
+            chk('apex-bc-show-code', 'نمایش ارقامِ بارکد', 'ارقامِ زیرِ میله‌ها (خوانا برای انسان)') +
+            chk('apex-bc-show-border', 'چاپ خط دورِ لیبل', 'برای بریدنِ دستی لیبل‌ها روی کاغذِ عادی') +
+            fld('اندازهٔ قلم (pt)', num('apex-bc-font', 4, 16, 0.5, '7')) },
+        { key: 'size', icon: 'fas fa-ruler-combined', title: 'اندازهٔ لیبل و ورق', sub: 'رول پرینترِ بارکد یا ورقِ A4', html:
+            fld('نوع کاغذ', '<select id="apex-bc-mode"><option value="roll">رول لیبل (پرینترِ بارکد/حرارتی)</option><option value="sheet">ورق لیبل (A4 / A5 / Letter)</option></select>') +
+            '<div class="apex-bc-roll">' +
+                fld('اندازهٔ لیبل', '<select id="apex-bc-rollpreset">' + rollOpts + '</select>') +
+                '<div class="apex-bset-row2">' + fld('عرض (mm)', num('apex-bc-lw', 10, 150, 0.5)) + fld('ارتفاع (mm)', num('apex-bc-lh', 8, 150, 0.5)) + '</div>' +
+                '<div class="apex-bset-row2">' + fld('لیبل در هر سطرِ رول', '<select id="apex-bc-rollcols"><option value="1">۱</option><option value="2">۲</option><option value="3">۳</option><option value="4">۴</option></select>') + fld('فاصلهٔ بین لیبل‌ها (mm)', num('apex-bc-rollgap', 0, 20, 0.5)) + '</div>' +
+            '</div>' +
+            '<div class="apex-bc-sheet">' +
+                '<div class="apex-bset-row2">' + fld('اندازهٔ ورق', '<select id="apex-bc-paper"><option value="A4">A4</option><option value="A5">A5</option><option value="Letter">Letter</option></select>') +
+                    fld('چیدمان', '<select id="apex-bc-sheetpreset">' + sheetOpts + '</select>') + '</div>' +
+                '<div class="apex-bset-row2">' + fld('ستون', num('apex-bc-cols', 1, 12, 1)) + fld('سطر', num('apex-bc-rows', 1, 30, 1)) + '</div>' +
+                '<div class="apex-bset-row2">' + fld('فاصلهٔ افقی (mm)', num('apex-bc-gapx', 0, 30, 0.5)) + fld('فاصلهٔ عمودی (mm)', num('apex-bc-gapy', 0, 30, 0.5)) + '</div>' +
+                '<div class="apex-bset-row2">' + fld('عرض لیبل (mm)', num('apex-bc-sw', 10, 210, 0.1)) + fld('ارتفاع لیبل (mm)', num('apex-bc-sh', 8, 297, 0.1)) + '</div>' +
+                '<div class="apex-bset-row2">' + fld('فاصلهٔ داخلی لیبل (mm)', num('apex-bc-pad', 0, 10, 0.5)) + fld('شروع از خانهٔ', num('apex-bc-start', 1, 360, 1)) + '</div>' +
+                '<small class="apex-bc-note" id="apex-bc-geominfo"></small>' +
+            '</div>' },
+        { key: 'margins', icon: 'fas fa-expand', title: 'حاشیه‌های چاپ', sub: 'فاصله از چهار لبهٔ کاغذ', html:
+            _apexMarginBox('apex-bc-mg', 'حاشیه‌های چاپ (میلی‌متر)', '') +
+            '<small class="apex-bc-note" id="apex-bc-mginfo"></small>' }
+    ];
+}
+/** باز کردنِ «طراحی بارکد». opts.productId: جنسِ از پیش انتخاب‌شده (اختیاری) */
+function apexBarcodeOpen(opts) {
+    var fromSidebar = false;
+    try { fromSidebar = !!document.querySelector('.settings-sidebar.open'); } catch (e) {}
+    window.__apexBc = { items: [], sel: -1 };
+    var ov = _apexOvlCreate('apex-bcd', 'طراحی بارکد', 'fas fa-barcode',
+        '<button type="button" class="apex-ovl-btn" id="apex-bc-save" title="ثبت تنظیمات"><i class="fas fa-check"></i><span>ثبت تنظیمات</span></button>' +
+        '<button type="button" class="apex-ovl-btn apex-ovl-primary" id="apex-bc-print" title="چاپ"><i class="fas fa-print"></i><span>چاپ</span></button>',
+        function () {
+            window.__apexBc = null;
+            if (fromSidebar) { try { ssbOpenSub('tools'); } catch (e) {} }
+        });
+    var tabs = _apexBcTabs();
+    var body = ov.querySelector('.apex-ovl-body');
+    body.classList.add('apex-bset-body', 'apex-bc-body');
+    body.innerHTML =
+        '<aside class="apex-bset-tabs">' +
+            tabs.map(function (t) {
+                return '<section class="apex-bset-tab" data-tab="' + t.key + '">' +
+                    '<button type="button" class="apex-bset-tabhead">' +
+                        '<span class="apex-bset-tabico"><i class="' + t.icon + '"></i></span>' +
+                        '<span class="apex-bset-tabtxt"><b>' + t.title + '</b><small>' + t.sub + '</small></span>' +
+                        '<i class="fas fa-chevron-down apex-bset-chev"></i>' +
+                    '</button>' +
+                    '<div class="apex-bset-tabbody">' + t.html + '</div>' +
+                '</section>';
+            }).join('') +
+        '</aside>' +
+        '<main class="apex-bset-preview">' +
+            '<div class="apex-bset-prevhead"><i class="fas fa-barcode"></i><span>پیش‌نمایش لیبل</span><small id="apex-bc-sum"></small></div>' +
+            '<div class="apex-bset-prevwrap" id="apex-bc-prevwrap"><div class="apex-bset-holder" id="apex-bc-holder"><iframe id="apex-bc-frame" title="پیش‌نمایش بارکد"></iframe></div></div>' +
+        '</main>';
+    _apexBcFill(_apexBcCfg());
+    Array.prototype.forEach.call(body.querySelectorAll('.apex-bset-tabhead'), function (h) {
+        h.addEventListener('click', function () {
+            var sec = h.parentNode, isOpen = sec.classList.contains('open');
+            Array.prototype.forEach.call(body.querySelectorAll('.apex-bset-tab.open'), function (x) { x.classList.remove('open'); });
+            if (!isOpen) sec.classList.add('open');
+        });
+    });
+    var first = body.querySelector('.apex-bset-tab'); if (first) first.classList.add('open');
+    body.addEventListener('click', function (e) { if (_apexMarginPreset(e)) { _apexBcSync(); _apexBcSchedule(60); } });
+    body.addEventListener('input', function (e) { if (e.target && e.target.id === 'apex-bc-q') return; _apexBcOnEdit(e); });
+    body.addEventListener('change', function (e) { if (e.target && e.target.id === 'apex-bc-q') return; _apexBcOnEdit(e); });
+    _apexBcPickerInit();
+    document.getElementById('apex-bc-save').addEventListener('click', _apexBcSave);
+    document.getElementById('apex-bc-print').addEventListener('click', _apexBcPrint);
+    if (!window.__apexBcResize) {
+        window.__apexBcResize = true;
+        window.addEventListener('resize', function () { if (document.getElementById('apex-bcd')) _apexBcFit(); });
+    }
+    if (opts && opts.productId != null) {
+        try {
+            var p = (db.getProducts() || []).find(function (x) { return x && x.id == opts.productId; });
+            if (p) _apexBcAddProduct(p);
+        } catch (e) {}
+    }
+    _apexBcSync();
+    _apexBcListRender();
+    _apexBcRender();
+}
+/** پر کردنِ فرم از تنظیمات */
+function _apexBcFill(c) {
+    var sv = function (id, v) { var el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
+    var ck = function (id, v) { var el = document.getElementById(id); if (el) el.checked = !!v; };
+    sv('apex-bc-type', c.type); sv('apex-bc-module', c.module); sv('apex-bc-barh', c.barH); sv('apex-bc-prefix', c.prefix);
+    ck('apex-bc-show-store', c.showStore); sv('apex-bc-store', c.storeText); ck('apex-bc-show-name', c.showName);
+    ck('apex-bc-show-price', c.showPrice); ck('apex-bc-show-code', c.showCode); ck('apex-bc-show-border', c.showBorder); sv('apex-bc-font', c.fontPt);
+    var pc = document.getElementById('apex-bc-pricecur');
+    if (pc) { pc.value = c.priceCur || pc.value; if (!pc.value && pc.options.length) pc.selectedIndex = 0; }
+    sv('apex-bc-mode', c.mode); sv('apex-bc-rollpreset', c.rollPreset); sv('apex-bc-lw', c.labelW); sv('apex-bc-lh', c.labelH);
+    sv('apex-bc-rollcols', c.rollCols); sv('apex-bc-rollgap', c.rollGap);
+    sv('apex-bc-paper', c.paper); sv('apex-bc-sheetpreset', c.sheetPreset); sv('apex-bc-cols', c.cols); sv('apex-bc-rows', c.rows);
+    sv('apex-bc-gapx', c.gapX); sv('apex-bc-gapy', c.gapY); sv('apex-bc-sw', c.sheetW); sv('apex-bc-sh', c.sheetH);
+    sv('apex-bc-pad', c.pad); sv('apex-bc-start', c.startPos);
+    // هر حالت (رول/ورق) حاشیه‌های جدای خودش را دارد
+    var st = window.__apexBc;
+    if (st) { st.mode = c.mode; st.mg = { sheet: [c.mT, c.mR, c.mB, c.mL], roll: [c.rmT, c.rmR, c.rmB, c.rmL] }; }
+    _apexBcMgFill(c.mode === 'sheet' ? [c.mT, c.mR, c.mB, c.mL] : [c.rmT, c.rmR, c.rmB, c.rmL]);
+}
+function _apexBcMgFill(a) {
+    ['t', 'r', 'b', 'l'].forEach(function (k, i) { var el = document.getElementById('apex-bc-mg-' + k); if (el) el.value = (a && a[i] != null) ? a[i] : ''; });
+}
+/** خواندنِ فرم → تنظیمات (پیش‌نویس) */
+function _apexBcRead() {
+    var g = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+    var c = function (id) { var el = document.getElementById(id); return !!(el && el.checked); };
+    var d = _apexBcDefaults();
+    var n = function (id, def) { var v = parseFloat(_apexBcLatin(g(id))); return isNaN(v) ? def : v; };
+    var m = function (id) { var v = String(g(id) || '').trim(); if (v === '') return ''; var x = parseFloat(_apexBcLatin(v)); return isNaN(x) ? '' : Math.max(0, Math.min(60, x)); };
+    var mode = g('apex-bc-mode') || 'roll';
+    var cur = [m('apex-bc-mg-t'), m('apex-bc-mg-r'), m('apex-bc-mg-b'), m('apex-bc-mg-l')];
+    var st = window.__apexBc, mg = (st && st.mg) || { sheet: ['', '', '', ''], roll: ['', '', '', ''] };
+    var sh = (mode === 'sheet') ? cur : mg.sheet, ro = (mode === 'roll') ? cur : mg.roll;
+    return {
+        type: g('apex-bc-type') || 'auto', prefix: g('apex-bc-prefix') || '20',
+        module: n('apex-bc-module', d.module), barH: n('apex-bc-barh', d.barH),
+        showStore: c('apex-bc-show-store'), storeText: String(g('apex-bc-store') || '').trim(), showName: c('apex-bc-show-name'),
+        showPrice: c('apex-bc-show-price'), priceCur: g('apex-bc-pricecur'), showCode: c('apex-bc-show-code'), showBorder: c('apex-bc-show-border'),
+        fontPt: n('apex-bc-font', d.fontPt),
+        mode: g('apex-bc-mode') || 'roll', rollPreset: g('apex-bc-rollpreset') || 'custom', labelW: n('apex-bc-lw', d.labelW), labelH: n('apex-bc-lh', d.labelH),
+        rollCols: n('apex-bc-rollcols', 1), rollGap: n('apex-bc-rollgap', d.rollGap),
+        paper: g('apex-bc-paper') || 'A4', sheetPreset: g('apex-bc-sheetpreset') || 'custom', cols: n('apex-bc-cols', d.cols), rows: n('apex-bc-rows', d.rows),
+        gapX: n('apex-bc-gapx', 0), gapY: n('apex-bc-gapy', 0), sheetW: n('apex-bc-sw', d.sheetW), sheetH: n('apex-bc-sh', d.sheetH),
+        pad: n('apex-bc-pad', d.pad), startPos: Math.max(1, Math.round(n('apex-bc-start', 1))),
+        mT: sh[0], mR: sh[1], mB: sh[2], mL: sh[3],
+        rmT: ro[0], rmR: ro[1], rmB: ro[2], rmL: ro[3]
+    };
+}
+function _apexBcOnEdit(e) {
+    var id = (e && e.target && e.target.id) || '';
+    var sv = function (k, v) { var el = document.getElementById(k); if (el) el.value = v; };
+    if (id === 'apex-bc-mode') {
+        var st = window.__apexBc;
+        if (st && st.mg) {
+            var prev = st.mode === 'sheet' ? 'sheet' : 'roll';
+            st.mg[prev] = ['t', 'r', 'b', 'l'].map(function (k) { var el = document.getElementById('apex-bc-mg-' + k); return el ? el.value : ''; });
+            st.mode = e.target.value;
+            _apexBcMgFill(st.mg[st.mode === 'sheet' ? 'sheet' : 'roll']);
+        }
+    } else if (id === 'apex-bc-rollpreset') {
+        var rp = _apexBcRollPresets().filter(function (r) { return r[0] === e.target.value; })[0];
+        if (rp) { sv('apex-bc-lw', rp[1]); sv('apex-bc-lh', rp[2]); }
+    } else if (id === 'apex-bc-lw' || id === 'apex-bc-lh') {
+        var w = document.getElementById('apex-bc-lw').value, h = document.getElementById('apex-bc-lh').value;
+        var hit = _apexBcRollPresets().filter(function (r) { return String(r[1]) === String(w) && String(r[2]) === String(h); })[0];
+        sv('apex-bc-rollpreset', hit ? hit[0] : 'custom');
+    } else if (id === 'apex-bc-sheetpreset') {
+        var sp = _apexBcSheetPresets().filter(function (r) { return r[0] === e.target.value; })[0];
+        if (sp) {
+            sv('apex-bc-cols', sp[1]); sv('apex-bc-rows', sp[2]); sv('apex-bc-sw', sp[3]); sv('apex-bc-sh', sp[4]);
+            sv('apex-bc-gapx', sp[5]); sv('apex-bc-gapy', sp[6]); sv('apex-bc-paper', sp[7]);
+            ['t', 'r', 'b', 'l'].forEach(function (s) { sv('apex-bc-mg-' + s, ''); });
+        }
+    } else if (/^apex-bc-(cols|rows|gapx|gapy|sw|sh|paper)$/.test(id)) {
+        sv('apex-bc-sheetpreset', 'custom');
+    }
+    _apexBcSync();
+    _apexBcSchedule(200);
+}
+/** نمایش/پنهان کردنِ بخش‌های وابسته + اطلاعاتِ هندسه */
+function _apexBcSync() {
+    var cfg = _apexBcRead();
+    var body = document.querySelector('#apex-bcd .apex-ovl-body');
+    if (!body) return;
+    body.classList.toggle('apex-bc-is-sheet', cfg.mode === 'sheet');
+    body.classList.toggle('apex-bc-no-store', !cfg.showStore);
+    body.classList.toggle('apex-bc-no-price', !cfg.showPrice);
+    var G = _apexBcGeom(cfg);
+    var f1 = function (n) { return Math.round(n * 10) / 10; };
+    var gi = document.getElementById('apex-bc-geominfo');
+    if (gi) gi.textContent = 'هر ورق ' + G.per + ' لیبل؛ اندازهٔ هر لیبل ' + f1(G.lw) + ' × ' + f1(G.lh) + ' میلی‌متر' +
+        (G.custom ? ' (نظر به حاشیه‌ها خودکار تنظیم شد)' : '');
+    // با حاشیهٔ دلخواه، اندازهٔ لیبل از حاشیه‌ها حساب می‌شود (بالا نشان داده شد)؛ مقدارِ ورق دست‌نخورده می‌ماند
+    ['apex-bc-sw', 'apex-bc-sh'].forEach(function (id) { var el = document.getElementById(id); if (el) el.disabled = (cfg.mode === 'sheet' && G.custom); });
+    var mi = document.getElementById('apex-bc-mginfo');
+    if (mi) mi.textContent = (cfg.mode === 'sheet')
+        ? 'فاصلهٔ شبکهٔ لیبل‌ها از لبه‌های ورق. «استندرد» = لیبل‌ها وسطِ ورق (همان اندازهٔ ورقِ لیبلِ آماده). با حاشیهٔ دلخواه، لیبل‌ها خودکار در فضای باقی‌مانده جا می‌شوند. حاشیهٔ فعلی: بالا ' + f1(G.m.t) + '، راست ' + f1(G.m.r) + '، پایین ' + f1(G.m.b) + '، چپ ' + f1(G.m.l) + ' mm'
+        : 'فاصلهٔ محتوای هر لیبل از لبه‌های آن (استندرد ۱٫۵ میلی‌متر). محتوا خودکار در فضای باقی‌مانده جا می‌شود.';
+}
+function _apexBcSchedule(ms) {
+    clearTimeout(window.__apexBcT);
+    window.__apexBcT = setTimeout(_apexBcRender, ms || 200);
+}
+/** اقلامِ چاپ؛ وقتی لیستی نیست، یک لیبلِ نمونه برای دیدنِ اثرِ تنظیمات */
+function _apexBcItems(forPrint) {
+    var st = window.__apexBc || { items: [] };
+    if (st.items.length || forPrint) return st.items;
+    var base = (typeof _baseCur === 'function') ? _baseCur() : 'AFN';
+    var sample = { id: '__sample__', name: 'جنس نمونه', unit: 'عدد', salePriceAFN: 250 };
+    return [{ p: sample, name: 'جنس نمونه', code: '2000000000008', copies: 1, sample: true, cur: base }];
+}
+function _apexBcRender() {
+    var frame = document.getElementById('apex-bc-frame');
+    if (!frame) return;
+    var cfg = _apexBcRead();
+    var res = _apexBcDocHtml(_apexBcItems(false), cfg, { preview: true });
+    var html = res.html;
+    try { if (typeof _apexDigitHtml === 'function') html = _apexDigitHtml(html); } catch (e) {}
+    var bh = '';
+    try { bh = location.href.replace(/[?#].*$/, '').replace(/[^\/]*$/, ''); } catch (e) {}
+    var head = (bh ? '<base href="' + bh + '">' : '') + '<style>html,body{overflow:hidden!important;}</style>';
+    html = html.replace('<head>', '<head>' + head);
+    try {
+        var dg = html.match(/<style id="apex-digit-faces">[\s\S]*?<\/style>/);
+        if (dg) { html = html.replace(dg[0], ''); html = html.replace('</head>', dg[0] + '</head>'); }
+    } catch (e) {}
+    frame.onload = function () { setTimeout(_apexBcFit, 30); };
+    try { var d = frame.contentWindow.document; d.open(); d.write(html); d.close(); }
+    catch (e) { try { frame.srcdoc = html; } catch (_) {} }
+    setTimeout(_apexBcFit, 120);
+    setTimeout(_apexBcFit, 600);
+    var real = (window.__apexBc && window.__apexBc.items.length) ? _apexBcDocHtml(window.__apexBc.items, cfg, {}) : null;
+    var sum = document.getElementById('apex-bc-sum');
+    if (sum) {
+        var fa = function (n) { return (typeof formatNumber === 'function') ? formatNumber(n) : n; };
+        sum.textContent = real
+            ? (fa(window.__apexBc.items.length) + ' جنس • ' + fa(real.labels) + ' لیبل • ' + fa(real.pages) + (cfg.mode === 'sheet' ? ' ورق' : ' سطرِ رول'))
+            : 'لیبلِ نمونه — برای چاپ، از «انتخاب جنس» جنس اضافه کنید';
+    }
+}
+function _apexBcFit() {
+    var frame = document.getElementById('apex-bc-frame');
+    var wrap = document.getElementById('apex-bc-prevwrap');
+    var holder = document.getElementById('apex-bc-holder');
+    if (!frame || !wrap || !holder) return;
+    try {
+        var d = frame.contentWindow.document, b = d && d.body;
+        if (!b) return;
+        frame.style.width = '1200px';
+        var nat = 0;
+        Array.prototype.forEach.call(d.querySelectorAll('.bcp'), function (s) { nat = Math.max(nat, s.offsetWidth); });
+        nat = Math.max(200, nat + 48);
+        frame.style.width = nat + 'px';
+        frame.style.height = '10px';   // ارتفاعِ واقعیِ محتوا (نه ارتفاعِ قبلیِ قاب) اندازه‌گیری شود
+        var h = Math.max(b.scrollHeight || 0, (d.documentElement ? d.documentElement.scrollHeight : 0) || 0, 120);
+        frame.style.height = (h + 2) + 'px';
+        var cs = window.getComputedStyle(wrap);
+        var avail = (wrap.clientWidth || 0) - (parseFloat(cs.paddingLeft) || 0) - (parseFloat(cs.paddingRight) || 0);
+        // لیبل‌های کوچک بزرگ‌نمایی می‌شوند (تا ۴ برابر) تا جزئیات دیده شود؛ ورق‌ها کوچک تا جا شوند
+        var sc = avail > 0 ? Math.min(4, avail / nat) : 1;
+        frame.style.transformOrigin = 'top right';
+        frame.style.transform = 'scale(' + sc + ')';
+        holder.style.width = Math.ceil(nat * sc) + 'px';
+        holder.style.height = Math.ceil((h + 2) * sc) + 'px';
+    } catch (e) {}
+}
+function _apexBcSave() {
+    var cfg = _apexBcRead();
+    try {
+        var s = (db.getSettings ? db.getSettings() : {}) || {};
+        var upd = Object.assign({}, s, { apexBarcode: cfg });
+        if (db.saveSettings) db.saveSettings(upd); else localStorage.setItem('settings', JSON.stringify(upd));
+        _apexToast('تنظیمات بارکد ذخیره شد ✓');
+    } catch (e) { console.error('barcode settings save:', e); _apexToast('ذخیرهٔ تنظیمات ممکن نشد', true); }
+}
+function _apexBcPrint() {
+    var st = window.__apexBc;
+    if (!st || !st.items.length) { _apexToast('اول از «انتخاب جنس» حداقل یک جنس اضافه کنید.', true); return; }
+    var cfg = _apexBcRead();
+    var bad = st.items.filter(function (it) { return !_apexBcSvg(it.code, cfg, 100, 10).ok; });
+    if (bad.length) { _apexToast('بارکدِ «' + bad[0].name + '» با نوعِ انتخاب‌شده سازگار نیست؛ نوع را «خودکار» کنید.', true); return; }
+    var res = _apexBcDocHtml(st.items, cfg, { title: 'چاپ بارکد' });
+    if (!res.labels) { _apexToast('تعداد لیبل صفر است.', true); return; }
+    if (typeof __openPrintPreview === 'function') {
+        __openPrintPreview(res.html, { title: 'چاپ بارکد', text: 'چاپ بارکد', assets: true, topBar: true, pdfName: 'بارکد' });
+    }
+}
+// ── انتخاب‌گرِ جنس (جستجو مثلِ بخشِ اجناس در بل‌ها) ───────────────────────────
+function _apexBcPickerInit() {
+    var q = document.getElementById('apex-bc-q'), res = document.getElementById('apex-bc-res');
+    if (!q || !res) return;
+    var t = null;
+    var run = function () { _apexBcSearch(q.value); };
+    q.addEventListener('input', function () { clearTimeout(t); t = setTimeout(run, 90); });
+    q.addEventListener('focus', run);
+    q.addEventListener('keydown', function (e) {
+        var items = res.querySelectorAll('.apex-bc-ri');
+        if (!items.length) return;
+        var st = window.__apexBc; if (!st) return;
+        if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            st.sel = (st.sel + (e.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length;
+            Array.prototype.forEach.call(items, function (x, i) { x.classList.toggle('on', i === st.sel); });
+            try { items[st.sel].scrollIntoView({ block: 'nearest' }); } catch (_) {}
+        } else if (e.key === 'Enter') {
+            e.preventDefault();
+            var it = items[st.sel >= 0 ? st.sel : 0]; if (it) it.click();
+        } else if (e.key === 'Escape') {
+            res.classList.remove('open');
+        }
+    });
+    res.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    res.addEventListener('click', function (e) {
+        var it = e.target.closest ? e.target.closest('.apex-bc-ri') : null;
+        if (!it) return;
+        var p = (db.getProducts() || []).find(function (x) { return x && String(x.id) === it.getAttribute('data-id'); });
+        if (p) _apexBcAddProduct(p);
+        q.value = ''; res.classList.remove('open'); res.innerHTML = '';
+        try { q.blur(); } catch (_) {}
+    });
+    q.addEventListener('blur', function () { setTimeout(function () { res.classList.remove('open'); }, 120); });
+}
+function _apexBcSearch(text) {
+    var res = document.getElementById('apex-bc-res');
+    if (!res) return;
+    var qs = _apexBcLatin(text).toLowerCase();
+    var list = [];
+    try { list = (db.getProducts() || []).filter(function (p) { return p && p.name; }); } catch (e) {}
+    var hits = list.filter(function (p) {
+        if (!qs) return true;
+        return String(p.name).toLowerCase().indexOf(qs) !== -1 || _apexBcOf(p).toLowerCase().indexOf(qs) !== -1 ||
+               String(p.categoryMain || '').toLowerCase().indexOf(qs) !== -1;
+    });
+    if (qs) hits.sort(function (a, b) {
+        var sa = String(a.name).toLowerCase().indexOf(qs) === 0 || _apexBcOf(a) === qs ? 0 : 1;
+        var sb = String(b.name).toLowerCase().indexOf(qs) === 0 || _apexBcOf(b) === qs ? 0 : 1;
+        return sa - sb;
+    });
+    hits = hits.slice(0, 40);
+    var st = window.__apexBc; if (st) st.sel = hits.length ? 0 : -1;
+    if (!hits.length) {
+        res.innerHTML = '<div class="apex-bc-rempty"><i class="fas fa-box-open"></i> ' + (list.length ? 'جنسی با این مشخصات پیدا نشد' : 'هنوز جنسی ثبت نشده است') + '</div>';
+        res.classList.add('open');
+        return;
+    }
+    var base = (typeof _baseCur === 'function') ? _baseCur() : 'AFN';
+    var hl = function (s) {
+        s = String(s || '');
+        if (!qs) return _apexBcEsc(s);
+        var i = s.toLowerCase().indexOf(qs);
+        if (i === -1) return _apexBcEsc(s);
+        return _apexBcEsc(s.slice(0, i)) + '<mark>' + _apexBcEsc(s.slice(i, i + qs.length)) + '</mark>' + _apexBcEsc(s.slice(i + qs.length));
+    };
+    var fa = function (n) { return (typeof formatNumber === 'function') ? formatNumber(n) : n; };
+    res.innerHTML = hits.map(function (p, i) {
+        var bc = _apexBcOf(p), pr = _apexBcPrice(p, base);
+        return '<div class="apex-bc-ri' + (i === 0 ? ' on' : '') + '" data-id="' + _apexBcEsc(p.id) + '">' +
+            '<span class="apex-bc-ri-ic"><i class="fas fa-box"></i></span>' +
+            '<span class="apex-bc-ri-main"><b>' + hl(p.name) + '</b>' +
+                '<span class="apex-bc-ri-sub">' +
+                    (bc ? '<span class="apex-bc-chip">' + hl(bc) + '</span>' : '<span class="apex-bc-chip apex-bc-chip-warn">بدون بارکد — تولید می‌شود</span>') +
+                    '<span>موجودی: ' + fa(_apexBcFmt2(p.stock != null ? p.stock : p.quantity)) + ' ' + _apexBcEsc(p.unit || '') + '</span>' +
+                    (pr ? '<span>' + fa(_apexBcFmt2(pr)) + ' ' + _apexBcEsc((typeof getCurrencyLabel === 'function') ? getCurrencyLabel(base) : base) + '</span>' : '') +
+                '</span></span>' +
+            '<i class="fas fa-plus apex-bc-ri-add"></i>' +
+        '</div>';
+    }).join('');
+    res.classList.add('open');
+}
+function _apexBcAddProduct(p) {
+    var st = window.__apexBc; if (!st) return;
+    var had = !!_apexBcOf(p);
+    var cfg = _apexBcRead();
+    var code = _apexBcEnsureProduct(p, cfg.prefix);
+    if (!code) return;
+    if (!had) _apexToast('برای «' + p.name + '» بارکد ' + code + ' تولید و در مشخصات جنس ثبت شد ✓');
+    var ex = st.items.filter(function (x) { return x.p && x.p.id == p.id; })[0];
+    if (ex) { ex.copies = Math.min(999, (parseInt(ex.copies, 10) || 0) + 1); ex.code = code; }
+    else st.items.push({ p: p, name: p.name || '', code: code, copies: 1 });
+    _apexBcListRender();
+    _apexBcSchedule(60);
+}
+function _apexBcListRender() {
+    var el = document.getElementById('apex-bc-list');
+    var st = window.__apexBc;
+    if (!el || !st) return;
+    if (!st.items.length) {
+        el.innerHTML = '<div class="apex-bc-lempty"><i class="fas fa-barcode"></i><span>هنوز جنسی انتخاب نشده است</span></div>';
+        return;
+    }
+    var cfg = _apexBcRead();
+    el.innerHTML = st.items.map(function (it, i) {
+        var t = (cfg.type === 'auto') ? _apexBcAuto(it.code) : cfg.type;
+        var ok = _apexBcEncode(t, it.code).ok;
+        return '<div class="apex-bc-row" data-i="' + i + '">' +
+            '<div class="apex-bc-row-main"><b>' + _apexBcEsc(it.name) + '</b>' +
+                '<span class="apex-bc-row-sub"><span class="apex-bc-chip' + (ok ? '' : ' apex-bc-chip-err') + '">' + _apexBcEsc(it.code) + '</span>' +
+                '<span class="apex-bc-type">' + _apexBcTypeName(t) + (ok ? '' : ' — ناسازگار') + '</span></span></div>' +
+            '<div class="apex-bc-qty">' +
+                '<button type="button" data-act="dec" title="کم"><i class="fas fa-minus"></i></button>' +
+                '<input type="number" min="1" max="999" value="' + (parseInt(it.copies, 10) || 1) + '" data-act="qty" inputmode="numeric">' +
+                '<button type="button" data-act="inc" title="زیاد"><i class="fas fa-plus"></i></button>' +
+            '</div>' +
+            '<button type="button" class="apex-bc-del" data-act="del" title="حذف از لیست"><i class="fas fa-times"></i></button>' +
+        '</div>';
+    }).join('');
+    if (!el.__apexBound) {
+        el.__apexBound = true;
+        el.addEventListener('click', function (e) {
+            var b = e.target.closest ? e.target.closest('[data-act]') : null;
+            if (!b || b.tagName === 'INPUT') return;
+            var row = b.closest('.apex-bc-row'); var s2 = window.__apexBc; if (!row || !s2) return;
+            var it = s2.items[+row.getAttribute('data-i')]; if (!it) return;
+            var a = b.getAttribute('data-act');
+            if (a === 'del') s2.items.splice(+row.getAttribute('data-i'), 1);
+            else if (a === 'inc') it.copies = Math.min(999, (parseInt(it.copies, 10) || 0) + 1);
+            else if (a === 'dec') it.copies = Math.max(1, (parseInt(it.copies, 10) || 1) - 1);
+            _apexBcListRender(); _apexBcSchedule(60);
+        });
+        el.addEventListener('input', function (e) {
+            if (!e.target || e.target.getAttribute('data-act') !== 'qty') return;
+            e.stopPropagation();
+            var row = e.target.closest('.apex-bc-row'); var s2 = window.__apexBc; if (!row || !s2) return;
+            var it = s2.items[+row.getAttribute('data-i')]; if (!it) return;
+            var v = parseInt(_apexBcLatin(e.target.value), 10);
+            if (!isNaN(v)) { it.copies = Math.max(1, Math.min(999, v)); _apexBcSchedule(250); }
+        });
+    }
+}
+// ── سایدبار › تنظیمات › «ابزار ها» ───────────────────────────────────────────
+function _ssbToolsHtml() {
+    return '<ul class="ssb-main-list ssb-group-list" style="display:block;padding:6px 4px;">' +
+        '<li onclick="ssbOpenSub(\'barcode\')"><span class="ssb-item-icon"><i class="fas fa-barcode"></i></span>' +
+        '<span class="ssb-item-label">طراحی بارکد</span><i class="fas fa-chevron-left ssb-arrow"></i></li>' +
+    '</ul>';
 }

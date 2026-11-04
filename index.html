@@ -764,10 +764,10 @@
                                             <i class="fas fa-cart-shopping"></i><span>خرید جدید</span>
                                         </button>
                                         <button type="button" class="nd-qa nd-qa-green" onclick="showReceiptForm()" title="دریافتی جدید">
-                                            <i class="fas fa-download"></i><span>دریافتی جدید</span>
+                                            <i class="fas fa-money-bill-wave nd-qa-money nd-qa-money-in"></i><span>دریافتی جدید</span>
                                         </button>
                                         <button type="button" class="nd-qa nd-qa-amber" onclick="showPaymentForm()" title="پرداختی جدید">
-                                            <i class="fas fa-upload"></i><span>پرداختی جدید</span>
+                                            <i class="fas fa-money-bill-wave nd-qa-money nd-qa-money-out"></i><span>پرداختی جدید</span>
                                         </button>
                                         <button type="button" class="nd-qa nd-qa-red" onclick="showSaleReturnForm()" title="برگشت از فروش">
                                             <i class="fas fa-arrow-left-long"></i><span>برگشت از فروش</span>
@@ -1749,6 +1749,7 @@
                                         <div class="bill-field bill-field-icononly">
                                             <i class="fas fa-barcode bill-field-icon"></i>
                                             <input type="text" id="product-code" placeholder="کد">
+                                            <button type="button" class="bill-inline-btn apex-bc-genbtn" onclick="apexBarcodeGenForForm()" title="تولید بارکد"><i class="fas fa-wand-magic-sparkles"></i></button>
                                         </div>
 
                                         <div class="bill-field bill-field-icononly">
@@ -2123,6 +2124,13 @@
                                             <div class="bill-receive-edit-row">
                                                 <label>مبلغ دریافتی</label>
                                                 <input type="number" id="sales-receive-edit-amount" step="0.01" placeholder="مبلغ" oninput="billReceiveEditSync(false)" onchange="billReceiveEditSync(false)">
+                                            </div>
+                                            <div class="bill-receive-edit-row">
+                                                <label>تاریخ</label>
+                                                <div class="bill-receive-edit-date">
+                                                    <i class="fas fa-calendar-alt bill-receive-edit-date-ic" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('sales-receive-edit-date',this)"></i>
+                                                    <input type="text" id="sales-receive-edit-date" class="jalali-date" data-no-default="1" placeholder="تاریخ" autocomplete="off">
+                                                </div>
                                             </div>
                                             <div class="bill-receive-edit-row">
                                                 <label>نوع</label>
@@ -2616,6 +2624,13 @@
                                             <div class="bill-receive-edit-row">
                                                 <label>مبلغ پرداختی</label>
                                                 <input type="number" id="purchase-receive-edit-amount" step="0.01" placeholder="مبلغ" oninput="billReceiveEditSync(true)" onchange="billReceiveEditSync(true)">
+                                            </div>
+                                            <div class="bill-receive-edit-row">
+                                                <label>تاریخ</label>
+                                                <div class="bill-receive-edit-date">
+                                                    <i class="fas fa-calendar-alt bill-receive-edit-date-ic" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('purchase-receive-edit-date',this)"></i>
+                                                    <input type="text" id="purchase-receive-edit-date" class="jalali-date" data-no-default="1" placeholder="تاریخ" autocomplete="off">
+                                                </div>
                                             </div>
                                             <div class="bill-receive-edit-row">
                                                 <label>نوع</label>
