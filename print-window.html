@@ -101,6 +101,44 @@
     setTimeout(hbPrint, 500);
   }
 
+  // ── (APEX) حالتِ «پنجرهٔ چاپِ ویندوز» (چاپِ بارکد روی پرنترِ حرارتی) ─────────────────
+  //  سندِ لیبل خودش سندِ اصلیِ همین پنجره می‌شود و فرمانِ hb_print_system (Rust) پنجرهٔ چاپِ
+  //  سیستمیِ ویندوز را باز می‌کند: انتخابِ پرنتر + دکمهٔ Preferences (تنظیماتِ درایورِ پرنتر:
+  //  اندازهٔ لیبل/Stock، جهت، تیرگی …) — مثلِ ورد. اگر این فرمان در نسخهٔ نصب‌شده نباشد،
+  //  همان پیش‌نمایشِ چاپِ قبلی باز می‌شود (هیچ چیزی نمی‌شکند).
+  function sysPrint() {
+    var fallback = function () { try { window.print(); } catch (e) {} };
+    try {
+      if (T && T.core && typeof T.core.invoke === 'function') {
+        T.core.invoke('hb_print_system').then(function (ok) { if (ok !== true) fallback(); }, fallback);
+        return;
+      }
+    } catch (e) {}
+    fallback();
+  }
+  window.__hbSysPrint = sysPrint;
+
+  function renderSystem(html) {
+    if (rendered) return;
+    rendered = true;
+    var bar =
+      '<div id="hb-sysbar" style="position:sticky;top:0;z-index:99999;display:flex;align-items:center;gap:10px;padding:10px 14px;' +
+      'background:#1e3a5f;color:#fff;font-family:Estedad,Vazirmatn,Tahoma,sans-serif;direction:rtl;box-shadow:0 2px 8px rgba(0,0,0,.18);">' +
+        '<button type="button" onclick="window.__hbSysPrint&&window.__hbSysPrint()" style="cursor:pointer;border:none;border-radius:8px;padding:8px 16px;' +
+          'font:700 13px Estedad,Vazirmatn,Tahoma,sans-serif;background:#1de9b6;color:#0f172a;">چاپ و تنظیماتِ پرنتر</button>' +
+        '<button type="button" onclick="window.hbClose&&window.hbClose()" style="cursor:pointer;border:none;border-radius:8px;padding:8px 16px;' +
+          'font:700 13px Estedad,Vazirmatn,Tahoma,sans-serif;background:rgba(255,255,255,.14);color:#fff;">بستن</button>' +
+        '<span style="font-size:12px;opacity:.85;margin-right:auto;">در پنجرهٔ چاپ، پرنتر را انتخاب و برای تنظیمات (اندازهٔ لیبل، جهت…) «Preferences» را بزنید.</span>' +
+      '</div><style>@media print{#hb-sysbar{display:none !important;}}</style>';
+    var h = String(html);
+    var ib = h.search(/<body[^>]*>/i);
+    if (ib !== -1) { var m = h.match(/<body[^>]*>/i)[0]; h = h.slice(0, ib + m.length) + bar + h.slice(ib + m.length); }
+    else h = bar + h;
+    var go = '<scr' + 'ipt>setTimeout(function(){ if (window.__hbSysPrint) window.__hbSysPrint(); }, 450);</scr' + 'ipt>';
+    h = (h.search(/<\/body>/i) !== -1) ? h.replace(/<\/body>/i, go + '</body>') : (h + go);
+    document.open(); document.write(h); document.close();
+  }
+
   window.hbPrint = function () {
     var f = document.getElementById('hb-frame');
     if (!f) { try { window.print(); } catch (e) {} return; }
@@ -126,6 +164,9 @@
     T.event.listen(EV_HTML, function (ev) {
       var h = ev && (ev.payload != null ? ev.payload : ev);
       if (typeof h === 'string' && h) render(h);
+      else if (h && typeof h === 'object' && typeof h.html === 'string' && h.html) {
+        if (h.system) renderSystem(h.html); else render(h.html);
+      }
     });
     // اعلامِ آمادگی — چند بار تکرار می‌شود تا اگر پنجرهٔ اصلی هنوز شنونده نگذاشته بود از دست نرود
     var tries = 0;
