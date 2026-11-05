@@ -13999,7 +13999,8 @@ function __openPrintPreview(rawHtml, opts) {
             return __ppOpenMobileOverlay(rawHtml, assetsHead, css, {
                 title: title, pdfName: pdfName, shareText: shareText,
                 // (APEX) آیکنِ «تنظیمات بل» کنارِ چاپ — فقط برای بل‌ها/رسیدها (بازسازیِ همین پیش‌نمایش)
-                billRegen: (typeof opts.billRegen === 'function') ? opts.billRegen : null
+                billRegen: (typeof opts.billRegen === 'function') ? opts.billRegen : null,
+                systemPrint: !!opts.systemPrint
             });
         } catch (e) {
             try { console.warn('[jouya-preview] overlay failed, fallback to window:', e && e.message); } catch (_) {}
@@ -14033,7 +14034,7 @@ function __openPrintPreview(rawHtml, opts) {
 //  در وب و اندروید هم اصلاً وارد این مسیر نمی‌شویم. پس هیچ نسخه‌ای آسیب نمی‌بیند.
 //  نکته: تابعِ «declaration» است تا با throwِ عمدیِ سطحِ بالای این فایل از بین نرود.
 // =============================================================================
-function __hbOpenTauriPrintWindow(docHtml, title) {
+function __hbOpenTauriPrintWindow(docHtml, title, opts) {
     try {
         if (!docHtml) return false;
         if (!(typeof __jouyaIsTauri === 'function' && __jouyaIsTauri())) return false;
@@ -14050,8 +14051,11 @@ function __hbOpenTauriPrintWindow(docHtml, title) {
 
         // تا وقتی پنجرهٔ چاپ «آماده‌ام» می‌گوید، محتوا را برایش می‌فرستیم
         var _un = null;
+        // (APEX) opts.system: سند در خودِ پنجره باز و «پنجرهٔ چاپِ ویندوز» (با دکمهٔ Preferences/تنظیماتِ
+        //  پرنتر) نشان داده می‌شود — برای پرنترهای حرارتی/بارکد. بدونِ آن، همان رفتارِ قبلی.
+        var _payload = (opts && opts.system) ? { html: docHtml, system: true } : docHtml;
         T.event.listen(EV_READY, function () {
-            try { T.event.emit(EV_HTML, docHtml); } catch (e) {}
+            try { T.event.emit(EV_HTML, _payload); } catch (e) {}
         }).then(function (un) {
             _un = un;
             setTimeout(function () { try { if (typeof _un === 'function') _un(); } catch (e) {} }, 15000);
@@ -14344,7 +14348,7 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
             // تنظیماتِ چاپ جمع‌وجور و کامل دیده شود و پنجرهٔ اصلیِ برنامه هیچ تغییری نکند.
             // پیش‌نمایشِ اورلیِ داخلِ برنامه سرِ جای خودش باز می‌ماند.
             // در وب و اندروید اصلاً وارد این مسیر نمی‌شویم و رفتار دقیقاً مثلِ قبل است.
-            if (typeof __hbOpenTauriPrintWindow === 'function' && __hbOpenTauriPrintWindow(doc, pdfName)) {
+            if (typeof __hbOpenTauriPrintWindow === 'function' && __hbOpenTauriPrintWindow(doc, pdfName, { system: !!meta.systemPrint })) {
                 if (b) { b.style.transform = pt; b.style.width = pw; }
                 try { console.log('[jouya-preview] print window opened'); } catch (_) {}
                 return;
@@ -47140,7 +47144,12 @@ function _apexBcPrint() {
     var res = _apexBcDocHtml(st.items, cfg, { title: 'چاپ بارکد' });
     if (!res.labels) { _apexToast('تعداد لیبل صفر است.', true); return; }
     if (typeof __openPrintPreview === 'function') {
-        __openPrintPreview(res.html, { title: 'چاپ بارکد', text: 'چاپ بارکد', assets: true, topBar: true, pdfName: 'بارکد' });
+        // (APEX) چاپِ بارکد در نسخهٔ نصبی: پنجرهٔ چاپِ ویندوز با «Preferences» (تنظیماتِ خودِ پرنترِ حرارتی)
+        __openPrintPreview(res.html, { title: 'چاپ بارکد', text: 'چاپ بارکد', assets: true, topBar: true, pdfName: 'بارکد', systemPrint: true });
+        try {
+            if (!(typeof __jouyaIsTauri === 'function' && __jouyaIsTauri()))
+                _apexToast('برای تنظیماتِ پرنترِ بارکد: در پنجرهٔ چاپ «Print using system dialog» (Ctrl+Shift+P) را بزنید و سپس Preferences.');
+        } catch (e) {}
     }
 }
 // ── انتخاب‌گرِ جنس (جستجو مثلِ بخشِ اجناس در بل‌ها) ───────────────────────────
