@@ -88,7 +88,7 @@ jobs:
           $WebFiles = @(
             'index.html', 'print-window.html',
             'style.css', 'auth-system.css', 'dashboard-store-info-fix.css', 'mobile-responsive.css',
-            'jouya-store.js', 'tauri-bridge.js', 'database.js', 'script.js', 'persian-date-utils.js',
+            'tauri-bridge.js', 'database.js', 'script.js', 'persian-date-utils.js',
             'auth-system.js', 'drive-backup.js', 'instant-update-fix.js', 'delivery-list.js',
             'currency-system.js', 'sync-config.js', 'sync-layer.js', 'auth-cloud.js',
             'device-guard.js', 'capacitor-back.js', 'capacitor-share.js',
@@ -162,6 +162,61 @@ jobs:
       - name: رمزنگاریِ فایل‌ها (پکِر لایهٔ ۲)
         shell: pwsh
         run: node tools/pack-encrypt.js src-tauri/dist-web
+
+      # ══════════════════════════════════════════════════════════════════════
+      #  (APEX) فرمانِ «پنجرهٔ چاپِ ویندوز» برای چاپِ بارکد — hb_print_system
+      #  ---------------------------------------------------------------------
+      #  فایلِ src-tauri/src/hb_print.rs را در بیلد ثبت می‌کند تا هنگامِ چاپِ لیبل، پنجرهٔ چاپِ
+      #  ویندوز با دکمهٔ Preferences (تنظیماتِ خودِ درایورِ پرنترِ حرارتی) باز شود:
+      #    ۱) «mod hb_print;» و «hb_print::hb_print_system» به فایلی که generate_handler! دارد
+      #    ۲) وابستگی‌های webview2-com و windows-core به Cargo.toml (جدولِ جدای ویندوز)
+      #  فقط روی نسخهٔ checkout‌شدهٔ همین بیلد اعمال می‌شود (مخزن تغییر نمی‌کند)، هر مورد فقط
+      #  اگر نباشد اضافه می‌شود، و اگر hb_print.rs در مخزن نباشد کلِ مرحله بی‌صدا رد می‌شود.
+      # ══════════════════════════════════════════════════════════════════════
+      - name: افزودنِ فرمانِ چاپِ سیستمیِ ویندوز (hb_print)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $Src = 'src-tauri/src'
+          if (-not (Test-Path -LiteralPath (Join-Path $Src 'hb_print.rs'))) {
+            Write-Host 'src-tauri/src/hb_print.rs در مخزن نیست؛ این مرحله رد شد.'
+            exit 0
+          }
+          $utf8 = New-Object System.Text.UTF8Encoding $false
+
+          # ۱) فایلِ ریشه‌ای که generate_handler! دارد (main.rs یا lib.rs)
+          $f = Get-ChildItem -LiteralPath $Src -Filter '*.rs' |
+               Where-Object { $_.Name -ne 'hb_print.rs' -and ([IO.File]::ReadAllText($_.FullName) -match 'generate_handler!\s*\[') } |
+               Select-Object -First 1
+          if (-not $f) { throw 'generate_handler! در src-tauri/src پیدا نشد.' }
+          $t = [IO.File]::ReadAllText($f.FullName)
+          if ($t -notmatch 'hb_print::hb_print_system') {
+            $rxH = [regex]'generate_handler!\s*\['
+            $t = $rxH.Replace($t, '$0' + "`n            hb_print::hb_print_system,", 1)
+          }
+          if ($t -notmatch '(?m)^\s*(pub\s+)?mod\s+hb_print\s*;') {
+            # پس از ویژگی‌های درونی (#![...]) و توضیحاتِ بالای فایل، پیش از نخستین آیتم
+            $rxM = [regex]'(?m)^(?=(use |mod |pub |fn |async |#\[|const |static |struct |enum |extern |type |impl ))'
+            $m = $rxM.Match($t)
+            if ($m.Success) { $t = $t.Insert($m.Index, "mod hb_print;`n") } else { $t = $t + "`nmod hb_print;`n" }
+          }
+          [IO.File]::WriteAllText($f.FullName, $t, $utf8)
+          Write-Host "✓ $($f.Name): mod hb_print + hb_print::hb_print_system"
+          Select-String -LiteralPath $f.FullName -Pattern 'hb_print' | ForEach-Object { Write-Host ("   {0}: {1}" -f $_.LineNumber, $_.Line.Trim()) }
+
+          # ۲) وابستگی‌ها — در جدولی با کلیدِ جدا (cfg(all(windows))) تا با جدولِ ویندوزِ موجود تکراری نشود
+          $c = (Resolve-Path 'src-tauri/Cargo.toml').Path
+          $ct = [IO.File]::ReadAllText($c)
+          $add = ''
+          if ($ct -notmatch '(?m)^\s*webview2-com\s*=') { $add += "webview2-com = `"0.39`"`n" }
+          if ($ct -notmatch '(?m)^\s*windows-core\s*=') { $add += "windows-core = `"0.62`"`n" }
+          if ($add) {
+            $ct = $ct.TrimEnd() + "`n`n[target.'cfg(all(windows))'.dependencies]`n" + $add
+            [IO.File]::WriteAllText($c, $ct, $utf8)
+            Write-Host "✓ Cargo.toml: $($add.Trim() -replace "`n", ' ، ')"
+          } else {
+            Write-Host '✓ Cargo.toml: وابستگی‌ها از قبل هست.'
+          }
 
       # ══════════════════════════════════════════════════════════════════════
       #  ساختِ نصب‌کننده برای هدفِ ویندوز ۷ (nightly + build-std)
