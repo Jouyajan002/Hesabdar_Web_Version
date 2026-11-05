@@ -12234,31 +12234,31 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
     'body { font-family: ' + fontFamily + '; font-size: ' + baseFont + 'px; color: #1a2533; background: #eceff3; direction: rtl; padding: ' + (isThermal ? '0' : '6mm') + '; }' +
     '.bill { width: 100%; max-width: ' + pageWidth + '; margin: 0 auto; background: #fff; border: 1px solid ' + navy + '; border-radius: 8px; overflow: hidden; }' +
     // header
-    '.bill-hdr { position: relative; display: flex; align-items: stretch; gap: 10px; padding: ' + (isThermal ? '8px' : '12px 16px') + '; background: #fff; border-bottom: 3px solid ' + gold + '; }' +
+    '.bill-hdr { position: relative; display: flex; align-items: stretch; gap: 10px; padding: ' + (isThermal ? '8px' : '7px 14px') + '; background: #fff; border-bottom: 3px solid ' + gold + '; }' +
     '.bill-hdr::after { content: ""; position: absolute; top: 0; right: 0; width: 42%; height: 100%; background: ' + navy + '; clip-path: polygon(18% 0, 100% 0, 100% 100%, 0 100%); z-index: 0; opacity: 0.06; }' +
     '.hdr-side { flex: 0 0 auto; width: ' + (isThermal ? '0' : '150px') + '; display: flex; align-items: center; justify-content: center; z-index: 1; }' +
-    '.hdr-side img { max-width: 100%; max-height: 90px; object-fit: contain; }' +
-    '.hdr-center { flex: 1; text-align: center; z-index: 1; display: flex; flex-direction: column; justify-content: center; gap: 3px; }' +
-    '.hdr-name { font-size: ' + titleFont + 'px; font-weight: 900; color: ' + navy + '; letter-spacing: 0.5px; }' +
-    '.hdr-name-en { font-size: ' + fEnName + 'px; font-weight: 700; color: ' + gold + '; letter-spacing: 0.5px; }' +
+    '.hdr-side img { max-width: 100%; max-height: ' + (isThermal ? '90px' : '64px') + '; object-fit: contain; }' +
+    '.hdr-center { flex: 1; text-align: center; z-index: 1; display: flex; flex-direction: column; justify-content: center; gap: ' + (isThermal ? '3px' : '2px') + '; }' +
+    '.hdr-name { font-size: ' + titleFont + 'px; font-weight: 900; color: ' + navy + '; letter-spacing: 0.5px;' + (isThermal ? '' : ' line-height: 1.3;') + ' }' +
+    '.hdr-name-en { font-size: ' + fEnName + 'px; font-weight: 700; color: ' + gold + '; letter-spacing: 0.5px;' + (isThermal ? '' : ' line-height: 1.35;') + ' }' +
     '.hdr-diamond { color: ' + gold + '; font-size: 9px; margin: 2px 0; }' +
-    '.hdr-slogan { font-size: ' + fSlogan + 'px; color: #55606e; }' +
-    '.hdr-logo { flex: 0 0 auto; width: ' + (isThermal ? '54px' : '110px') + '; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; z-index: 1; }' +
-    '.hdr-logo img { max-width: 100%; max-height: ' + (isThermal ? '48px' : '80px') + '; object-fit: contain; }' +
+    '.hdr-slogan { font-size: ' + fSlogan + 'px; color: #55606e;' + (isThermal ? '' : ' line-height: 1.4;') + ' }' +
+    '.hdr-logo { flex: 0 0 auto; width: ' + (isThermal ? '54px' : '110px') + '; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: ' + (isThermal ? '3px' : '2px') + '; z-index: 1; }' +
+    '.hdr-logo img { max-width: 100%; max-height: ' + (isThermal ? '48px' : '54px') + '; object-fit: contain; }' +
     '.hdr-logo-ph { width: 60px; height: 60px; border-radius: 10px; background: ' + navy + '; color: ' + gold + '; display: flex; align-items: center; justify-content: center; font-size: 26px; }' +
-    '.hdr-logo-en { font-size: 9px; font-weight: 800; color: ' + navy + '; text-align: center; letter-spacing: 0.5px; }' +
+    '.hdr-logo-en { font-size: 9px; font-weight: 800; color: ' + navy + '; text-align: center; letter-spacing: 0.5px;' + (isThermal ? '' : ' line-height: 1.2;') + ' }' +
     // info boxes
-    '.bill-info { display: flex; ' + (isThermal ? 'flex-direction: column;' : '') + ' gap: 0; margin: ' + (isThermal ? '6px' : '10px 16px') + '; border: 1px solid #d6deea; border-radius: 8px; overflow: hidden; }' +
-    '.info-col { flex: 1; padding: ' + (isThermal ? '6px 8px' : '10px 14px') + '; display: flex; flex-direction: column; gap: 6px; }' +
+    '.bill-info { display: flex; ' + (isThermal ? 'flex-direction: column;' : '') + ' gap: 0; margin: ' + (isThermal ? '6px' : '6px 14px') + '; border: 1px solid #d6deea; border-radius: 8px; overflow: hidden; }' +
+    '.info-col { flex: 1; padding: ' + (isThermal ? '6px 8px' : '5px 12px') + '; display: flex; flex-direction: column; gap: ' + (isThermal ? '6px' : '4px') + '; }' +
     '.info-col.right { border-left: ' + (isThermal ? 'none' : '1px solid #d6deea') + '; ' + (isThermal ? 'border-bottom: 1px solid #d6deea;' : '') + ' }' +
-    '.info-line { display: flex; align-items: center; gap: 6px; font-size: ' + baseFont + 'px; }' +
-    '.info-line .ico { width: 20px; height: 20px; border-radius: 50%; background: ' + navy + '; color: ' + onPrimary + '; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; flex: 0 0 auto; }' +
+    '.info-line { display: flex; align-items: center; gap: 6px; font-size: ' + baseFont + 'px;' + (isThermal ? '' : ' line-height: 1.35;') + ' }' +
+    '.info-line .ico { width: ' + (isThermal ? '20px' : '18px') + '; height: ' + (isThermal ? '20px' : '18px') + '; border-radius: 50%; background: ' + navy + '; color: ' + onPrimary + '; display: inline-flex; align-items: center; justify-content: center; font-size: 10px; flex: 0 0 auto; }' +
     '.info-line .lbl { font-weight: 700; color: ' + navy + '; white-space: nowrap; }' +
     '.info-line .val { flex: 1; border-bottom: 1px dotted #9aa5b5; min-width: 40px; padding-bottom: 1px; color: #1a2533; }' +
     // items table
-    '.items { width: 100%; border-collapse: collapse; margin: 0; font-size: ' + baseFont + 'px; }' +
-    '.items thead th { background: ' + navy + '; color: #fff; font-weight: 700; padding: ' + (isThermal ? '5px 3px' : '8px 5px') + '; border: 1px solid ' + navy + '; text-align: center; }' +
-    '.items tbody td { border: 1px solid #cdd6e2; padding: ' + (isThermal ? '4px 3px' : '6px 6px') + '; text-align: center; }' +
+    '.items { width: 100%; border-collapse: collapse; margin: 0; font-size: ' + baseFont + 'px;' + (isThermal ? '' : ' line-height: 1.35;') + ' }' +
+    '.items thead th { background: ' + navy + '; color: #fff; font-weight: 700; padding: ' + (isThermal ? '5px 3px' : '5px 5px') + '; border: 1px solid ' + navy + '; text-align: center; }' +
+    '.items tbody td { border: 1px solid #cdd6e2; padding: ' + (isThermal ? '4px 3px' : '4px 6px') + '; text-align: center; }' +
     '.items tbody tr:nth-child(even) { background: #f5f7fb; }' +
     '.items .c-num { width: 8%; color: ' + navy + '; font-weight: 700; }' +
     '.items .c-desc { width: ' + (isThermal ? '46%' : '48%') + '; text-align: right; }' +
@@ -12268,24 +12268,24 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
     // bottom
     '.bill-bottom { display: flex; ' + (isThermal ? 'flex-direction: column;' : '') + ' border-top: 2px solid ' + navy + '; }' +
     '.totals { flex: 1; display: flex; flex-direction: column; }' +
-    '.tot-row { display: flex; align-items: stretch; border-bottom: 1px solid #e1e7f0; }' +
-    '.tot-row .t-lbl { width: 46%; background: ' + navy + '; color: #fff; font-weight: 700; text-align: center; padding: ' + (isThermal ? '5px' : '7px') + '; font-size: ' + (isThermal ? '10px' : '12px') + '; }' +
+    '.tot-row { display: flex; align-items: stretch; border-bottom: 1px solid #e1e7f0;' + (isThermal ? '' : ' line-height: 1.35;') + ' }' +
+    '.tot-row .t-lbl { width: 46%; background: ' + navy + '; color: #fff; font-weight: 700; text-align: center; padding: ' + (isThermal ? '5px' : '4px 7px') + '; font-size: ' + (isThermal ? '10px' : '12px') + '; }' +
     '.tot-row.hl .t-lbl { background: ' + gold + '; color: #1a2533; }' +
-    '.tot-row .t-val { flex: 1; text-align: center; padding: ' + (isThermal ? '5px' : '7px') + '; font-weight: 700; font-size: ' + (isThermal ? '10px' : '12px') + '; border-bottom: 1px dotted #b9c2d0; }' +
-    '.note-box { flex: 1.05; padding: ' + (isThermal ? '8px' : '12px 14px') + '; border-right: ' + (isThermal ? 'none' : '1px solid #e1e7f0') + '; ' + (isThermal ? 'border-top: 1px solid #e1e7f0;' : '') + ' display: flex; flex-direction: column; gap: 10px; position: relative; }' +
+    '.tot-row .t-val { flex: 1; text-align: center; padding: ' + (isThermal ? '5px' : '4px 7px') + '; font-weight: 700; font-size: ' + (isThermal ? '10px' : '12px') + '; border-bottom: 1px dotted #b9c2d0; }' +
+    '.note-box { flex: 1.05; padding: ' + (isThermal ? '8px' : '8px 12px') + '; border-right: ' + (isThermal ? 'none' : '1px solid #e1e7f0') + '; ' + (isThermal ? 'border-top: 1px solid #e1e7f0;' : '') + ' display: flex; flex-direction: column; gap: ' + (isThermal ? '10px' : '6px') + '; position: relative; }' +
     '.note-box .note-txt { font-size: ' + (isThermal ? '9px' : '11px') + '; color: #44506a; display: flex; align-items: flex-start; gap: 8px; }' +
     '.note-box .note-txt .sig-ico { width: 30px; height: 30px; border-radius: 50%; background: ' + navy + '; color: ' + onPrimary + '; display: inline-flex; align-items: center; justify-content: center; font-size: 13px; flex: 0 0 auto; }' +
     '.note-box .sig-line { margin-top: auto; border-top: 1px dashed #98a3b4; padding-top: 4px; text-align: center; font-size: 10px; color: #7a8598; }' +
     // footer
-    '.bill-ft { display: flex; ' + (isThermal ? 'flex-direction: column; gap: 6px;' : '') + ' align-items: center; justify-content: space-between; background: ' + navy + '; color: ' + onPrimary + '; padding: ' + (isThermal ? '8px' : '10px 16px') + '; gap: 12px; }' +
+    '.bill-ft { display: flex; ' + (isThermal ? 'flex-direction: column; gap: 6px;' : '') + ' align-items: center; justify-content: space-between; background: ' + navy + '; color: ' + onPrimary + '; padding: ' + (isThermal ? '8px' : '6px 14px') + '; gap: 12px; }' +
     '.ft-thanks { text-align: ' + (isThermal ? 'center' : 'right') + '; }' +
     '.ft-thanks .t1 { font-size: ' + (isThermal ? '12px' : '15px') + '; font-weight: 800; }' +
     '.ft-thanks .t2 { font-size: ' + (isThermal ? '9px' : '11px') + '; color: ' + gold + '; margin-top: 2px; }' +
     '.ft-contact { display: flex; align-items: center; gap: 12px; }' +
-    '.ft-lines { display: flex; flex-direction: column; gap: 4px; }' +
+    '.ft-lines { display: flex; flex-direction: column; gap: ' + (isThermal ? '4px' : '2px') + '; }' +
     '.ft-line { display: flex; align-items: center; gap: 7px; font-size: ' + (isThermal ? '10px' : '12px') + '; }' +
     '.ft-line i { color: ' + onPrimary + '; width: 22px; height: 22px; border-radius: 50%; background: rgba(255,255,255,0.14); display: inline-flex; align-items: center; justify-content: center; font-size: 10px; }' +
-    '.ft-barcode img { width: ' + (isThermal ? '46px' : '58px') + '; height: ' + (isThermal ? '46px' : '58px') + '; object-fit: contain; background: #fff; padding: 3px; border-radius: 6px; }';
+    '.ft-barcode img { width: ' + (isThermal ? '46px' : '46px') + '; height: ' + (isThermal ? '46px' : '46px') + '; object-fit: contain; background: #fff; padding: 3px; border-radius: 6px; }';
 
     // ---- ستونِ «جزئیات» (فقط وقتی حداقل یک قلم جزئیات دارد) ----
     // عرض‌ها بازچینش می‌شوند تا ستونِ جدید جا شود و همه‌چیز در همان عرضِ ۱۰۰٪ـِ کاغذ منظم بماند
@@ -12345,7 +12345,6 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
             '<div class="hdr-center">' +
                 '<div class="hdr-name">' + esc(storeName) + '</div>' +
                 (storeNameEn ? ('<div class="hdr-name-en">' + esc(storeNameEn) + '</div>') : '') +
-                '<div class="hdr-diamond">◆</div>' +
                 '<div class="hdr-slogan">' + esc(slogan) + '</div>' +
             '</div>' +
             logoBox +
@@ -46624,6 +46623,8 @@ function _apexBcDefaults() {
         type: 'auto', prefix: '20', module: 0.33, barH: 12,
         showStore: true, storeText: '', showName: true, showPrice: true, priceCur: '', showCode: true, showBorder: false, fontPt: 7,
         mode: 'roll', rollPreset: '40x30', labelW: 40, labelH: 30, rollCols: 1, rollGap: 2,
+        rollRot: 'h',        // جهتِ لیبل در چاپِ رول: h = افقی (همان طرح)، r = چرخش ۹۰° به راست، l = چرخش ۹۰° به چپ
+        rollPage: 'driver',  // اندازهٔ صفحه در چاپِ رول: driver = کاغذِ تنظیمات پرنتر، exact = دقیقاً اندازهٔ لیبل (PDF)
         paper: 'A4', sheetPreset: '3x8', cols: 3, rows: 8, gapX: 0, gapY: 0, sheetW: 70, sheetH: 37, pad: 1.5, startPos: 1,
         mT: '', mR: '', mB: '', mL: '',        // حاشیه‌های ورق (حالتِ ورق)
         rmT: '', rmR: '', rmB: '', rmL: ''     // حاشیه‌های داخلِ هر لیبل (حالتِ رول)
@@ -46760,8 +46761,13 @@ function _apexBcDocHtml(items, cfg, opts) {
         return labelCache[key];
     };
     var out = '';
+    // (APEX) جهتِ لیبل در رول: چرخش ۹۰° → صفحه H × W و محتوای سطر داخلِ یک قابِ چرخیده
+    var rot = (G.mode === 'roll' && (cfg.rollRot === 'r' || cfg.rollRot === 'l')) ? cfg.rollRot : '';
+    var secW = rot ? G.PH : G.PW, secH = rot ? G.PW : G.PH;
     pages.forEach(function (pg) {
-        out += '<section class="bcp" style="width:' + r2(G.PW) + 'mm;height:' + r2(G.PH) + 'mm;">';
+        out += '<section class="bcp" style="width:' + r2(secW) + 'mm;height:' + r2(secH) + 'mm;">';
+        if (rot) out += '<div class="bcr" style="width:' + r2(G.PW) + 'mm;height:' + r2(G.PH) + 'mm;transform:' +
+            (rot === 'r' ? ('translateX(' + r2(G.PH) + 'mm) rotate(90deg)') : ('translateY(' + r2(G.PW) + 'mm) rotate(-90deg)')) + ';">';
         pg.forEach(function (it, idx) {
             var c = idx % G.cols, r = Math.floor(idx / G.cols);
             var x = (G.mode === 'sheet' ? G.m.r : 0) + c * (G.lw + G.gx);
@@ -46774,16 +46780,21 @@ function _apexBcDocHtml(items, cfg, opts) {
             out += '<div class="bcl' + (it ? '' : ' bcl-skip') + '" style="right:' + r2(x) + 'mm;top:' + r2(y) + 'mm;width:' + r2(G.lw) + 'mm;height:' + r2(G.lh) + 'mm;' + padStyle + '">' +
                    (it ? lbl(it, Math.max(4, iw), Math.max(4, ih)) : '') + '</div>';
         });
+        if (rot) out += '</div>';
         out += '</section>';
     });
     if (!pages.length) out = '<div class="bcp-empty">برای پیش‌نمایش، یک جنس انتخاب کنید.</div>';
     var css =
         '*{box-sizing:border-box;margin:0;padding:0;}' +
-        '@page{size:' + r2(G.PW) + 'mm ' + r2(G.PH) + 'mm;margin:0;}' +
+        // (APEX) رول + «از تنظیماتِ پرنتر»: اندازهٔ صفحه را نمی‌دهیم تا مرورگر صفحهٔ عرضی (عرض > طول) را خودکار
+        //  «Landscape» نکند — همان علتِ چاپِ چرخیده و افتادنِ لیبل روی لیبلِ بعدی در پرنترهای بارکد.
+        ((G.mode === 'roll' && cfg.rollPage !== 'exact') ? '@page{margin:0;}' : ('@page{size:' + r2(secW) + 'mm ' + r2(secH) + 'mm;margin:0;}')) +
         'html,body{background:#fff;}' +
         'body{font-family:\'Estedad\',\'Vazirmatn\',Tahoma,sans-serif;color:#000;direction:rtl;-webkit-print-color-adjust:exact;print-color-adjust:exact;}' +
         '.bcp{position:relative;overflow:hidden;background:#fff;page-break-after:always;break-after:page;}' +
         '.bcp:last-of-type{page-break-after:auto;break-after:auto;}' +
+        '.bcr{position:absolute;left:0;top:0;transform-origin:0 0;}' +
+        '@media print{.bcp{margin:0 auto 0 0;}}' +
         '.bcl{position:absolute;overflow:hidden;' + (cfg.showBorder ? 'outline:0.2mm dashed #555;outline-offset:-0.1mm;' : '') + '}' +
         '.bcl-in{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0.5mm;text-align:center;overflow:hidden;line-height:1.2;}' +
         '.bcl-store{font-size:0.85em;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;}' +
@@ -46851,7 +46862,10 @@ function _apexBcTabs() {
             '<div class="apex-bc-roll">' +
                 fld('اندازهٔ لیبل', '<select id="apex-bc-rollpreset">' + rollOpts + '</select>') +
                 '<div class="apex-bset-row2">' + fld('عرض (mm)', num('apex-bc-lw', 10, 150, 0.5)) + fld('ارتفاع (mm)', num('apex-bc-lh', 8, 150, 0.5)) + '</div>' +
-                '<div class="apex-bset-row2">' + fld('لیبل در هر سطرِ رول', '<select id="apex-bc-rollcols"><option value="1">۱</option><option value="2">۲</option><option value="3">۳</option><option value="4">۴</option></select>') + fld('فاصلهٔ بین لیبل‌ها (mm)', num('apex-bc-rollgap', 0, 20, 0.5)) + '</div>' +
+                '<div class="apex-bset-row2">' + fld('لیبل در هر سطرِ رول', '<select id="apex-bc-rollcols"><option value="1">۱</option><option value="2">۲</option><option value="3">۳</option><option value="4">۴</option></select>') + fld('فاصلهٔ افقیِ کنارِ هم (mm)', num('apex-bc-rollgap', 0, 20, 0.5)) + '</div>' +
+                fld('جهت لیبل در چاپ', '<select id="apex-bc-rollrot"><option value="h">افقی — همان‌طور که طراحی شده</option><option value="r">عمودی — چرخش ۹۰ درجه به راست</option><option value="l">عمودی — چرخش ۹۰ درجه به چپ</option></select>') +
+                fld('اندازهٔ صفحه در چاپ', '<select id="apex-bc-rollpage"><option value="driver">از تنظیماتِ پرنتر (پیشنهادی برای پرنتر بارکد)</option><option value="exact">دقیقاً اندازهٔ لیبل (برای ذخیرهٔ PDF)</option></select>') +
+                '<small class="apex-bc-note" id="apex-bc-rollinfo"></small>' +
             '</div>' +
             '<div class="apex-bc-sheet">' +
                 '<div class="apex-bset-row2">' + fld('اندازهٔ ورق', '<select id="apex-bc-paper"><option value="A4">A4</option><option value="A5">A5</option><option value="Letter">Letter</option></select>') +
@@ -46939,6 +46953,7 @@ function _apexBcFill(c) {
     if (pc) { pc.value = c.priceCur || pc.value; if (!pc.value && pc.options.length) pc.selectedIndex = 0; }
     sv('apex-bc-mode', c.mode); sv('apex-bc-rollpreset', c.rollPreset); sv('apex-bc-lw', c.labelW); sv('apex-bc-lh', c.labelH);
     sv('apex-bc-rollcols', c.rollCols); sv('apex-bc-rollgap', c.rollGap);
+    sv('apex-bc-rollrot', c.rollRot || 'h'); sv('apex-bc-rollpage', c.rollPage || 'driver');
     sv('apex-bc-paper', c.paper); sv('apex-bc-sheetpreset', c.sheetPreset); sv('apex-bc-cols', c.cols); sv('apex-bc-rows', c.rows);
     sv('apex-bc-gapx', c.gapX); sv('apex-bc-gapy', c.gapY); sv('apex-bc-sw', c.sheetW); sv('apex-bc-sh', c.sheetH);
     sv('apex-bc-pad', c.pad); sv('apex-bc-start', c.startPos);
@@ -46969,6 +46984,7 @@ function _apexBcRead() {
         fontPt: n('apex-bc-font', d.fontPt),
         mode: g('apex-bc-mode') || 'roll', rollPreset: g('apex-bc-rollpreset') || 'custom', labelW: n('apex-bc-lw', d.labelW), labelH: n('apex-bc-lh', d.labelH),
         rollCols: n('apex-bc-rollcols', 1), rollGap: n('apex-bc-rollgap', d.rollGap),
+        rollRot: g('apex-bc-rollrot') || 'h', rollPage: g('apex-bc-rollpage') || 'driver',
         paper: g('apex-bc-paper') || 'A4', sheetPreset: g('apex-bc-sheetpreset') || 'custom', cols: n('apex-bc-cols', d.cols), rows: n('apex-bc-rows', d.rows),
         gapX: n('apex-bc-gapx', 0), gapY: n('apex-bc-gapy', 0), sheetW: n('apex-bc-sw', d.sheetW), sheetH: n('apex-bc-sh', d.sheetH),
         pad: n('apex-bc-pad', d.pad), startPos: Math.max(1, Math.round(n('apex-bc-start', 1))),
@@ -47017,6 +47033,18 @@ function _apexBcSync() {
     body.classList.toggle('apex-bc-no-price', !cfg.showPrice);
     var G = _apexBcGeom(cfg);
     var f1 = function (n) { return Math.round(n * 10) / 10; };
+    var rgEl = document.getElementById('apex-bc-rollgap');
+    if (rgEl) rgEl.disabled = (G.mode === 'roll' && G.cols < 2);
+    var ri = document.getElementById('apex-bc-rollinfo');
+    if (ri && G.mode === 'roll') {
+        var rotd = (cfg.rollRot === 'r' || cfg.rollRot === 'l');
+        var pw = rotd ? G.PH : G.PW, ph = rotd ? G.PW : G.PH;
+        ri.textContent = 'اندازهٔ صفحهٔ هر سطر در چاپ: ' + f1(pw) + ' × ' + f1(ph) + ' میلی‌متر (عرض × طول). ' +
+            (cfg.rollPage === 'exact'
+                ? 'صفحه دقیقاً به همین اندازه ساخته می‌شود (مناسبِ PDF). اگر پرنترِ بارکد لیبل را چرخیده چاپ کرد، «از تنظیماتِ پرنتر» را انتخاب کنید.'
+                : 'در تنظیماتِ پرنتر (Printing Preferences) اندازهٔ کاغذ را همین مقدار بگذارید؛ آنگاه «Layout» در پنجرهٔ چاپ هم کار می‌کند. فاصلهٔ بالا و پایینِ لیبل‌ها روی رول را حسگرِ پرنتر خودش رد می‌کند.') +
+            (G.cols < 2 ? ' «فاصلهٔ افقی» فقط برای چند لیبلِ کنارِ هم است.' : '');
+    }
     var gi = document.getElementById('apex-bc-geominfo');
     if (gi) gi.textContent = 'هر ورق ' + G.per + ' لیبل؛ اندازهٔ هر لیبل ' + f1(G.lw) + ' × ' + f1(G.lh) + ' میلی‌متر' +
         (G.custom ? ' (نظر به حاشیه‌ها خودکار تنظیم شد)' : '');
