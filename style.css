@@ -8449,10 +8449,11 @@ html[data-jruntime="android"] .filter-menu .btn-primary { padding: 9px 12px !imp
 #confirmModal.modal-alert .modal-footer .btn-danger:hover { background: #eef3fb !important; }
 #confirmModal.modal-alert .modal-footer { gap: 10px; }
 #confirmModal.modal-alert .modal-footer .btn-secondary {
-    background: rgba(255,255,255,.14) !important; color: #fff !important;
+    /* (APEX) متنِ «لغو» سیاه و زمینهٔ روشن تا در همهٔ نسخه‌ها خوانا باشد */
+    background: #e8edf4 !important; color: #000 !important;
     border: 1px solid rgba(255,255,255,.35) !important;
 }
-#confirmModal.modal-alert .modal-footer .btn-secondary:hover { background: rgba(255,255,255,.24) !important; }
+#confirmModal.modal-alert .modal-footer .btn-secondary:hover { background: #dfe6ef !important; color: #000 !important; }
 
 /* ===== اعتبارسنجیِ درون‌فیلدی — هشدارِ سرخ زیر فیلدِ الزامیِ خالی ===== */
 .field-error-msg {
@@ -10703,8 +10704,8 @@ html.apex-ovl-open, html.apex-ovl-open body { overflow: hidden !important; }
 }
 .apex-ovl-btn:hover { background: rgba(255,255,255,.22); }
 .apex-ovl-btn:active { transform: scale(.96); }
-.apex-ovl-btn.apex-ovl-primary { background: #10b981; }
-.apex-ovl-btn.apex-ovl-primary:hover { background: #059669; }
+.apex-ovl-btn.apex-ovl-primary { background: #d79b30; }   /* طلاییِ لوگوی APEX */
+.apex-ovl-btn.apex-ovl-primary:hover { background: #c08626; }
 .apex-ovl-btn.apex-ovl-icon { width: 40px; height: 40px; padding: 0; justify-content: center; }
 .apex-ovl-body { flex: 1 1 auto; min-height: 0; overflow: auto; -webkit-overflow-scrolling: touch; }
 
@@ -10758,7 +10759,7 @@ html.apex-ovl-open, html.apex-ovl-open body { overflow: hidden !important; }
 .apex-bset-prevhead small { font-weight: 500; font-size: 11.5px; color: #64748b; }
 .apex-bset-prevwrap { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 16px; background: #e9eef5; }
 .apex-bset-holder { margin: 0 auto; overflow: hidden; border-radius: 8px; box-shadow: 0 8px 26px rgba(2,6,23,.14); background: #fff; }
-.apex-bset-holder iframe { display: block; border: 0; background: #fff; width: 900px; height: 600px; }
+.apex-bset-holder iframe { display: block; border: 0; background: #fff; width: 900px; height: 600px; max-width: none !important; }   /* موبایل: بل با عرضِ واقعیِ خودش رندر و یکنواخت کوچک می‌شود (مثلِ نسخهٔ نصبی) */
 @media (max-width: 900px) {
     .apex-bset-body { flex-direction: column; overflow: auto; padding: 12px; }
     .apex-bset-tabs { flex: 0 0 auto; max-width: none; overflow: visible; padding-left: 0; }

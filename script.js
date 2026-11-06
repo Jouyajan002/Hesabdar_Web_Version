@@ -3664,7 +3664,8 @@ function saveCashbox() {
     
     if (!name) { showMessage('خطا', 'لطفاً نام حساب را وارد کنید.'); return; }
     // اگر موجودی اولیه وارد شده، ارزِ آن الزامی است تا در ارزِ درست ثبت شود
-    if (initialBalance > 0 && !currency) { showMessage('خطا', 'لطفاً ارزِ موجودی اولیه را انتخاب کنید (از کارت نرخ ارز).'); return; }
+    // موجودیِ اولیه می‌تواند مثبت، منفی (بدهیِ آغازینِ حساب) یا اعشاری باشد؛ هر مقدارِ غیرصفر ارز می‌خواهد
+    if (initialBalance !== 0 && !currency) { showMessage('خطا', 'لطفاً ارزِ موجودی اولیه را انتخاب کنید (از کارت نرخ ارز).'); return; }
     
     const editId = document.getElementById('cashboxForm').dataset.editId;
     // حساب دیگر «ارزِ حساب» ندارد؛ همهٔ ارزها را می‌پذیرد و موجودیِ هر ارز در balances نگه داشته می‌شود.
@@ -3691,7 +3692,9 @@ function saveCashbox() {
     if (!result.success) { showMessage('خطا', result.error || 'خطا در ذخیره حساب'); return; }
     
     // ====== درخواست کاربر: مبلغ اولیه حساب در فهرست معاملات حساب ثبت شود ======
-    if (!editId && initialBalance > 0 && result.data && result.data.id) {
+    //  موجودیِ اولیهٔ منفی هم (مثلاً ‎-5000‎) با علامتِ خودش ثبت می‌شود تا در معاملاتِ حساب، مانده‌ها
+    //  و بازسازیِ موجودی دقیقاً حساب شود (پیش‌تر فقط مقدارِ مثبت ریکارد می‌شد).
+    if (!editId && initialBalance !== 0 && result.data && result.data.id) {
         try {
             if (typeof _logCashboxTransaction === 'function') {
                 _logCashboxTransaction(result.data.id, {
@@ -4929,7 +4932,8 @@ registerDataRebuilder({
         logs.forEach(function (g) {
             if (!g || g.cashboxId == null || !(g.cashboxId in bal)) return;
             var amt = parseFloat(g.amount) || 0;
-            if (!(amt > 0)) return;
+            // موجودیِ اولیهٔ منفیِ حساب (بدهیِ آغازین) با علامتِ خودش جزوِ موجودی است
+            if (!(amt > 0) && !(amt < 0 && _cbIsInitialLog(g))) return;
             var lc = g.currency || _boxCur[g.cashboxId] || _base;
             if (_engCashboxIsIncome(g.type)) _add(g.cashboxId, lc, amt);
             else if (_engCashboxIsExpense(g.type)) _add(g.cashboxId, lc, -amt);
@@ -11007,7 +11011,7 @@ function loadCashboxTransactionsList(cashboxId) {
                 'shipping_charge': 'هزینه حمل و نقل',
                 'transfer_in': 'انتقال ورودی',
                 'transfer_out': 'انتقال خروجی'
-            })[log.type] || log.type;
+            })[_cbLogView(log).type] || log.type;
             // تعیین تاریخ نمایشی: ابتدا datetime/date کاربر، سپس fallback از createdAt (ISO → جلالی)
             var _displayDate = log.datetime || log.date || '';
             if (!_displayDate && log.createdAt) {
@@ -11029,7 +11033,7 @@ function loadCashboxTransactionsList(cashboxId) {
                 createdAt: log.createdAt || log.datetime || '',
                 type: typeLabel,
                 person: log.relatedCashboxName || '-',
-                amount: parseFloat(log.amount || 0),
+                amount: _cbLogView(log).amount,
                 currency: log.currency || _baseCur(),
                 desc: log.description || log.notes || '-',
                 billNumber: '-',
@@ -11333,7 +11337,8 @@ function _openCashboxLogEditModal(log, cashboxId) {
         try {
             var newAmt = parseFloat(document.getElementById('_cb_log_edit_amount').value);
             var newDate = (document.getElementById('_cb_log_edit_date').value || '').trim();
-            if (!isFinite(newAmt) || newAmt < 0) { showMessage('خطا', 'مبلغ نامعتبر است.'); return; }
+            // موجودیِ اولیهٔ حساب می‌تواند منفی باشد؛ سایرِ معاملات فقط مبلغِ مثبت
+            if (!isFinite(newAmt) || (newAmt < 0 && !_cbIsInitialLog(log))) { showMessage('خطا', 'مبلغ نامعتبر است.'); return; }
 
             var logs = JSON.parse(localStorage.getItem('cashboxTransactions') || '[]');
             var idx = logs.findIndex(function(l) { return l.id == log.id; });
@@ -11422,7 +11427,10 @@ function deleteCashboxLogEntry(logId, cashboxId) {
             } else {
                 // deposit/withdraw — یک طرفه
                 var amt = parseFloat(log.amount || 0);
-                if (log.cashboxId && amt > 0) {
+                if (log.cashboxId && amt < 0 && _cbIsInitialLog(log)) {
+                    // موجودیِ اولیهٔ منفی: برگشتِ اثر = افزودنِ همان مبلغ
+                    db.updateCashboxBalance(log.cashboxId, -amt, 'in', log.currency || undefined);
+                } else if (log.cashboxId && amt > 0) {
                     // برگشتِ اثر باید در همان ارزی باشد که سطر با آن ثبت شده بود.
                     // (رکوردهای قدیمیِ بدونِ currency → undefined → همان رفتارِ قبلی)
                     if (log.type === 'deposit_in' || log.type === 'deposit_external' || log.type === 'transfer_in') {
@@ -14053,7 +14061,15 @@ function __hbOpenTauriPrintWindow(docHtml, title, opts) {
         var _un = null;
         // (APEX) opts.system: سند در خودِ پنجره باز و «پنجرهٔ چاپِ ویندوز» (با دکمهٔ Preferences/تنظیماتِ
         //  پرنتر) نشان داده می‌شود — برای پرنترهای حرارتی/بارکد. بدونِ آن، همان رفتارِ قبلی.
-        var _payload = (opts && opts.system) ? { html: docHtml, system: true } : docHtml;
+        //  محتوا همیشه «متن» فرستاده می‌شود (همان نوعی که پنجرهٔ چاپِ بل می‌گیرد)؛ حالتِ سیستمی با یک
+        //  <meta name="apex-sysprint"> در خودِ سند مشخص می‌شود تا print-window.htmlِ قدیمی هم دست‌کم
+        //  پیش‌نمایشِ عادی را نشان دهد و هرگز روی «در حال آماده‌سازی…» نماند.
+        var _payload = docHtml;
+        if (opts && opts.system) {
+            var _sh = String(docHtml), _mt = '<meta name="apex-sysprint" content="1">';
+            var _hm = _sh.match(/<head[^>]*>/i);
+            _payload = _hm ? _sh.replace(_hm[0], _hm[0] + _mt) : (_mt + _sh);
+        }
         T.event.listen(EV_READY, function () {
             try { T.event.emit(EV_HTML, _payload); } catch (e) {}
         }).then(function (un) {
@@ -14061,20 +14077,48 @@ function __hbOpenTauriPrintWindow(docHtml, title, opts) {
             setTimeout(function () { try { if (typeof _un === 'function') _un(); } catch (e) {} }, 15000);
         }).catch(function () {});
 
+        // (APEX) حالتِ سیستمی (چاپِ بارکد): پنجرهٔ واسط عملاً دیده نمی‌شود (۱×۱، بدونِ قاب و
+        //  بدونِ نوارِ وظیفه) و کاربر فقط «پنجرهٔ چاپِ ویندوز» (انتخابِ پرنتر + Preferences) را
+        //  می‌بیند. اگر فرمانِ چاپِ سیستمی در این نسخه نبود، پنجرهٔ واسط خبر می‌دهد و چاپ از
+        //  همان پیش‌نمایشِ داخلِ برنامه (opts.onFallback) انجام می‌شود.
+        var _sys = !!(opts && opts.system);
+        if (_sys && opts && typeof opts.onFallback === 'function') {
+            var _unFb = null, _fbDone = false;
+            T.event.listen('hb-print-fallback-' + tok, function () {
+                if (_fbDone) return; _fbDone = true;
+                try { opts.onFallback(); } catch (e) {}
+            }).then(function (un) {
+                _unFb = un;
+                setTimeout(function () { try { if (typeof _unFb === 'function') _unFb(); } catch (e) {} }, 60000);
+            }).catch(function () {});
+        }
+        var _wopts = _sys ? {
+            url: 'print-window.html?t=' + encodeURIComponent(tok),
+            title: 'چاپ' + (title ? (' — ' + title) : ''),
+            width: 1,
+            height: 1,
+            center: true,
+            resizable: false,
+            decorations: false,
+            skipTaskbar: true,
+            shadow: false,
+            focus: true
+        } : {
+            url: 'print-window.html?t=' + encodeURIComponent(tok),
+            title: 'چاپ' + (title ? (' — ' + title) : ''),
+            width: 980,
+            height: 720,
+            minWidth: 620,
+            minHeight: 480,
+            center: true,
+            resizable: true,
+            decorations: true,
+            focus: true
+        };
+
         var open = function () {
             try {
-                var w = new WVW(LABEL, {
-                    url: 'print-window.html?t=' + encodeURIComponent(tok),
-                    title: 'چاپ' + (title ? (' — ' + title) : ''),
-                    width: 980,
-                    height: 720,
-                    minWidth: 620,
-                    minHeight: 480,
-                    center: true,
-                    resizable: true,
-                    decorations: true,
-                    focus: true
-                });
+                var w = new WVW(LABEL, _wopts);
                 try {
                     w.once('tauri://error', function (e) {
                         try { console.warn('[hb-print] خطای ساختِ پنجره:', e); } catch (_) {}
@@ -14348,7 +14392,12 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
             // تنظیماتِ چاپ جمع‌وجور و کامل دیده شود و پنجرهٔ اصلیِ برنامه هیچ تغییری نکند.
             // پیش‌نمایشِ اورلیِ داخلِ برنامه سرِ جای خودش باز می‌ماند.
             // در وب و اندروید اصلاً وارد این مسیر نمی‌شویم و رفتار دقیقاً مثلِ قبل است.
-            if (typeof __hbOpenTauriPrintWindow === 'function' && __hbOpenTauriPrintWindow(doc, pdfName, { system: !!meta.systemPrint })) {
+            var _fb = function () {
+                // (APEX) فرمانِ چاپِ سیستمی در دسترس نبود → چاپ از همین پیش‌نمایش (مثلِ قبل از پنجرهٔ جدا)
+                try { var d2 = frame.contentWindow.document; if (pdfName) d2.title = pdfName; } catch (e) {}
+                try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (e) { try { window.print(); } catch (_) {} }
+            };
+            if (typeof __hbOpenTauriPrintWindow === 'function' && __hbOpenTauriPrintWindow(doc, pdfName, { system: !!meta.systemPrint, onFallback: _fb })) {
                 if (b) { b.style.transform = pt; b.style.width = pw; }
                 try { console.log('[jouya-preview] print window opened'); } catch (_) {}
                 return;
@@ -14361,6 +14410,77 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
             try { console.warn('[jouya-preview] print error:', e && e.message); } catch (_) {}
             try { window.print(); } catch (_) {}
         }
+    }
+
+    // (APEX) «دانلود / چاپ PDF»:
+    //  ‑ نسخهٔ نصبی (Tauri) و وبِ دسکتاپ: پنجرهٔ «ذخیره در…» سیستم با نامِ همین بل/گزارش
+    //    (مثلِ «دانلود JSON») و فایلِ PDF در محلِ انتخاب‌شده ذخیره می‌شود.
+    //  ‑ اپلیکیشنِ اندروید: پیش‌نمایشِ چاپِ خودِ اندروید (با گزینهٔ «ذخیره به‌صورتِ PDF»).
+    //  ‑ وبِ موبایل: پیش‌نمایشِ چاپِ سیستم (همان چاپِ قبلی، با گزینهٔ ذخیرهٔ PDF).
+    function _ppPdfFileName() {
+        return (typeof window.__jouyaPersianPdfName === 'function') ? window.__jouyaPersianPdfName(pdfName) : (String(pdfName || 'گزارش') + '.pdf');
+    }
+    function _ppToast(msg, type) { try { if (typeof window.showToast === 'function') window.showToast(msg, type || 'info'); } catch (e) {} }
+    function _ppDownloadBlob(blob, name) {
+        try {
+            var url = URL.createObjectURL(blob);
+            var a = document.createElement('a');
+            a.href = url; a.download = name; a.style.display = 'none';
+            document.body.appendChild(a); a.click();
+            setTimeout(function () { try { document.body.removeChild(a); URL.revokeObjectURL(url); } catch (e) {} }, 4000);
+            return true;
+        } catch (e) { return false; }
+    }
+    function _ppAndroidPrint() {
+        var job = _ppPdfFileName().replace(/\.pdf$/i, '');
+        var bh = '';
+        try { bh = location.href.replace(/[?#].*$/, '').replace(/[^\/]*$/, ''); } catch (e) {}
+        var fallback = function () { mobileShareFile(); };   // نسخهٔ قدیمیِ APK بدونِ افزونهٔ چاپ: همان اشتراکِ فایلِ PDF
+        try {
+            if (typeof __jouyaAndCall !== 'function') { fallback(); return; }
+            __jouyaAndCall('ApexPrint', 'printHtml', { html: '<!DOCTYPE html>' + doc, name: job, baseUrl: bh })
+                .catch(function (e) { try { console.warn('[jouya-preview] android print:', e && (e.message || e)); } catch (_) {} fallback(); });
+        } catch (e) { fallback(); }
+    }
+    function doSavePdf() {
+        var isTauri = (typeof __jouyaIsTauri === 'function') && __jouyaIsTauri();
+        var isAndroid = !isTauri && (typeof __hbIsAndroidNative === 'function') && __hbIsAndroidNative();
+        if (isAndroid) { _ppAndroidPrint(); return; }
+        var isDesk = isTauri || ((typeof window.__jouyaIsDesktopShare === 'function') ? window.__jouyaIsDesktopShare() : true);
+        if (!isDesk) { doPrint(); return; }                     // وبِ موبایل: پیش‌نمایشِ چاپِ سیستم
+        var name = _ppPdfFileName();
+        var bp0 = ensurePdf();
+        if (!bp0) { doPrint(); return; }                        // کتابخانهٔ PDF نیست → همان چاپِ قبلی
+        var failMsg = function () {
+            if (typeof showMessage === 'function') showMessage('دانلود PDF', 'ساختِ فایلِ PDF ممکن نشد؛ از دکمهٔ چاپ استفاده کنید.');
+        };
+        if (typeof window.showSaveFilePicker === 'function') {
+            var hp;
+            try {
+                hp = window.showSaveFilePicker({ suggestedName: name, types: [{ description: 'PDF', accept: { 'application/pdf': ['.pdf'] } }] });
+            } catch (e) { hp = Promise.reject(e); }
+            hp.then(function (h) {
+                if (!_pdfBlob) _ppToast('در حال ساختِ فایلِ PDF…', 'info');
+                return bp0.then(function (blob) {
+                    return h.createWritable().then(function (w) {
+                        return w.write(blob).then(function () { return w.close(); });
+                    });
+                }).then(function () {
+                    _ppToast('فایلِ PDF ذخیره شد: ' + (h.name || name), 'success');
+                }, function (e) {
+                    try { console.warn('[jouya-preview] save pdf:', e && (e.message || e)); } catch (_) {}
+                    failMsg();
+                });
+            }, function (e) {
+                if (e && e.name === 'AbortError') return;          // کاربر پنجره را بست
+                // پنجرهٔ ذخیره در دسترس نبود → دانلودِ عادیِ مرورگر با همین نام
+                bp0.then(function (blob) { if (!_ppDownloadBlob(blob, name)) failMsg(); }, failMsg);
+            });
+            return;
+        }
+        // مرورگرِ بدونِ پنجرهٔ ذخیره (مثلاً فایرفاکس): دانلودِ عادیِ مرورگر با همین نام
+        if (!_pdfBlob) _ppToast('در حال ساختِ فایلِ PDF…', 'info');
+        bp0.then(function (blob) { if (!_ppDownloadBlob(blob, name)) failMsg(); }, failMsg);
     }
 
     function doShareMenu(ev) {
@@ -14381,7 +14501,7 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
             var t = (e2.target && e2.target.closest) ? e2.target.closest('[data-act]') : null;
             if (!t) return;
             var act = t.getAttribute('data-act');
-            if (act === 'pdf') { closeShareMenu(); doPrint(); return; }
+            if (act === 'pdf') { closeShareMenu(); doSavePdf(); return; }
             if (act === 'wa') {
                 closeShareMenu();
                 // مسیرِ واحد با گزارشِ تشخیصی: پنلِ اشتراکِ سیستم (نسخهٔ نصبی) → اشتراکِ نیتیوِ
@@ -15390,13 +15510,13 @@ function generateCashboxReport(cashboxId) {
                 'shipping_charge': 'هزینه حمل و نقل',
                 'transfer_in': 'انتقال ورودی',
                 'transfer_out': 'انتقال خروجی'
-            })[log.type] || log.type;
+            })[_cbLogView(log).type] || log.type;
             return {
                 date: log.datetime || log.date || '',
                 createdAt: log.createdAt || log.datetime || '',
                 type: typeLabel,
                 person: log.relatedCashboxName || '-',
-                amount: parseFloat(log.amount || 0),
+                amount: _cbLogView(log).amount,
                 currency: log.currency || _baseCur(),
                 desc: log.description || log.notes || '-',
                 billNumber: '-'
@@ -27984,7 +28104,7 @@ function ssbGetTitle(key) {
         serversync: '<i class="fas fa-right-left"></i> ارسال و دریافت اطلاعات',
         update:   '<i class="fas fa-cloud-arrow-down"></i> بروزرسانی',
         settingsgroup: '<i class="fas fa-sliders-h"></i> تنظیمات',
-        tools:    '<i class="fas fa-toolbox"></i> ابزار ها',
+        tools:    '<i class="fas fa-toolbox"></i> پلاگین ها',
     };
     return titles[key] || '<i class="fas fa-cog"></i> تنظیمات';
 }
@@ -36121,6 +36241,20 @@ function executeCashboxWithdraw() {
  * ثبت یک رکورد در معاملات حساب (cashboxTransactions در localStorage)
  * این تابع برای deposit/transfer/expense/etc استفاده می‌شود
  */
+// ── موجودیِ اولیهٔ حساب (مثبت، منفی یا اعشاری) ─────────────────────────────
+//  لاگِ «موجودی اولیه صندوق» با علامتِ خودش ذخیره می‌شود. موجودیِ اولیهٔ منفی (بدهیِ آغازینِ
+//  حساب) در فهرست و گزارشِ معاملاتِ حساب به‌صورتِ «برداشت» با مبلغِ مثبت نشان داده می‌شود
+//  تا ورودی/خروجی و ماندهٔ ردیف‌ها درست و خوانا باشند.
+function _cbIsInitialLog(log) {
+    return !!(log && log.type === 'deposit_external' && typeof log.notes === 'string'
+        && log.notes.indexOf('موجودی اولیه صندوق') !== -1);
+}
+function _cbLogView(log) {
+    var a = parseFloat(log && log.amount || 0) || 0;
+    if (a < 0 && _cbIsInitialLog(log)) return { type: 'withdraw_external', amount: -a };
+    return { type: log ? log.type : '', amount: a };
+}
+
 function _logCashboxTransaction(cashboxId, txData) {
     try {
         var key = 'cashboxTransactions';
@@ -46012,7 +46146,7 @@ function _apexBsetTabs() {
                 fld('رنگ اصلی', '<input type="color" id="ssb-bill-primary" value="#1b2a4a">') +
                 fld('رنگ تأکید', '<input type="color" id="ssb-bill-accent" value="#c8963c">') +
             '</div>' },
-        { key: 'font', icon: 'fas fa-font', title: 'قلم بل', sub: 'نوع و اندازهٔ قلم', html:
+        { key: 'font', icon: 'fas fa-font', title: 'فونت', sub: 'نوع و اندازهٔ قلم', html:
             fld('نوع قلم', '<select id="ssb-bill-font-family"><option value="vazirmatn">استعداد (پیش‌فرض)</option><option value="tahoma">Tahoma</option><option value="nazanin">B Nazanin / نازنین</option><option value="arial">Arial</option><option value="times">Times New Roman</option><option value="courier">Courier New</option></select>') +
             '<div class="apex-bset-row2">' +
                 fld('اندازهٔ متن بدنه (px)', '<input type="number" id="ssb-bill-base-font" min="7" max="24" placeholder="12">') +
@@ -46278,12 +46412,11 @@ function _ssbGroupHtml() {
         li('notes', 'fas fa-bell', 'هشدار های داخل سیستم') +
         li('security', 'fas fa-lock', 'امنیت') +
         li('datasettings', 'fas fa-cogs', 'تنظیمات اطلاعات') +
-        li('tools', 'fas fa-toolbox', 'ابزار ها') +
     '</ul>';
 }
 /** والد هر زیربخش برای «برگشت» (گروه تنظیمات و زیرگروه تنظیمات اطلاعات) */
 function _ssbParentOf(key) {
-    var g = { display: 1, invoice: 1, numsys: 1, currency: 1, notes: 1, security: 1, datasettings: 1, tools: 1 };
+    var g = { display: 1, invoice: 1, numsys: 1, currency: 1, notes: 1, security: 1, datasettings: 1 };
     var ds = { excel: 1, importpersons: 1, serversync: 1, dbinit: 1, 'delete': 1 };
     if (g[key]) return 'settingsgroup';
     if (key === 'barcode') return 'tools';
@@ -47294,7 +47427,7 @@ function _apexBcListRender() {
         });
     }
 }
-// ── سایدبار › تنظیمات › «ابزار ها» ───────────────────────────────────────────
+// ── سایدبار › «پلاگین ها» (زیرِ «تنظیمات») ───────────────────────────────────────────
 function _ssbToolsHtml() {
     return '<ul class="ssb-main-list ssb-group-list" style="display:block;padding:6px 4px;">' +
         '<li onclick="ssbOpenSub(\'barcode\')"><span class="ssb-item-icon"><i class="fas fa-barcode"></i></span>' +
