@@ -106,37 +106,76 @@
   //  سیستمیِ ویندوز را باز می‌کند: انتخابِ پرنتر + دکمهٔ Preferences (تنظیماتِ درایورِ پرنتر:
   //  اندازهٔ لیبل/Stock، جهت، تیرگی …) — مثلِ ورد. اگر این فرمان در نسخهٔ نصب‌شده نباشد،
   //  همان پیش‌نمایشِ چاپِ قبلی باز می‌شود (هیچ چیزی نمی‌شکند).
+  // (APEX) پنجرهٔ واسطِ چاپِ بارکد ۱×۱ و نامرئی است؛ کاربر فقط «پنجرهٔ چاپِ ویندوز» را می‌بیند.
+  //  پس از بسته‌شدنِ پنجرهٔ چاپ (چاپ یا لغو)، این پنجرهٔ واسط هم خودکار بسته می‌شود.
+  var EV_FB = 'hb-print-fallback' + (tok ? ('-' + tok) : '');
+  var sysClosing = false;
+  function sysCloseSoon(ms) {
+    if (sysClosing) return;
+    sysClosing = true;
+    setTimeout(function () { try { window.hbClose(); } catch (e) {} }, ms || 0);
+  }
+  // فرمانِ چاپِ سیستمی نبود → پنجرهٔ اصلی از پیش‌نمایشِ خودش چاپ می‌کند و این پنجره بسته می‌شود
+  function sysFallback() {
+    var sent = false;
+    try { if (T && T.event && typeof T.event.emit === 'function') { T.event.emit(EV_FB, Date.now()); sent = true; } } catch (e) {}
+    if (sent) { sysCloseSoon(400); return; }
+    try { window.print(); } catch (e) {}
+  }
+  function sysWatch() {
+    var t0 = Date.now(), blurred = false, hadMain = null;
+    // ۶ ثانیه مهلت تا کارِ چاپ کاملاً به پرنتر سپرده شود، بعد بستن
+    window.addEventListener('blur', function () { blurred = true; });
+    window.addEventListener('focus', function () { if (blurred || (Date.now() - t0) > 1500) sysCloseSoon(6000); });
+    window.addEventListener('afterprint', function () { sysCloseSoon(6000); });
+    setTimeout(function () { sysCloseSoon(0); }, 180000);   // ایمنی: حداکثر ۳ دقیقه
+    // اگر پنجرهٔ اصلیِ برنامه بسته شد، این پنجرهٔ نامرئی هم بسته شود
+    setInterval(function () {
+      try {
+        var W = T && T.window, ga = W && W.getAllWindows;
+        if (typeof ga !== 'function') return;
+        Promise.resolve(ga.call(W)).then(function (list) {
+          var has = false;
+          (list || []).forEach(function (w) { if (w && w.label === 'main') has = true; });
+          if (hadMain === null) { hadMain = has; return; }
+          if (hadMain && !has) sysCloseSoon(0);
+        }).catch(function () {});
+      } catch (e) {}
+    }, 3000);
+  }
   function sysPrint() {
-    var fallback = function () { try { window.print(); } catch (e) {} };
     try {
       if (T && T.core && typeof T.core.invoke === 'function') {
-        T.core.invoke('hb_print_system').then(function (ok) { if (ok !== true) fallback(); }, fallback);
+        T.core.invoke('hb_print_system').then(function (ok) { if (ok === true) sysWatch(); else sysFallback(); }, sysFallback);
         return;
       }
     } catch (e) {}
-    fallback();
+    sysFallback();
   }
   window.__hbSysPrint = sysPrint;
 
   function renderSystem(html) {
     if (rendered) return;
-    rendered = true;
-    var bar =
-      '<div id="hb-sysbar" style="position:sticky;top:0;z-index:99999;display:flex;align-items:center;gap:10px;padding:10px 14px;' +
-      'background:#1e3a5f;color:#fff;font-family:Estedad,Vazirmatn,Tahoma,sans-serif;direction:rtl;box-shadow:0 2px 8px rgba(0,0,0,.18);">' +
-        '<button type="button" onclick="window.__hbSysPrint&&window.__hbSysPrint()" style="cursor:pointer;border:none;border-radius:8px;padding:8px 16px;' +
-          'font:700 13px Estedad,Vazirmatn,Tahoma,sans-serif;background:#1de9b6;color:#0f172a;">چاپ و تنظیماتِ پرنتر</button>' +
-        '<button type="button" onclick="window.hbClose&&window.hbClose()" style="cursor:pointer;border:none;border-radius:8px;padding:8px 16px;' +
-          'font:700 13px Estedad,Vazirmatn,Tahoma,sans-serif;background:rgba(255,255,255,.14);color:#fff;">بستن</button>' +
-        '<span style="font-size:12px;opacity:.85;margin-right:auto;">در پنجرهٔ چاپ، پرنتر را انتخاب و برای تنظیمات (اندازهٔ لیبل، جهت…) «Preferences» را بزنید.</span>' +
-      '</div><style>@media print{#hb-sysbar{display:none !important;}}</style>';
-    var h = String(html);
-    var ib = h.search(/<body[^>]*>/i);
-    if (ib !== -1) { var m = h.match(/<body[^>]*>/i)[0]; h = h.slice(0, ib + m.length) + bar + h.slice(ib + m.length); }
-    else h = bar + h;
-    var go = '<scr' + 'ipt>setTimeout(function(){ if (window.__hbSysPrint) window.__hbSysPrint(); }, 450);</scr' + 'ipt>';
-    h = (h.search(/<\/body>/i) !== -1) ? h.replace(/<\/body>/i, go + '</body>') : (h + go);
-    document.open(); document.write(h); document.close();
+    // سندِ لیبل بدونِ document.open/write جایگزینِ محتوای همین صفحه می‌شود (head و body و ویژگی‌هایشان)
+    try {
+      var nd = new DOMParser().parseFromString(String(html), 'text/html');
+      var copyAttrs = function (from, to) {
+        var a, k;
+        for (k = to.attributes.length - 1; k >= 0; k--) to.removeAttribute(to.attributes[k].name);
+        for (k = 0; k < from.attributes.length; k++) { a = from.attributes[k]; to.setAttribute(a.name, a.value); }
+      };
+      copyAttrs(nd.documentElement, document.documentElement);
+      copyAttrs(nd.body, document.body);
+      document.head.innerHTML = nd.head.innerHTML;
+      document.body.innerHTML = nd.body.innerHTML;
+      rendered = true;
+    } catch (e) {
+      // نشد → چاپ از پیش‌نمایشِ داخلِ برنامه
+      rendered = true;
+      sysFallback();
+      return;
+    }
+    setTimeout(sysPrint, 450);
   }
 
   window.hbPrint = function () {
@@ -163,7 +202,9 @@
     // دریافتِ محتوای بل از پنجرهٔ اصلی
     T.event.listen(EV_HTML, function (ev) {
       var h = ev && (ev.payload != null ? ev.payload : ev);
-      if (typeof h === 'string' && h) render(h);
+      if (typeof h === 'string' && h) {
+        if (/<meta[^>]+name=["']?apex-sysprint/i.test(h.slice(0, 4000))) renderSystem(h); else render(h);
+      }
       else if (h && typeof h === 'object' && typeof h.html === 'string' && h.html) {
         if (h.system) renderSystem(h.html); else render(h.html);
       }
