@@ -366,6 +366,134 @@ jobs:
           fi
           echo "✓ افزونه‌های Share و Filesystem و App درست ثبت شده‌اند."
 
+      # ══════════════════════════════════════════════════════════════════════
+      #  (APEX) «دانلود / چاپ PDF» در اپلیکیشنِ اندروید — پیش‌نمایشِ چاپِ خودِ اندروید
+      #  ---------------------------------------------------------------------
+      #  WebViewِ اندروید window.print را اجرا نمی‌کند؛ این مرحله یک افزونهٔ کوچکِ
+      #  Capacitor به نامِ ApexPrint (فایلِ ApexPrintPlugin.java) کنارِ MainActivity
+      #  می‌سازد و در MainActivity ثبت می‌کند. افزونه سندِ بل/گزارش را در یک WebViewِ
+      #  جداگانه بار می‌کند و پنجرهٔ چاپِ اندروید (با گزینهٔ «ذخیره به‌صورتِ PDF») را
+      #  باز می‌کند. فقط پروژهٔ اندرویدِ همین بیلد عوض می‌شود؛ ریپو دست نمی‌خورد.
+      #  اگر MainActivity پیدا نشد، بی‌صدا رد می‌شود و برنامه همان اشتراکِ فایلِ PDF را می‌کند.
+      # ══════════════════════════════════════════════════════════════════════
+      - name: افزودنِ افزونهٔ چاپِ اندروید (ApexPrint)
+        run: |
+          set -e
+          MA=$(find android/app/src/main/java -name MainActivity.java | head -n 1)
+          if [ -z "$MA" ]; then
+            echo "::warning::MainActivity.java پیدا نشد؛ افزونهٔ چاپ اضافه نشد."; exit 0
+          fi
+          PKG=$(grep -m1 -E '^package ' "$MA" | sed -E 's/^package ([^;]+);.*/\1/')
+          DIR=$(dirname "$MA")
+          echo "package $PKG;" > "$DIR/ApexPrintPlugin.java"
+          cat >> "$DIR/ApexPrintPlugin.java" <<'JAVA'
+
+          import android.content.Context;
+          import android.print.PrintAttributes;
+          import android.print.PrintDocumentAdapter;
+          import android.print.PrintManager;
+          import android.webkit.WebResourceRequest;
+          import android.webkit.WebResourceResponse;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          import com.getcapacitor.JSObject;
+          import com.getcapacitor.Plugin;
+          import com.getcapacitor.PluginCall;
+          import com.getcapacitor.PluginMethod;
+          import com.getcapacitor.annotation.CapacitorPlugin;
+
+          /** (APEX) چاپ/ذخیرهٔ PDFِ سندِ HTML با پنجرهٔ چاپِ خودِ اندروید. */
+          @CapacitorPlugin(name = "ApexPrint")
+          public class ApexPrintPlugin extends Plugin {
+              // ارجاعِ قوی تا پایانِ کارِ چاپ (وگرنه WebView زودتر از موعد جمع می‌شود)
+              private WebView printView;
+
+              @PluginMethod
+              public void printHtml(final PluginCall call) {
+                  final String html = call.getString("html");
+                  if (html == null || html.length() == 0) { call.reject("html is empty"); return; }
+                  String n = call.getString("name", "document");
+                  if (n == null || n.trim().length() == 0) n = "document";
+                  final String jobName = n.trim();
+                  String b = call.getString("baseUrl", "");
+                  if (b == null || b.length() == 0) {
+                      try { b = getBridge().getLocalUrl() + "/"; } catch (Exception e) { b = "https://localhost/"; }
+                  }
+                  final String baseUrl = b;
+                  getActivity().runOnUiThread(new Runnable() {
+                      @Override
+                      public void run() {
+                          try {
+                              final WebView wv = new WebView(getActivity());
+                              wv.getSettings().setJavaScriptEnabled(true);
+                              wv.setWebViewClient(new WebViewClient() {
+                                  private boolean done = false;
+
+                                  @Override
+                                  public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                                      // فونت‌ها و آیکن‌های برنامه از همان سرورِ داخلیِ Capacitor
+                                      try { return getBridge().getLocalServer().shouldInterceptRequest(request); }
+                                      catch (Exception e) { return null; }
+                                  }
+
+                                  @Override
+                                  public void onPageFinished(final WebView view, String url) {
+                                      if (done) return;
+                                      done = true;
+                                      view.postDelayed(new Runnable() {
+                                          @Override
+                                          public void run() {
+                                              try {
+                                                  PrintManager pm = (PrintManager) getActivity().getSystemService(Context.PRINT_SERVICE);
+                                                  PrintDocumentAdapter adapter = view.createPrintDocumentAdapter(jobName);
+                                                  PrintAttributes attrs = new PrintAttributes.Builder()
+                                                          .setMediaSize(PrintAttributes.MediaSize.ISO_A4)
+                                                          .build();
+                                                  pm.print(jobName, adapter, attrs);
+                                                  JSObject ret = new JSObject();
+                                                  ret.put("ok", true);
+                                                  call.resolve(ret);
+                                              } catch (Exception e) {
+                                                  call.reject("print failed: " + e.getMessage());
+                                              }
+                                          }
+                                      }, 700);
+                                  }
+                              });
+                              printView = wv;
+                              wv.loadDataWithBaseURL(baseUrl, html, "text/html", "UTF-8", null);
+                          } catch (Exception e) {
+                              call.reject("print init failed: " + e.getMessage());
+                          }
+                      }
+                  });
+              }
+          }
+          JAVA
+          # ثبتِ افزونه در MainActivity (فقط اگر قبلاً ثبت نشده باشد)
+          python3 - "$MA" <<'PY'
+          import re, sys
+          p = sys.argv[1]
+          s = open(p, encoding='utf-8').read()
+          if 'ApexPrintPlugin' in s:
+              print('MainActivity: از قبل ثبت شده'); sys.exit(0)
+          if 'super.onCreate(' in s:
+              s = s.replace('super.onCreate(', 'registerPlugin(ApexPrintPlugin.class);\n        super.onCreate(', 1)
+          else:
+              body = ('\n    @Override\n    public void onCreate(android.os.Bundle savedInstanceState) {\n'
+                      '        registerPlugin(ApexPrintPlugin.class);\n'
+                      '        super.onCreate(savedInstanceState);\n    }\n')
+              m = re.search(r'class\s+MainActivity\s+extends\s+BridgeActivity\s*\{', s)
+              if not m:
+                  print('::warning::ساختارِ MainActivity شناخته نشد؛ افزونهٔ چاپ ثبت نشد.'); sys.exit(0)
+              s = s[:m.end()] + body + s[m.end():]
+          open(p, 'w', encoding='utf-8').write(s)
+          print('MainActivity: افزونهٔ ApexPrint ثبت شد')
+          PY
+          echo "— $MA —"; cat "$MA"
+          echo "— $DIR/ApexPrintPlugin.java ساخته شد —"
+
       # نام و کدِ نسخه را داخلِ گریدلِ اندروید تزریق می‌کنیم تا در «دربارهٔ برنامه» و
       # در مقایسهٔ بروزرسانی درست نمایش داده شود.
       - name: تزریقِ شمارهٔ نسخه
