@@ -14101,13 +14101,15 @@ function __hbOpenTauriPrintWindow(docHtml, title, opts) {
             }).catch(function () {});
         }
         var _wopts = _sys ? {
-            url: 'print-window.html?t=' + encodeURIComponent(tok),
+            // sys=1 → صفحهٔ واسط روی صفحه‌نمایش کاملاً نامرئی و بی‌اثر روی کلیک می‌شود (فقط چاپ دیده می‌شود)
+            url: 'print-window.html?t=' + encodeURIComponent(tok) + '&sys=1',
             title: 'چاپ' + (title ? (' — ' + title) : ''),
             width: 1,
             height: 1,
             center: true,
             resizable: false,
             decorations: false,
+            transparent: true,
             skipTaskbar: true,
             shadow: false,
             focus: true

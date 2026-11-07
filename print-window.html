@@ -82,6 +82,30 @@
   var EV_READY = 'hb-print-ready' + (tok ? ('-' + tok) : '');
   var EV_HTML  = 'hb-print-html'  + (tok ? ('-' + tok) : '');
 
+  // (APEX) پنجرهٔ واسطِ چاپِ بارکد (sys=1): ویندوز اندازهٔ کمینه‌ای به پنجره می‌دهد، پس
+  //  محتوای آن «روی صفحه‌نمایش» کاملاً نامرئی (زمینهٔ شفاف، بدونِ نوارِ پیمایش) و پنجره
+  //  نسبت به کلیک بی‌اثر می‌شود؛ هنگامِ چاپ (media print) لیبل کامل چاپ می‌شود.
+  var SYS = false;
+  try { SYS = (new URLSearchParams(location.search)).get('sys') === '1'; } catch (e) { SYS = false; }
+  function sysHideScreen() {
+    if (!SYS) return;
+    try {
+      var old = document.getElementById('hb-sys-hide'); if (old) old.parentNode.removeChild(old);
+      var st = document.createElement('style');
+      st.id = 'hb-sys-hide';
+      st.textContent = '@media screen{html,body{background:transparent!important;overflow:hidden!important;}' +
+        'html::-webkit-scrollbar,body::-webkit-scrollbar{display:none!important;}body *{visibility:hidden!important;}}';
+      (document.head || document.documentElement).appendChild(st);
+    } catch (e) {}
+  }
+  if (SYS) {
+    sysHideScreen();
+    try {
+      var _cw = (T && T.window && typeof T.window.getCurrentWindow === 'function') ? T.window.getCurrentWindow() : null;
+      if (_cw && typeof _cw.setIgnoreCursorEvents === 'function') Promise.resolve(_cw.setIgnoreCursorEvents(true)).catch(function () {});
+    } catch (e) {}
+  }
+
   function render(html) {
     if (rendered) return;
     rendered = true;
@@ -168,6 +192,7 @@
       copyAttrs(nd.body, document.body);
       document.head.innerHTML = nd.head.innerHTML;
       document.body.innerHTML = nd.body.innerHTML;
+      sysHideScreen();
       rendered = true;
     } catch (e) {
       // نشد → چاپ از پیش‌نمایشِ داخلِ برنامه
