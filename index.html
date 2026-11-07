@@ -370,7 +370,7 @@
             </li>
             <li onclick="ssbOpenSub('excel')" style="display:none;">
                 <span class="ssb-item-icon"><i class="fas fa-file-excel"></i></span>
-                <span class="ssb-item-label">اکسل / وارد کردن داده</span>
+                <span class="ssb-item-label">اکسل / وارد کردن اطلاعات</span>
                 <i class="fas fa-chevron-left ssb-arrow"></i>
             </li>
             <li onclick="ssbOpenSub('dbinit')" style="display:none;">
@@ -1977,11 +1977,13 @@
                                     <div class="bill-field">
                                         <div class="search-wrapper bill-search">
                                             <i class="fas fa-user bill-field-icon"></i>
-                                            <input type="text" class="form-control" id="qs-customer-search"
-                                                   placeholder="خریدار" autocomplete="off"
-                                                   onfocus="showAllPersonsForField(this,'qs-customer-results','qs-customer','مشتری')"
-                                                   onkeyup="searchQuickSaleCustomer(this)">
+                                            <input type="text" class="form-control apex-psn-input" id="qs-customer-search"
+                                                   placeholder="خریدار" autocomplete="off" data-apex-psn="qs-customer"
+                                                   oninput="apexPersonSearch(this, event)"
+                                                   onkeydown="apexPersonSearchKey(event, this)">
                                             <input type="hidden" id="qs-customer" required>
+                                            <button type="button" class="apex-field-add" tabindex="-1" title="ثبت شخص جدید"
+                                                    onmousedown="event.preventDefault()" onclick="apexBillAddPerson('sales')"><i class="fas fa-user-plus"></i></button>
                                             <div id="qs-customer-results" class="search-results-list"></div>
                                         </div>
                                     </div>
@@ -2476,11 +2478,13 @@
                                     <div class="bill-field">
                                         <div class="search-wrapper bill-search">
                                             <i class="fas fa-user-tie bill-field-icon"></i>
-                                            <input type="text" class="form-control" id="qp-supplier-search"
-                                                   placeholder="فروشنده" autocomplete="off"
-                                                   onfocus="showAllPersonsForField(this,'qp-supplier-results','qp-supplier','تامین کننده')"
-                                                   onkeyup="searchQuickPurchaseSupplier(this)">
+                                            <input type="text" class="form-control apex-psn-input" id="qp-supplier-search"
+                                                   placeholder="فروشنده" autocomplete="off" data-apex-psn="qp-supplier"
+                                                   oninput="apexPersonSearch(this, event)"
+                                                   onkeydown="apexPersonSearchKey(event, this)">
                                             <input type="hidden" id="qp-supplier" required>
+                                            <button type="button" class="apex-field-add" tabindex="-1" title="ثبت شخص جدید"
+                                                    onmousedown="event.preventDefault()" onclick="apexBillAddPerson('purchase')"><i class="fas fa-user-plus"></i></button>
                                             <div id="qp-supplier-results" class="search-results-list"></div>
                                         </div>
                                     </div>
@@ -2724,11 +2728,13 @@
                                     <div class="bill-field">
                                         <div class="search-wrapper bill-search">
                                             <i class="fas fa-user bill-field-icon"></i>
-                                            <input type="text" class="form-control" id="receive-from-search"
-                                                   placeholder="پرداخت کننده" autocomplete="off"
-                                                   onfocus="showAllPersonsForField(this,'receive-from-results','receive-from','مشتری')"
-                                                   onkeyup="searchReceivePerson(this)">
+                                            <input type="text" class="form-control apex-psn-input" id="receive-from-search"
+                                                   placeholder="پرداخت کننده" autocomplete="off" data-apex-psn="receive-from"
+                                                   oninput="apexPersonSearch(this, event)"
+                                                   onkeydown="apexPersonSearchKey(event, this)">
                                             <input type="hidden" id="receive-from" required>
+                                            <button type="button" class="apex-field-add" tabindex="-1" title="ثبت شخص جدید"
+                                                    onmousedown="event.preventDefault()" onclick="apexBillAddPerson('receipt')"><i class="fas fa-user-plus"></i></button>
                                             <div id="receive-from-results" class="search-results-list"></div>
                                         </div>
                                     </div>
@@ -2868,11 +2874,13 @@
                                     <div class="bill-field">
                                         <div class="search-wrapper bill-search">
                                             <i class="fas fa-user bill-field-icon"></i>
-                                            <input type="text" class="form-control" id="pay-to-search"
-                                                   placeholder="دریافت کننده" autocomplete="off"
-                                                   onfocus="showAllPersonsForField(this,'pay-to-results','pay-to','پرداخت')"
-                                                   onkeyup="searchPayPerson(this)">
+                                            <input type="text" class="form-control apex-psn-input" id="pay-to-search"
+                                                   placeholder="دریافت کننده" autocomplete="off" data-apex-psn="pay-to"
+                                                   oninput="apexPersonSearch(this, event)"
+                                                   onkeydown="apexPersonSearchKey(event, this)">
                                             <input type="hidden" id="pay-to" required>
+                                            <button type="button" class="apex-field-add" tabindex="-1" title="ثبت شخص جدید"
+                                                    onmousedown="event.preventDefault()" onclick="apexBillAddPerson('payment')"><i class="fas fa-user-plus"></i></button>
                                             <div id="pay-to-results" class="search-results-list"></div>
                                         </div>
                                     </div>

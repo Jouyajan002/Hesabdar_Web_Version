@@ -2879,6 +2879,9 @@ function showSection(sectionId) {
     } catch (_e) {}
     // ثبتِ یک‌بارهٔ هندلرهای سراسری (اعتبارسنجیِ درون‌فیلدی) — مستقل از توقفِ اجرای سطح‌بالا
     try { if (typeof _attachInlineValidation === 'function') _attachInlineValidation(); } catch (e) {}
+    // (APEX) جستجوی درجای شخص/جنس: بستنِ نتایج با کلیکِ بیرون + آیکنِ «ثبت جنس» در ردیف‌های بل
+    try { if (typeof _apexBillFieldsInstall === 'function') _apexBillFieldsInstall(); } catch (e) {}
+    try { if (typeof _apexPsnClose === 'function') _apexPsnClose(); } catch (e) {}
     // بستن و ریستِ همهٔ منوهای فلتر/مرتب‌سازی هنگام جابه‌جایی بین بخش‌ها
     try { if (typeof _resetAllFilterSortMenus === 'function') _resetAllFilterSortMenus(); } catch (e) {}
     // تازه‌سازیِ لحظه‌ایِ همهٔ انتخابگرهای ارز (اگر کاربر ارزی افزوده/حذف کرده باشد)
@@ -10034,7 +10037,12 @@ function _togglePaymentNoTrack() {
 
 // توابع مدیریت معاملات و مصارف
 function loadTransactionsList() {
-    const transactions = (db.getTransactions() || []).slice().sort(sortNewestFirst);
+    // (APEX) ترتیبِ دقیقِ زمانی: آخرین معامله در ردیفِ اول و اولین معامله در ردیفِ آخر.
+    //  مقایسهٔ رشته‌ایِ تاریخ (مثلِ «9:05 AM» در برابرِ «11:40 AM» یا AM/PM) ساعت را اشتباه
+    //  می‌چید؛ حالا تاریخ و ساعت به عددِ زمانی تبدیل و مقایسه می‌شوند (فقط ترتیبِ نمایش).
+    const transactions = (db.getTransactions() || []).slice().sort(function (a, b) {
+        return (typeof __hbRepAsc === 'function') ? __hbRepAsc(b, a) : sortNewestFirst(a, b);
+    });
     const tbody = document.querySelector('#transactions-table tbody');
     if(!tbody) return;
     tbody.innerHTML = '';
@@ -17043,9 +17051,15 @@ function deletePersonTransaction(txId, personId) {
 function addChangelog(action, type, data, description) {
     try {
         var logs = JSON.parse(localStorage.getItem('changelog') || '[]');
+        // (APEX) تاریخ و ساعتِ دقیق (قبلاً قالبِ «HH:mm» پشتیبانی نمی‌شد و فقط تاریخ ثبت می‌شد)
+        var _clNow = Date.now();
+        var _clDate = (typeof _nowJalaliDateTime === 'function') ? _nowJalaliDateTime() : '';
+        if (!_clDate) _clDate = (typeof PersianDate !== 'undefined') ? new PersianDate().format('YYYY/MM/DD') : new Date().toLocaleString('fa-IR');
         logs.push({
-            id: Date.now(),
-            date: (typeof PersianDate !== 'undefined') ? new PersianDate().format('YYYY/MM/DD HH:mm') : new Date().toLocaleString('fa-IR'),
+            id: _clNow,
+            ts: _clNow,
+            createdAt: new Date(_clNow).toISOString(),
+            date: _clDate,
             action: action,
             type: type,
             dataSnapshot: JSON.parse(JSON.stringify(data)),
@@ -23186,6 +23200,8 @@ function openPersonTxFromDetail(personId) {
 }
 // دکمهٔ برگشتِ فورم ثبت شخص: اگر از مشخصات آمده به مشخصات، وگرنه به لیست اشخاص
 function personFormGoBack() {
+    // (APEX) اگر فورم از آیکنِ «ثبت شخص جدید» داخلِ بل باز شده بود → مستقیم به همان بل
+    if (typeof _apexQuickAddCancel === 'function' && _apexQuickAddCancel('person')) return;
     if (_personDetailReturnForForm != null) {
         var id = _personDetailReturnForForm; _personDetailReturnForForm = null;
         if (typeof showPersonDetail === 'function') { showPersonDetail(id); return; }
@@ -28357,9 +28373,9 @@ function ssbLoadSubContent(key) {
         case 'excel':
             return `
             <div class="ssb-card" style="border-right:4px solid #10b981;">
-                <h4><i class="fas fa-file-excel" style="color:#10b981;"></i> ورود اجناس انبار از اکسل</h4>
+                <h4><i class="fas fa-file-excel" style="color:#10b981;"></i> ورود اجناس از اکسل</h4>
                 <p style="font-size:0.82rem;color:#64748b;line-height:1.7;margin:6px 0 10px;">
-                    ابتدا قالب اکسل را دانلود کنید، اطلاعات اجناس انبار خود را در آن وارد کنید، سپس فایل را بارگذاری نمایید. اجناس به انبار موجود <strong>اضافه</strong> می‌شوند (نه جایگزین).
+                    ابتدا قالب اکسل را دانلود کنید، اطلاعات اجناس خود را در آن وارد کنید، سپس فایل را بارگذاری نمایید. اجناس به اجناس موجود <strong>اضافه</strong> می‌شوند (نه جایگزین).
                 </p>
                 <button class="ssb-btn ssb-btn-primary" onclick="ssbDownloadProductsExcelTemplate()" style="margin-bottom:10px;width:100%;">
                     <i class="fas fa-download"></i> دانلود قالب اکسل اجناس
@@ -28367,19 +28383,19 @@ function ssbLoadSubContent(key) {
                 <label style="font-size:0.85rem;display:block;margin-bottom:6px;color:#475569;">انتخاب فایل اکسل پر شده:</label>
                 <input type="file" id="ssb-products-excel-file" accept=".xlsx,.xls,.csv" style="margin-bottom:10px;width:100%;">
                 <button class="ssb-btn ssb-btn-success" onclick="ssbImportProductsFromExcel()" style="width:100%;">
-                    <i class="fas fa-upload"></i> ورود اجناس به انبار
+                    <i class="fas fa-upload"></i> ورود به اجناس
                 </button>
             </div>
             <div class="ssb-card">
-                <h4><i class="fas fa-file-import"></i> وارد کردن داده از JSON</h4>
-                <p style="font-size:0.8rem;color:#94a3b8;margin-bottom:8px;">برای بازیابی کامل پشتیبان (همه داده‌ها) از فایل JSON.</p>
+                <h4><i class="fas fa-file-import"></i> وارد کردن اطلاعات از JSON</h4>
+                <p style="font-size:0.8rem;color:#94a3b8;margin-bottom:8px;">برای بازیابی کامل پشتیبان (همه اطلاعات) از فایل JSON.</p>
                 <input type="file" id="ssb-import-file" accept=".json" style="margin-bottom:10px;">
                 <button class="ssb-btn ssb-btn-success" onclick="ssbImportData()">
                     <i class="fas fa-upload"></i> وارد کردن
                 </button>
             </div>
             <div class="ssb-card">
-                <h4><i class="fas fa-file-export"></i> خروجی داده</h4>
+                <h4><i class="fas fa-file-export"></i> خروجی اطلاعات</h4>
                 <button class="ssb-btn ssb-btn-primary" onclick="ssbExportData()">
                     <i class="fas fa-download"></i> دانلود JSON
                 </button>
@@ -28493,7 +28509,7 @@ function ssbLoadSubContent(key) {
             <ul class="ssb-main-list" style="display:block;padding:6px 4px;">
                 <li onclick="ssbOpenSub('excel')">
                     <span class="ssb-item-icon"><i class="fas fa-file-excel"></i></span>
-                    <span class="ssb-item-label">اکسل / وارد کردن داده</span>
+                    <span class="ssb-item-label">اکسل / وارد کردن اطلاعات</span>
                     <i class="fas fa-chevron-left ssb-arrow"></i>
                 </li>
                 <li onclick="ssbOpenSub('importpersons')">
@@ -29915,7 +29931,7 @@ function ssbExportData() {
 function ssbImportData() {
     const fileInput = document.getElementById('ssb-import-file');
     if (!fileInput || !fileInput.files[0]) { ssbShowMsg('فایلی انتخاب نشده!', true); return; }
-    if (!confirm('داده‌های فعلی جایگزین می‌شوند. ادامه می‌دهید؟')) return;
+    if (!confirm('اطلاعات فعلی جایگزین می‌شوند. ادامه می‌دهید؟')) return;
     if (db.importData) {
         __hbGuardedImport(fileInput.files[0], 'ورود')
             .catch(e  => { ssbShowMsg('خطا: ' + (e.error || e.message || ''), true); });
@@ -31599,7 +31615,12 @@ function loadChangelogList() {
             tbody.innerHTML = '<tr><td colspan="6" style="text-align:center">هیچ تغییری ثبت نشده است</td></tr>';
             return;
         }
-        var sorted = logs.slice().reverse().slice(0, 300);
+        // (APEX) ترتیبِ دقیقِ تاریخ و ساعت (جدیدترین بالا) — شاملِ تغییراتِ رسیده از دستگاه‌های دیگر
+        var sorted = logs.slice().sort(function (a, b) {
+            var ka = _apexClogTs(a), kb = _apexClogTs(b);
+            if (ka !== kb) return kb - ka;
+            return (Number(b && b.id) || 0) - (Number(a && a.id) || 0);
+        }).slice(0, 300);
         var actionColors = { 'حذف': 'badge-danger', 'ویرایش': 'badge-warning', 'ثبت': 'badge-success', 'ایجاد': 'badge-success' };
         sorted.forEach(function(log) {
             var action = log.action || '-';
@@ -31619,9 +31640,10 @@ function loadChangelogList() {
                 ? '<span class="sales-card-meta-item"><b class="sales-meta-label">اطلاعات:</b><span class="sales-meta-val">' + log.description + '</span></span>'
                 : '';
 
+            var _when = _apexClogWhen(log);
             var row = document.createElement('tr');
             if (log.undone) row.style.opacity = '0.45';
-            row.dataset.date = (log.date || '').split(' ')[0];
+            row.dataset.date = (_when || '').split(' ')[0];
             row.dataset.type = log.type || '';
             row.style.cursor = 'pointer';
             row.className = 'sales-card-row ptx-row ' + _bcls;
@@ -31634,7 +31656,7 @@ function loadChangelogList() {
                         '</div>' +
                         '<div class="sales-card-meta">' +
                             '<span class="sales-card-meta-item"><b class="sales-meta-label">مرجع:</b><span class="sales-meta-val">' + refCode + '</span></span>' +
-                            '<span class="sales-card-meta-item"><b class="sales-meta-label">زمان:</b><span class="sales-meta-val">' + (log.date || '-') + '</span></span>' +
+                            '<span class="sales-card-meta-item"><b class="sales-meta-label">زمان:</b><span class="sales-meta-val">' + (_when || '-') + '</span></span>' +
                             _descMeta +
                         '</div>' +
                         '<div class="sales-card-amount">مبلغ: <span>' + _amtText + '</span></div>' +
@@ -31661,7 +31683,7 @@ function viewChangelogDetail(changeId) {
         var details = [
             'عملیات: ' + (log.action || '-'),
             'نوع: ' + (log.type || '-'),
-            'تاریخ تغییر: ' + (log.date || '-'),
+            'تاریخ تغییر: ' + ((typeof _apexClogWhen === 'function' ? _apexClogWhen(log) : log.date) || '-'),
             'شرح: ' + (log.description || '-')
         ];
         if (d.billNumber) details.push('شماره فاکتور: ' + d.billNumber);
@@ -33170,6 +33192,8 @@ function openProductInoutFromDetail(productId) {
 }
 // دکمهٔ برگشتِ فورم ثبت جنس: اگر از مشخصات آمده به مشخصات، وگرنه به لیست اجناس
 function productFormGoBack() {
+    // (APEX) اگر فورم از «ثبت جنس» داخلِ بل باز شده بود → مستقیم به همان بل
+    if (typeof _apexQuickAddCancel === 'function' && _apexQuickAddCancel('product')) return;
     if (_productDetailReturnForForm != null) {
         var id = _productDetailReturnForForm; _productDetailReturnForForm = null;
         if (typeof showProductDetail === 'function') { showProductDetail(id); return; }
@@ -34926,6 +34950,8 @@ function billRegisterProduct(isPurchase) {
     _productPickerReturnSection = isPurchase ? 'purchase-form' : 'sales-form';
     // تا ناوبری به فورمِ ثبت جنس، حالتِ picker را پاک نکند (مثلِ ساختِ جنس از داخلِ انتخابگر)
     _activePickerState = { sectionId: 'products-list', returnSectionId: _productPickerReturnSection };
+    // (APEX) «برگشت» بدونِ ثبت → مستقیم به همین بل
+    _apexQuickAdd = { kind: 'product', section: _productPickerReturnSection };
     if (typeof showProductForm === 'function') showProductForm();
 }
 if (typeof window !== 'undefined') window.billRegisterProduct = billRegisterProduct;
@@ -37771,7 +37797,7 @@ function ssbDownloadProductsExcelTemplate() {
             ['۳- اعداد را به انگلیسی یا فارسی وارد کنید — هر دو پشتیبانی می‌شود.'],
             ['۴- اگر کد بارکد نداشتید، خالی بگذارید.'],
             ['۵- اگر جنس همنام در انبار موجود باشد، موجودی به آن اضافه می‌شود (به‌جای ایجاد دوبل).'],
-            ['۶- بعد از پر کردن، فایل را ذخیره کنید و از بخش «اکسل/وارد کردن داده» بارگذاری کنید.'],
+            ['۶- بعد از پر کردن، فایل را ذخیره کنید و از بخش «اکسل/وارد کردن اطلاعات» بارگذاری کنید.'],
             [''],
             ['ستون‌های اجباری: نام جنس، واحد شمارش'],
             ['ستون‌های اختیاری: بقیه ستون‌ها — اگر مقدار نداشتید خالی بگذارید.']
@@ -47433,4 +47459,392 @@ function _ssbToolsHtml() {
         '<li onclick="ssbOpenSub(\'barcode\')"><span class="ssb-item-icon"><i class="fas fa-barcode"></i></span>' +
         '<span class="ssb-item-label">طراحی بارکد</span><i class="fas fa-chevron-left ssb-arrow"></i></li>' +
     '</ul>';
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) انتخابِ شخص در فورم‌های فروش/خرید/دریافت/پرداختِ فوری — جستجوی درجا
+//  ──────────────────────────────────────────────────────────────────────────────
+//  رفتار عیناً مثلِ «جستجوی جنس» در بل: با تایپ، حداکثر ۵ شخصِ نزدیک (نام یا شماره)
+//  در یک فهرستِ شناور زیرِ فیلد نشان داده می‌شود (اول آن‌هایی که با همان حروف شروع
+//  می‌شوند)، بخشِ مطابق پررنگ می‌شود، کلیک روی ردیف یا Enter/Tab شخص را انتخاب
+//  می‌کند و پیشنهادِ درجا (تکمیلِ خودکارِ نام) هم مثلِ جستجوی جنس است.
+//  فقط شیوهٔ انتخاب عوض شده؛ مقدارهای ذخیره‌شده همان قبلی است (نام در فیلد،
+//  شناسهٔ شخص در فیلدِ پنهان) و هیچ منطقِ ذخیره/محاسبه‌ای تغییر نکرده است.
+// ════════════════════════════════════════════════════════════════════════════════
+function _apexPsnDD() {
+    var dd = document.getElementById('_apex_psn_dd');
+    if (!dd) {
+        dd = document.createElement('div');
+        dd.id = '_apex_psn_dd';
+        dd.className = 'apex-psn-dd';
+        dd.style.display = 'none';
+        document.body.appendChild(dd);
+    }
+    return dd;
+}
+function _apexPsnClose() {
+    var dd = document.getElementById('_apex_psn_dd');
+    if (!dd) return;
+    dd.style.display = 'none';
+    dd.innerHTML = '';
+    dd._input = null;
+    dd._idx = -1;
+    if (dd._scrollHandler) { window.removeEventListener('scroll', dd._scrollHandler, true); dd._scrollHandler = null; }
+}
+function _apexPsnEsc(s) {
+    return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function _apexPsnPlace(dd, input) {
+    var r = input.getBoundingClientRect();
+    var wrap = input.closest('.bill-field') || input;
+    var wr = wrap.getBoundingClientRect();
+    var below = window.innerHeight - wr.bottom - 6, above = wr.top - 6, maxH = 240;
+    // در صفحهٔ باریکِ موبایل فیلد کم‌عرض است → فهرست دست‌کم ~۲۶۰px (از لبهٔ راستِ فیلد، درونِ صفحه)
+    var w = Math.max(wr.width, Math.min(260, window.innerWidth - 16));
+    var left = Math.max(8, Math.min(wr.right - w, window.innerWidth - 8 - w));
+    dd.style.left = left + 'px';
+    dd.style.width = w + 'px';
+    if (below >= 120 || below >= above) {
+        dd.style.top = (wr.bottom + 2) + 'px'; dd.style.bottom = 'auto';
+        dd.style.maxHeight = Math.min(maxH, Math.max(below, 80)) + 'px';
+    } else {
+        dd.style.top = 'auto'; dd.style.bottom = (window.innerHeight - wr.top + 2) + 'px';
+        dd.style.maxHeight = Math.min(maxH, Math.max(above, 80)) + 'px';
+    }
+    void r;
+}
+function _apexPsnHidden(input) {
+    var id = input && input.getAttribute('data-apex-psn');
+    return id ? document.getElementById(id) : null;
+}
+function _apexPsnMatches(q) {
+    var persons = (typeof db !== 'undefined' && db.getPersons) ? (db.getPersons() || []) : [];
+    var lq = q.toLowerCase();
+    var list = persons.filter(function (p) {
+        if (!p) return false;
+        var n = String(p.name || '').toLowerCase();
+        var ph = String(p.phone || '');
+        return n.indexOf(lq) !== -1 || (ph && ph.indexOf(q) !== -1);
+    });
+    list.sort(function (a, b) {
+        var an = String(a.name || '').toLowerCase(), bn = String(b.name || '').toLowerCase();
+        var ap = an.indexOf(lq) === 0 ? 0 : 1, bp = bn.indexOf(lq) === 0 ? 0 : 1;
+        if (ap !== bp) return ap - bp;
+        return an.localeCompare(bn);
+    });
+    return list;
+}
+function apexPersonSearch(input, ev) {
+    if (!input) return;
+    var hidden = _apexPsnHidden(input);
+    var typed = input.value || '';
+    var q = typed.trim();
+    // هر تغییری در متن یعنی انتخابِ قبلی دیگر معتبر نیست (مثلِ جستجوی جنس)
+    if (hidden) hidden.value = '';
+    input.dataset.matchId = '';
+    input.dataset.matchName = '';
+    if (!q) { _apexPsnClose(); return; }
+
+    var list = _apexPsnMatches(q);
+    var dd = _apexPsnDD();
+    if (!list.length) { _apexPsnClose(); }
+    else {
+        var lq = q.toLowerCase(), html = '';
+        list.slice(0, 5).forEach(function (p) {
+            var name = String(p.name || ''), i = name.toLowerCase().indexOf(lq), shown;
+            shown = (i !== -1)
+                ? _apexPsnEsc(name.substring(0, i)) + '<strong>' + _apexPsnEsc(name.substring(i, i + q.length)) + '</strong>' + _apexPsnEsc(name.substring(i + q.length))
+                : _apexPsnEsc(name);
+            html += '<div class="apex-psn-item" data-pid="' + _apexPsnEsc(p.id) + '" onmousedown="event.preventDefault();_apexPsnPick(this.getAttribute(\'data-pid\'))">' +
+                        '<span class="apex-psn-name">' + shown + '</span>' +
+                        (p.category ? '<span class="apex-psn-cat">' + _apexPsnEsc(p.category) + '</span>' : '') +
+                        (p.phone ? '<span class="apex-psn-phone">' + _apexPsnEsc(p.phone) + '</span>' : '') +
+                    '</div>';
+        });
+        dd.innerHTML = html;
+        dd._input = input;
+        dd._idx = -1;
+        _apexPsnPlace(dd, input);
+        dd.style.display = 'block';
+        if (!dd._scrollHandler) {
+            var raf = null;
+            dd._scrollHandler = function () {
+                if (raf) return;
+                raf = requestAnimationFrame(function () {
+                    raf = null;
+                    if (dd.style.display === 'none' || !dd._input) return;
+                    _apexPsnPlace(dd, dd._input);
+                });
+            };
+            window.addEventListener('scroll', dd._scrollHandler, true);
+        }
+    }
+
+    // پیشنهادِ درجا (تکمیلِ نام) — فقط هنگامِ نوشتن، نه پاک‌کردن، و نه وسطِ ترکیبِ حروفِ کیبوردِ موبایل
+    var isDel = !!(ev && ev.inputType && /^delete/i.test(ev.inputType));
+    var composing = !!(ev && ev.isComposing);
+    var coarse = false;
+    try { coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); } catch (e) {}
+    if (isDel || composing || coarse) return;
+    var best = null, lq2 = q.toLowerCase();
+    for (var k = 0; k < list.length; k++) {
+        if (String(list[k].name || '').toLowerCase().indexOf(lq2) === 0) { best = list[k]; break; }
+    }
+    if (!best) return;
+    var full = String(best.name || '');
+    if (full.toLowerCase().indexOf(typed.toLowerCase()) !== 0) return;
+    input.dataset.matchId = String(best.id);
+    input.dataset.matchName = full;
+    if (full.length > typed.length) {
+        input.value = typed + full.substring(typed.length);
+        try { input.setSelectionRange(typed.length, full.length); } catch (e) {}
+    }
+}
+function _apexPsnPick(pid, input) {
+    var dd = document.getElementById('_apex_psn_dd');
+    input = input || (dd && dd._input);
+    if (!input) return;
+    var persons = (typeof db !== 'undefined' && db.getPersons) ? (db.getPersons() || []) : [];
+    var p = null;
+    for (var i = 0; i < persons.length; i++) { if (persons[i] && String(persons[i].id) === String(pid)) { p = persons[i]; break; } }
+    if (!p) return;
+    input.value = p.name || '';
+    var hidden = _apexPsnHidden(input);
+    if (hidden) hidden.value = p.id;
+    input.dataset.matchId = '';
+    input.dataset.matchName = '';
+    _apexPsnClose();
+}
+function apexPersonSearchKey(ev, input) {
+    var dd = document.getElementById('_apex_psn_dd');
+    var open = !!(dd && dd.style.display !== 'none' && dd._input === input);
+    var items = open ? dd.querySelectorAll('.apex-psn-item') : [];
+    var k = ev.key;
+    if (k === 'ArrowDown' || k === 'ArrowUp') {
+        if (!items.length) return;
+        ev.preventDefault();
+        var n = items.length, idx = (typeof dd._idx === 'number') ? dd._idx : -1;
+        idx = (k === 'ArrowDown') ? (idx + 1) % n : (idx <= 0 ? n - 1 : idx - 1);
+        dd._idx = idx;
+        Array.prototype.forEach.call(items, function (el, j) { el.classList.toggle('is-active', j === idx); });
+        try { items[idx].scrollIntoView({ block: 'nearest' }); } catch (e) {}
+        return;
+    }
+    if (k === 'Escape') { if (open) { ev.preventDefault(); _apexPsnClose(); } return; }
+    if (k === 'Enter' || k === 'Tab') {
+        if (open && dd._idx >= 0 && items[dd._idx]) {
+            ev.preventDefault();
+            _apexPsnPick(items[dd._idx].getAttribute('data-pid'), input);
+            return;
+        }
+        var mid = input.dataset.matchId;
+        if (!mid) {
+            var q = (input.value || '').trim();
+            if (!q) return;
+            var list = _apexPsnMatches(q);
+            var lq = q.toLowerCase(), exact = null;
+            for (var i = 0; i < list.length; i++) { if (String(list[i].name || '').toLowerCase() === lq) { exact = list[i]; break; } }
+            var best = exact || list[0];
+            if (!best) return;
+            mid = best.id;
+        }
+        ev.preventDefault();
+        _apexPsnPick(mid, input);
+    }
+}
+
+// ── بستنِ فهرستِ نتایجِ جستجو (جنس و شخص) با کلیک در هر جای دیگرِ صفحه ─────────────
+//  نتایج بسته می‌شوند و متنِ فیلد دست نمی‌خورد؛ کاربر می‌تواند دوباره بیاید و جستجو کند.
+function _apexSearchOutsideInstall() {
+    if (typeof document === 'undefined' || document.__apexSearchOutside) return;
+    document.__apexSearchOutside = true;
+    document.addEventListener('click', function (e) {
+        var t = e.target;
+        if (!t || !t.closest) return;
+        // شخص
+        var pdd = document.getElementById('_apex_psn_dd');
+        if (pdd && pdd.style.display !== 'none') {
+            var inP = t.closest('#_apex_psn_dd') || (pdd._input && (t === pdd._input));
+            if (!inP) _apexPsnClose();
+        }
+        // جنس (فهرستِ شناورِ سراسری + فهرستِ داخلِ ردیف)
+        var bdd = document.getElementById('_psr_body_dd');
+        if (bdd && bdd.style.display !== 'none') {
+            var aw = bdd._activeWrapper, ai = bdd._activeInput;
+            var inB = t.closest('#_psr_body_dd') || (ai && t === ai) || (aw && aw.contains && aw.contains(t));
+            if (!inB) {
+                bdd.style.display = 'none';
+                bdd.innerHTML = '';
+                if (bdd._scrollHandler) { window.removeEventListener('scroll', bdd._scrollHandler, true); bdd._scrollHandler = null; }
+            }
+        }
+        var own = t.closest('.product-search-wrapper');
+        var boxes = document.querySelectorAll('.product-search-wrapper .product-search-results');
+        for (var i = 0; i < boxes.length; i++) {
+            var b = boxes[i];
+            if (b.style.display === 'none' || !b.innerHTML) continue;
+            if (own && own.contains(b)) continue;
+            b.style.display = 'none';
+            b.innerHTML = '';
+        }
+    }, true);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) آیکنِ «ثبت شخص جدید» / «ثبت جنس جدید» داخلِ فیلدها
+//  ──────────────────────────────────────────────────────────────────────────────
+//  همان مسیرِ موجودِ «ثبت شخص/جنس جدید از داخلِ انتخابگر» استفاده می‌شود:
+//  پس از ثبت، شخص در همان فیلد انتخاب و جنس به همان بل افزوده می‌شود و کاربر به
+//  همان بل برمی‌گردد. اگر بدونِ ثبت «برگشت» بزند، مستقیم به همان بل برمی‌گردد.
+//  ثبتِ شخص/جنس از خودِ بخشِ اشخاص/اجناس مثلِ قبل به لیستِ همان بخش می‌رود.
+// ════════════════════════════════════════════════════════════════════════════════
+var _apexQuickAdd = null;   // { kind: 'person'|'product', section: '...' }
+// (تابع است، نه متغیر: کدهای سطحِ بالای انتهای فایل اجرا نمی‌شوند؛ فقط تعریفِ توابع در دسترس است)
+function _apexPsnForms() {
+    return {
+        sales:    { input: 'qs-customer-search',  hidden: 'qs-customer',  section: 'sales-form' },
+        purchase: { input: 'qp-supplier-search',  hidden: 'qp-supplier',  section: 'purchase-form' },
+        receipt:  { input: 'receive-from-search', hidden: 'receive-from', section: 'receipt-form' },
+        payment:  { input: 'pay-to-search',       hidden: 'pay-to',       section: 'payment-form' }
+    };
+}
+function apexBillAddPerson(kind) {
+    var f = _apexPsnForms()[kind];
+    if (!f) return;
+    var inputEl = document.getElementById(f.input);
+    var hiddenEl = document.getElementById(f.hidden);
+    _apexPsnClose();
+    _personPickerReturnSection = f.section;
+    _personPickerCallback = function (person) {
+        if (inputEl) inputEl.value = person.name || '';
+        if (hiddenEl) hiddenEl.value = person.id;
+    };
+    _personPickerCategory = null;
+    // تا رفتن به فورمِ ثبتِ شخص، حالتِ انتخاب پاک نشود (مثلِ ثبتِ شخص از داخلِ انتخابگر)
+    _activePickerState = { sectionId: 'persons-list', returnSectionId: f.section };
+    _apexQuickAdd = { kind: 'person', section: f.section };
+    if (typeof showPersonForm === 'function') showPersonForm();
+}
+function apexBillAddProduct(btn) {
+    var wrapper = btn && btn.closest ? btn.closest('.product-search-wrapper') : null;
+    if (!wrapper) return;
+    var isPurchase = !!wrapper.closest('#purchase-items-body');
+    var inputEl = wrapper.querySelector('.product-search-input');
+    try {
+        var bdd = document.getElementById('_psr_body_dd');
+        if (bdd) { bdd.style.display = 'none'; bdd.innerHTML = ''; }
+    } catch (e) {}
+    _productPickerInput = inputEl || wrapper;
+    _productPickerIsPurchase = isPurchase;
+    _productPickerReturnSection = isPurchase ? 'purchase-form' : 'sales-form';
+    _activePickerState = { sectionId: 'products-list', returnSectionId: _productPickerReturnSection };
+    _apexQuickAdd = { kind: 'product', section: _productPickerReturnSection };
+    if (typeof showProductForm === 'function') showProductForm();
+}
+// «برگشت» از فورمِ ثبتِ شخص/جنسی که از داخلِ بل باز شده → مستقیم به همان بل
+function _apexQuickAddCancel(kind) {
+    var q = _apexQuickAdd;
+    if (!q || q.kind !== kind) return false;
+    var alive = (kind === 'person')
+        ? (typeof _personPickerCallback === 'function' && _personPickerReturnSection === q.section)
+        : (_productPickerInput != null && _productPickerReturnSection === q.section);
+    _apexQuickAdd = null;
+    if (!alive) return false;
+    _cancelPickerAndReturn(q.section);
+    return true;
+}
+// آیکنِ «ثبت جنس» در ردیف‌های خالیِ جدولِ اجناسِ بلِ فروش/خرید
+function _apexEnsureProductAddBtn(wrapper) {
+    if (!wrapper) return;
+    var inBill = wrapper.closest('#sales-items-body') || wrapper.closest('#purchase-items-body');
+    var btn = wrapper.querySelector('.apex-field-add');
+    var has = false;
+    if (inBill) {
+        var hid = wrapper.querySelector('input[type="hidden"]');
+        var row = wrapper.closest('tr');
+        has = !!((hid && String(hid.value || '').trim()) || (row && row.dataset && row.dataset.serviceId));
+    }
+    if (!inBill || has) { if (btn) btn.remove(); return; }
+    if (btn) return;
+    btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'apex-field-add';
+    btn.tabIndex = -1;
+    btn.title = 'ثبت جنس جدید';
+    btn.innerHTML = '<i class="fas fa-cart-plus"></i>';
+    btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    btn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); apexBillAddProduct(btn); });
+    wrapper.appendChild(btn);
+}
+function _apexRefreshProductAddBtns() {
+    ['sales-items-body', 'purchase-items-body'].forEach(function (id) {
+        var tb = document.getElementById(id);
+        if (!tb) return;
+        Array.prototype.forEach.call(tb.querySelectorAll('.product-search-wrapper'), _apexEnsureProductAddBtn);
+    });
+}
+function _apexBillFieldsInstall() {
+    _apexSearchOutsideInstall();
+    _apexRefreshProductAddBtns();
+    if (typeof document === 'undefined' || document.__apexBillFieldsObs || typeof MutationObserver === 'undefined') return;
+    var ok = false;
+    ['sales-items-body', 'purchase-items-body'].forEach(function (id) {
+        var tb = document.getElementById(id);
+        if (!tb) return;
+        ok = true;
+        new MutationObserver(function () {
+            clearTimeout(tb.__apexAddT);
+            tb.__apexAddT = setTimeout(_apexRefreshProductAddBtns, 30);
+        }).observe(tb, { childList: true, subtree: true });
+    });
+    if (!ok) return;
+    document.__apexBillFieldsObs = true;
+    // انتخاب/پاک‌کردنِ جنس در همان ردیف → آیکن هم‌سان شود
+    document.addEventListener('input', function (e) {
+        var w = e.target && e.target.closest ? e.target.closest('.product-search-wrapper') : null;
+        if (w) setTimeout(function () { _apexEnsureProductAddBtn(w); }, 0);
+    }, true);
+}
+if (typeof window !== 'undefined') {
+    window.apexPersonSearch = apexPersonSearch;
+    window.apexPersonSearchKey = apexPersonSearchKey;
+    window._apexPsnPick = _apexPsnPick;
+    window.apexBillAddPerson = apexBillAddPerson;
+    window.apexBillAddProduct = apexBillAddProduct;
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) «آخرین تغییرات»: زمانِ دقیقِ هر ردیف (تاریخ + ساعت) و ترتیبِ درست
+//  ردیف‌های قدیمی که فقط تاریخ داشتند (قالبِ «HH:mm» ثبت نمی‌شد)، ساعتِ واقعی را از
+//  زمانِ ثبتِ خودِ ردیف (شناسهٔ زمانی) می‌گیرند. فقط نمایش و ترتیب؛ محتوا عوض نمی‌شود.
+// ════════════════════════════════════════════════════════════════════════════════
+function _apexClogTs(log) {
+    if (!log) return 0;
+    var t = Number(log.ts);
+    if (t > 1e12 && t < 1e14) return t;
+    if (log.createdAt) { var c = Date.parse(log.createdAt); if (!isNaN(c)) return c; }
+    var id = Number(log.id);
+    if (id > 1e12 && id < 1e14) return id;
+    return 0;
+}
+function _apexFmtJalaliTs(ms) {
+    try {
+        var n = new Date(ms);
+        var fake = new Date(n.getTime() + (270 + n.getTimezoneOffset()) * 60 * 1000);   // ساعتِ افغانستان
+        var d = (typeof PersianDate !== 'undefined') ? new PersianDate(fake).format('YYYY/MM/DD') : '';
+        if (!d) return '';
+        var h24 = fake.getHours(), ap = h24 >= 12 ? 'PM' : 'AM', h12 = h24 % 12; if (h12 === 0) h12 = 12;
+        var mm = fake.getMinutes(), ss = fake.getSeconds();
+        return d + ' ' + h12 + ':' + (mm < 10 ? '0' : '') + mm + ':' + (ss < 10 ? '0' : '') + ss + ' ' + ap;
+    } catch (e) { return ''; }
+}
+function _apexClogWhen(log) {
+    if (!log) return '';
+    var d = String(log.date || '').trim();
+    var hasTime = d && /\d{1,2}:\d{2}/.test(d) && d.indexOf('HH') === -1;
+    if (hasTime) return d;
+    var ms = _apexClogTs(log);
+    var f = ms ? _apexFmtJalaliTs(ms) : '';
+    if (f) return f;
+    return d.replace(/\s*HH:mm\s*$/, '');
 }

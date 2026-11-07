@@ -202,6 +202,102 @@
         return data;
     }
 
+    // ── (APEX) «آخرین تغییرات» (changelog) میانِ دستگاه‌ها ─────────────────────────
+    //  هر ردیفِ تاریخچه یک رکوردِ جدا در همان جدولِ store_settings است (record_id =
+    //  setting:changelog:<id>)، نه کلِ فهرست در یک رکورد؛ پس ردیف‌های دو دستگاه هرگز
+    //  روی هم بازنویسی نمی‌شوند و فقط ردیفِ تازه/تغییرکرده (مثلاً «برگشت داده شد») بالا
+    //  می‌رود. تصاویرِ data: از نسخهٔ ابری حذف می‌شوند و اگر عکسِ پیش از تغییرِ یک ردیف
+    //  خیلی بزرگ بود، فقط خودِ ردیف (بدونِ آن عکس) سینک می‌شود. جدولِ تازه‌ای لازم نیست.
+    var CL_KEY = 'changelog', CL_PREFIX = 'changelog:', CL_MAX_BYTES = 60000, CL_BATCH = 20, CL_CAP = 500;
+    function clIsKey(k) { return typeof k === 'string' && k.indexOf(CL_PREFIX) === 0; }
+    // هشِ مستقل از ترتیبِ کلیدها (پایگاه‌داده ترتیبِ کلیدهای JSON را عوض می‌کند؛ بدونِ این،
+    // دو دستگاه یک ردیفِ یکسان را «تغییرکرده» می‌دیدند و بی‌پایان دوباره می‌فرستادند)
+    function clStable(v) {
+        if (v === null || typeof v !== 'object') return JSON.stringify(v);
+        if (Array.isArray(v)) return '[' + v.map(function (x) { return x === undefined ? 'null' : clStable(x); }).join(',') + ']';
+        var ks = Object.keys(v).filter(function (k) { return v[k] !== undefined; }).sort();
+        return '{' + ks.map(function (k) { return JSON.stringify(k) + ':' + clStable(v[k]); }).join(',') + '}';
+    }
+    function clHash(data) { try { return hashStr(clStable(data)); } catch (e) { return '0'; } }
+    function clTs(e) {
+        if (!e) return 0;
+        var t = Number(e.ts); if (t > 1e12 && t < 1e14) return t;
+        if (e.createdAt) { var c = Date.parse(e.createdAt); if (!isNaN(c)) return c; }
+        var id = Number(e.id); return (id > 1e12 && id < 1e14) ? id : 0;
+    }
+    function clSyncData(e) {
+        var k = CL_PREFIX + e.id, v;
+        try { v = JSON.parse(JSON.stringify(e, function (key, val) { return isDataUrl(val) ? undefined : val; })); } catch (x) { return null; }
+        var data = { key: k, value: v };
+        var len = 0; try { len = JSON.stringify(data).length; } catch (x) { return null; }
+        if (len > CL_MAX_BYTES) {
+            var v2 = {}, f;
+            for (f in v) { if (Object.prototype.hasOwnProperty.call(v, f) && f !== 'dataSnapshot') v2[f] = v[f]; }
+            v2.snapshotOmitted = true;
+            data = { key: k, value: v2 };
+        }
+        return data;
+    }
+    function detectChangelogChanges() {
+        var raw = LS_get(CL_KEY);
+        if (raw == null) return null;                 // کلید نیست (مثلاً پاک‌سازیِ محلی) → هیچ حذفی به ابر نرود
+        var list; try { list = JSON.parse(raw); } catch (e) { return null; }
+        if (!Array.isArray(list)) return null;
+        var snap = snapRead();
+        var prev = snap[STORE_SETTINGS_TABLE] || {};
+        var rows = [], metaByRid = {}, present = {};
+        list.forEach(function (e) {
+            if (!e || e.id == null) return;
+            var k = CL_PREFIX + e.id;
+            present[k] = 1;
+            var data = clSyncData(e); if (!data) return;
+            var h = clHash(data), p = prev[k];
+            if (p && !p.deleted && p.h === h) return;
+            var rid = (p && p.rid) ? p.rid : ('setting:' + k);
+            rows.push({ workspace_id: workspaceId, record_id: rid, data: data, deleted_at: null, device_key: shortDevice() });
+            metaByRid[rid] = { id: k, h: h, deleted: false };
+        });
+        // ردیفی که روی این دستگاه حذف شد (یا از سقفِ ۵۰۰ بیرون رفت) روی دستگاه‌های دیگر هم برود
+        Object.keys(prev).forEach(function (k) {
+            if (!clIsKey(k) || present[k]) return;
+            if (prev[k] && prev[k].deleted) return;
+            var rid = (prev[k] && prev[k].rid) ? prev[k].rid : ('setting:' + k);
+            rows.push({ workspace_id: workspaceId, record_id: rid, data: {}, deleted_at: nowIso(), device_key: shortDevice() });
+            metaByRid[rid] = { id: k, h: '', deleted: true };
+        });
+        if (!rows.length) return null;
+        return { table: STORE_SETTINGS_TABLE, key: '__changelog__', rows: rows, metaByRid: metaByRid, batch: CL_BATCH };
+    }
+    // ادغامِ ردیف‌های دریافتی در فهرستِ محلی (بر اساسِ id؛ بدونِ دوباره‌کاری)
+    function clMergeIncoming(up, del) {
+        var arr = readArray(CL_KEY), byId = {};
+        arr.forEach(function (e) { if (e && e.id != null) byId[String(e.id)] = e; });
+        Object.keys(del).forEach(function (id) { delete byId[id]; });
+        Object.keys(up).forEach(function (id) {
+            var v = up[id];
+            if (!v || typeof v !== 'object') return;
+            var loc = byId[id];
+            if (loc && loc.dataSnapshot) {
+                // عکسِ کاملِ محلیِ پیش از تغییر (با تصاویر) حفظ شود؛ بقیهٔ فیلدها از نسخهٔ دریافتی
+                var m = {}, f;
+                for (f in v) { if (Object.prototype.hasOwnProperty.call(v, f) && f !== 'dataSnapshot' && f !== 'snapshotOmitted') m[f] = v[f]; }
+                m.dataSnapshot = loc.dataSnapshot;
+                v = m;
+            }
+            byId[id] = v;
+        });
+        var out = Object.keys(byId).map(function (k) { return byId[k]; });
+        out.sort(function (a, b) { return (clTs(a) - clTs(b)) || ((Number(a.id) || 0) - (Number(b.id) || 0)); });
+        if (out.length > CL_CAP) out = out.slice(out.length - CL_CAP);
+        writeArray(CL_KEY, out);
+        try {
+            var sec = document.getElementById('changelog-list');
+            if (sec && sec.classList.contains('active') && typeof window.loadChangelogList === 'function') {
+                setTimeout(function () { try { window.loadChangelogList(); } catch (e) {} }, 0);
+            }
+        } catch (e) {}
+    }
+
     // هشِ سبک و پایدار برای تشخیصِ تغییرِ محتوای یک رکورد
     function hashStr(s) {
         var h = 5381, i = s.length;
@@ -615,6 +711,7 @@
         //  در snapshot هست ولی دیگر در localStorage نیست، به‌صورتِ tombstone بالا
         //  می‌رود تا روی همهٔ دستگاه‌های همان حساب هم حذف شود.
         Object.keys(prev).forEach(function (k) {
+            if (clIsKey(k)) return;                              // ردیف‌های تاریخچه جدا بررسی می‌شوند
             if (LS_get(k) != null) return;                       // هنوز هست
             if (prev[k] && prev[k].deleted) return;              // قبلاً tombstone شده
             var rid = (prev[k] && prev[k].rid) ? prev[k].rid : ('setting:' + k);
@@ -831,6 +928,10 @@
                     keys.forEach(function (k) {
                         if (!TABLE_BY_KEY[k] && snap[STORE_SETTINGS_TABLE][k]) delete snap[STORE_SETTINGS_TABLE][k];
                     });
+                    // ردیف‌های «آخرین تغییرات» هم (اگر خودِ فهرست پاک شده باشد) فقط محلی پاک شوند
+                    if (keys.indexOf(CL_KEY) !== -1) {
+                        Object.keys(snap[STORE_SETTINGS_TABLE]).forEach(function (k) { if (clIsKey(k)) delete snap[STORE_SETTINGS_TABLE][k]; });
+                    }
                 }
                 snapWrite(snap);
                 // ۴) outbox/pending را برای ایمنی خالی کن (در مسیرِ push استفاده نمی‌شود ولی محضِ احتیاط).
@@ -856,6 +957,8 @@
         var changeSet = detectChanges();
         var settingsChange = detectSettingsChanges();
         if (settingsChange) changeSet.push(settingsChange);
+        var changelogChange = detectChangelogChanges();
+        if (changelogChange) changeSet.push(changelogChange);
         if (!changeSet.length) return Promise.resolve();
         return ensureToken().then(function () {
             var chain = Promise.resolve();
@@ -865,7 +968,7 @@
             changeSet.forEach(function (ch) {
                 chain = chain.then(function () {
                     // هر جدول جدا؛ خطای یک جدول بقیه را متوقف نمی‌کند.
-                    return uploadInBatches(ch.table, ch.rows, BATCH_UPLOAD).then(function (serverRows) {
+                    return uploadInBatches(ch.table, ch.rows, ch.batch || BATCH_UPLOAD).then(function (serverRows) {
                         // snapshot را از مقادیرِ «سرور» (updated_at/revision) می‌سازیم، نه حدسِ کلاینت.
                         snap[ch.table] = snap[ch.table] || {};
                         (serverRows || []).forEach(function (sr) {
@@ -1089,17 +1192,32 @@
     function applySettingsIncoming(recs, snap, myDev) {
         snap[STORE_SETTINGS_TABLE] = snap[STORE_SETTINGS_TABLE] || {};
         var applied = 0;
+        var clUp = {}, clDel = {}, clAny = false;
         recs.forEach(function (r) {
             var k = (r.data && r.data.key) || stripDevice(r.record_id);
 
             // echo: تغییری که خودِ این دستگاه فرستاده — فقط snapshot را هم‌تراز کن.
             if (r.device_key === myDev) {
+                if (clIsKey(k)) {   // (APEX) ردیفِ تاریخچه: همان هشِ مستقل از ترتیب
+                    snap[STORE_SETTINGS_TABLE][k] = { rid: r.record_id, h: (r.deleted_at ? '' : clHash(r.data)), rev: r.revision, u: r.updated_at, deleted: !!r.deleted_at };
+                    return;
+                }
                 snap[STORE_SETTINGS_TABLE][k] = { rid: r.record_id, h: recHash(r.data), rev: r.revision, u: r.updated_at };
                 return;
             }
             // حلِ تعارض: نسخهٔ دریافتی وقتی برنده است که از آخرین نسخهٔ شناخته‌شده جدیدتر باشد.
             var known = snap[STORE_SETTINGS_TABLE][k];
             if (known && known.u && r.updated_at <= known.u) return;
+
+            // (APEX) ردیفِ «آخرین تغییرات» → در فهرستِ محلیِ changelog ادغام می‌شود
+            if (clIsKey(k)) {
+                var cid = k.slice(CL_PREFIX.length);
+                if (r.deleted_at) { clDel[cid] = 1; delete clUp[cid]; }
+                else if (r.data && r.data.value) { clUp[cid] = r.data.value; delete clDel[cid]; }
+                clAny = true; applied++;
+                snap[STORE_SETTINGS_TABLE][k] = { rid: r.record_id, h: (r.deleted_at ? '' : clHash(r.data)), rev: r.revision, u: r.updated_at, deleted: !!r.deleted_at };
+                return;
+            }
 
             if (!r.deleted_at && r.data && k) {
                 var incomingVal = r.data.value;
@@ -1128,6 +1246,7 @@
             }
             snap[STORE_SETTINGS_TABLE][k] = { rid: r.record_id, h: recHash(r.data), rev: r.revision, u: r.updated_at, deleted: !!r.deleted_at };
         });
+        if (clAny) { try { clMergeIncoming(clUp, clDel); } catch (e) { warn('ادغامِ «آخرین تغییرات» ناموفق:', e && e.message); } }
         return applied;
     }
 
