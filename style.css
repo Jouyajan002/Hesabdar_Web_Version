@@ -10962,3 +10962,19 @@ body.dark-mode .apex-field-add:hover, body.dark-mode .apex-field-add:focus-visib
 body.dark-mode .apex-psn-dd { background: #1e293b; box-shadow: 0 6px 20px rgba(0, 0, 0, .45); }
 body.dark-mode .apex-psn-item { color: #e2e8f0; border-bottom-color: #334155; }
 body.dark-mode .apex-psn-item:hover, body.dark-mode .apex-psn-item.is-active { background: #273449; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   (APEX) امور مالی › مصارف و کارمندان: منوی سه‌نقطه (ویرایش/حذف) کامل دیده شود
+   علت: «رندرِ تنبلِ ردیف‌ها» (content-visibility:auto) رسمِ هر ردیف را به کادرِ خودش
+   محدود می‌کند و بزرگ‌نماییِ ردیف هنگامِ hover (transform) هم همین اثر را دارد؛ پس منوی
+   بازشده بریده/پنهان می‌شد و در موبایل «شیتِ پایین» به‌جای پایینِ صفحه داخلِ ردیف می‌ماند.
+   فقط تا وقتی منوی همان ردیف باز است این محدودیت برداشته می‌شود و ردیف روی ردیف‌های
+   بعدی و نوارِ پایینِ موبایل قرار می‌گیرد؛ بقیهٔ ردیف‌ها و رندرِ تنبل مثلِ قبل.
+   ═══════════════════════════════════════════════════════════════════════════ */
+#expenses .product-card-row:has(.person-row-menu.open),
+#employee-management .product-card-row:has(.person-row-menu.open) {
+    content-visibility: visible !important;
+    contain: none !important;
+    transform: none !important;
+    z-index: 100000 !important;   /* بالاتر از ردیف‌های بعدی و نوارِ پایینِ موبایل (شیتِ پایین) */
+}

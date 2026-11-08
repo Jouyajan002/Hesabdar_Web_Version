@@ -9423,6 +9423,8 @@ function resetSalesForm() {
     // اعمال وضعیت فعال/غیرفعال بر اساس ارز پیش‌فرض
     updateSalesCurrencyFields();
     calculateSalesTotal();
+    // (APEX) مشتریِ پیش‌فرض از «تنظیمات بل» — کاربر می‌تواند پاکش کند و شخصِ دیگری انتخاب کند
+    try { if (typeof _apexApplyBillDefaultPerson === 'function') _apexApplyBillDefaultPerson('sales'); } catch (e) {}
 }
 
 // توابع مدیریت خرید
@@ -9847,6 +9849,8 @@ function resetPurchaseForm() {
     // اعمال وضعیت فعال/غیرفعال بر اساس ارز پیش‌فرض
     updatePurchaseCurrencyFields();
     calculatePurchaseTotal();
+    // (APEX) تامین‌کنندهٔ پیش‌فرض از «تنظیمات بل» — کاربر می‌تواند پاکش کند و شخصِ دیگری انتخاب کند
+    try { if (typeof _apexApplyBillDefaultPerson === 'function') _apexApplyBillDefaultPerson('purchase'); } catch (e) {}
 }
 
 // توابع مدیریت دریافت و پرداخت
@@ -26875,6 +26879,12 @@ function handleProductSearch(input, isPurchase) {
 
     const userTyped = input.value || '';
     const userTypedLower = userTyped.toLowerCase().trim();
+    input.dataset.matchSvc = '';   // (APEX) پیشنهادِ درجای «خدمت» (فقط بلِ فروش/خرید فوری)
+    // (APEX) همین الان با Enter خدمتی در همین ردیف ثبت شد → keyupِ همان Enter انتخاب را پاک نکند
+    if ((input.dataset.lastKey === 'Enter' || input.dataset.lastKey === 'Tab') && wrapper) {
+        var _svcHid = wrapper.querySelector('input[type="hidden"]');
+        if (_svcHid && /^svc-/i.test(String(_svcHid.value || ''))) return;
+    }
 
     // پاک کردن hidden input تا تا قبل از تأیید نهایی، چیزی ست نشود
     const hiddenInput = wrapper ? wrapper.querySelector('input[type="hidden"]') : null;
@@ -26913,8 +26923,27 @@ function handleProductSearch(input, isPurchase) {
         return aName.localeCompare(bName);
     });
 
+    // (APEX) در بلِ فروش/خرید فوری، خدمات هم با همان قاعده جستجو می‌شوند (نام، از هر جای متن؛
+    //  اول آن‌هایی که با همان حروف شروع می‌شوند) و در همان فهرست با برچسبِ «خدمت» می‌آیند.
+    const _svcBillRow = !!(input.closest && input.closest('#sales-items-body, #purchase-items-body'));
+    const _svcAll = (_svcBillRow && typeof _svcRead === 'function') ? _svcRead() : [];
+    const svcMatches = _svcAll.filter(function (sv) {
+        return sv && (sv.name || '').toLowerCase().indexOf(userTypedLower) !== -1;
+    });
+    const _mergedMatches = substringMatches.map(function (p) { return { k: 'p', o: p }; })
+        .concat(svcMatches.map(function (sv) { return { k: 's', o: sv }; }));
+    if (svcMatches.length) {
+        _mergedMatches.sort(function (a, b) {
+            const aName = (a.o.name || '').toLowerCase(), bName = (b.o.name || '').toLowerCase();
+            const aPrefix = aName.startsWith(userTypedLower) ? 0 : 1;
+            const bPrefix = bName.startsWith(userTypedLower) ? 0 : 1;
+            if (aPrefix !== bPrefix) return aPrefix - bPrefix;
+            return aName.localeCompare(bName);
+        });
+    }
+
     // نمایش dropdown اگر بیش از یک نتیجه substring (یا حتی یک نتیجه که prefix نیست) داریم
-    if (resultsContainer && substringMatches.length > 0) {
+    if (resultsContainer && _mergedMatches.length > 0) {
         // ===== تزریق یک‌باره CSS برای hover (به جای onmouseenter/onmouseleave inline) =====
         // این کار باعث می‌شود تغییر background روی hover هیچ attribute mutation تولید نکند
         // و در نتیجه observerهای سراسری و interval ۱۵۰ms دیگر باعث لرزش نمی‌شوند
@@ -26928,10 +26957,27 @@ function handleProductSearch(input, isPurchase) {
             document.head.appendChild(_psrStyle);
         }
 
-        const limited = substringMatches.slice(0, 5); // حداکثر ۵ نتیجه نزدیک — به درخواست کاربر
+        const limited = _mergedMatches.slice(0, 5); // حداکثر ۵ نتیجه نزدیک — به درخواست کاربر
         const isPurchaseStr = isPurchase ? 'true' : 'false';
         let html = '';
-        limited.forEach(function(p) {
+        limited.forEach(function(_m) {
+            if (_m.k === 's') {   // (APEX) ردیفِ «خدمت»
+                const sv = _m.o, sName = String(sv.name || '');
+                const sIdx = sName.toLowerCase().indexOf(userTypedLower);
+                const esc = function (x) { return String(x).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); };
+                const sDisp = (sIdx !== -1)
+                    ? esc(sName.substring(0, sIdx)) + '<strong style="color:var(--primary,#6366f1);">' + esc(sName.substring(sIdx, sIdx + userTypedLower.length)) + '</strong>' + esc(sName.substring(sIdx + userTypedLower.length))
+                    : esc(sName);
+                html += '<div class="product-search-result-item" '
+                      + 'style="padding:6px 10px;cursor:pointer;border-bottom:1px solid #f1f5f9;font-size:12.5px;display:flex;align-items:center;gap:6px;line-height:1.4;" '
+                      + 'onmousedown="event.preventDefault();_apexPickServiceFromSearch(this,' + JSON.stringify(String(sv.id)).replace(/"/g, '&quot;') + ',' + isPurchaseStr + ')">'
+                      + '<span style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;">' + sDisp + '</span>'
+                      + '<span style="color:#7c3aed;background:#f3e8ff;border-radius:6px;padding:0 6px;font-size:10px;white-space:nowrap;">خدمت</span>'
+                      + '<span style="color:#64748b;font-size:10.5px;margin-right:auto;white-space:nowrap;">' + (typeof formatNumber === 'function' ? formatNumber(parseFloat(sv.price) || 0) : (parseFloat(sv.price) || 0)) + '</span>'
+                      + '</div>';
+                return;
+            }
+            const p = _m.o;
             // highlight بخش match شده در نام
             const name = p.name || '';
             const lowerName = name.toLowerCase();
@@ -27035,6 +27081,16 @@ function handleProductSearch(input, isPurchase) {
         input.dataset.matchId = '';
         input.dataset.matchName = '';
         if (hiddenInput) hiddenInput.value = '';
+        // (APEX) جنسی با این حروف شروع نشد ولی خدمتی شد → پیشنهادِ درجای همان خدمت (Enter = افزودن)
+        var _svPre = svcMatches.find(function (sv) { return (sv.name || '').toLowerCase().startsWith(userTypedLower); });
+        if (_svPre) {
+            var _svFull = String(_svPre.name || '');
+            input.dataset.matchSvc = String(_svPre.id);
+            if (_svFull.length > userTyped.length && _svFull.toLowerCase().startsWith(userTyped.toLowerCase())) {
+                input.value = userTyped + _svFull.substring(userTyped.length);
+                try { input.setSelectionRange(userTyped.length, _svFull.length); } catch (e) {}
+            }
+        }
         return;
     }
 
@@ -27165,6 +27221,7 @@ function handleProductSearchKey(event, input, isPurchase) {
     if (event.key === 'Backspace' || event.key === 'Delete') {
         input.dataset.matchId = '';
         input.dataset.matchName = '';
+        input.dataset.matchSvc = '';
         var hidden = input.parentElement && input.parentElement.querySelector('input[type="hidden"]');
         if (hidden) hidden.value = '';
         return; // اجازه رفتار پیش‌فرض مرورگر
@@ -27176,6 +27233,12 @@ function handleProductSearchKey(event, input, isPurchase) {
         var matchName = input.dataset.matchName;
 
         // اگر matchId نداشت، تطبیق دیگری پیدا کن (fallback)
+        // (APEX) پیشنهادِ درجا «خدمت» بود → همان خدمت به بل افزوده شود
+        if (!matchId && input.dataset.matchSvc) {
+            event.preventDefault();
+            _apexPickServiceFromSearch(input, input.dataset.matchSvc, isPurchase);
+            return;
+        }
         if (!matchId) {
             var query = (input.value || '').toLowerCase().trim();
             if (query.length === 0) return; // هیچ متنی تایپ نشده
@@ -27194,7 +27257,17 @@ function handleProductSearchKey(event, input, isPurchase) {
                        (p.code && p.code.toLowerCase().includes(query));
             });
 
-            if (!bestMatch) return; // هیچ تطبیقی پیدا نشد، اجازه رفتار طبیعی
+            if (!bestMatch) {
+                // (APEX) جنسی نبود؛ در بلِ فروش/خرید فوری خدمتِ هم‌نام/شبیه
+                if (input.closest && input.closest('#sales-items-body, #purchase-items-body') && typeof _svcRead === 'function') {
+                    var _svs = _svcRead();
+                    var _sv = _svs.find(function (x) { return (x.name || '').toLowerCase() === query; })
+                        || _svs.find(function (x) { return (x.name || '').toLowerCase().startsWith(query); })
+                        || _svs.find(function (x) { return (x.name || '').toLowerCase().includes(query); });
+                    if (_sv) { event.preventDefault(); _apexPickServiceFromSearch(input, _sv.id, isPurchase); }
+                }
+                return; // هیچ تطبیقی پیدا نشد، اجازه رفتار طبیعی
+            }
             matchId = bestMatch.id;
             matchName = bestMatch.name;
         }
@@ -28658,6 +28731,16 @@ function ssbPopulateForm(key) {
             _sv('ssb-bill-mg-r', settings.billMarginRight != null ? settings.billMarginRight : '');
             _sv('ssb-bill-mg-b', settings.billMarginBottom != null ? settings.billMarginBottom : '');
             _sv('ssb-bill-mg-l', settings.billMarginLeft != null ? settings.billMarginLeft : '');
+            // (APEX) مشتری / تامین‌کنندهٔ پیش‌فرض (شخصِ حذف‌شده = خالی)
+            try {
+                var _dfp = function (id, pid) {
+                    var p = (typeof _apexFindPersonById === 'function') ? _apexFindPersonById(pid) : null;
+                    _sv(id, p ? p.id : '');
+                    _sv(id + '-search', p ? (p.name || '') : '');
+                };
+                _dfp('ssb-bill-def-customer', settings.billDefaultCustomerId);
+                _dfp('ssb-bill-def-supplier', settings.billDefaultSupplierId);
+            } catch (_) {}
             // تصاویر (بازنشانی بافر آپلود موقت)
             window.__ssbBill = { billLogo: null, billSideImage: null, billBarcode: null };
             _img('ssb-bill-logo-preview', settings.billLogo || settings.storeLogo || '');
@@ -29031,6 +29114,9 @@ function _ssbBillPayload() {
     }
     // (APEX) سطرهای خالیِ جدول حذف شدند؛ مقدارِ قبلیِ این تنظیم دست‌نخورده می‌ماند
     if (!document.getElementById('ssb-bill-minrows')) delete payload.billMinRows;
+    // (APEX) مشتری / تامین‌کنندهٔ پیش‌فرض — فقط وقتی فیلدهایشان باز است نوشته می‌شوند
+    if (document.getElementById('ssb-bill-def-customer')) payload.billDefaultCustomerId = _apexBsetPsnId('ssb-bill-def-customer');
+    if (document.getElementById('ssb-bill-def-supplier')) payload.billDefaultSupplierId = _apexBsetPsnId('ssb-bill-def-supplier');
     return payload;
 }
 function ssbSaveBill() {
@@ -34706,6 +34792,7 @@ function deleteService(id) {
  * @param {string} returnTo  - 'picker' اگر از حالتِ انتخاب آمده (تا نشستِ انتخاب حفظ شود)
  */
 function showServiceForm(serviceId, returnTo) {
+    window._apexSvcQuickAdd = null;   // (APEX) فقط آیکنِ «ثبت خدمت» داخلِ بل دوباره آن را می‌گذارد
     window._serviceFormReturnTo = (returnTo === 'picker' || _svcMode()) ? 'picker' : null;
     showSection('service-form');
     var f = document.getElementById('serviceForm');
@@ -34738,6 +34825,14 @@ function showServiceForm(serviceId, returnTo) {
 
 /** خروج از فرم خدمت — به لیست برمی‌گردد و نشستِ انتخاب را حفظ می‌کند */
 function _exitServiceForm() {
+    // (APEX) فورم از آیکنِ «ثبت خدمت» داخلِ بل باز شده بود → بدونِ ثبت، مستقیم به همان بل
+    if (window._apexSvcQuickAdd) {
+        var _q = window._apexSvcQuickAdd;
+        window._apexSvcQuickAdd = null;
+        window._serviceFormReturnTo = null;
+        _apexSvcQuickReturn(_q, null);
+        return;
+    }
     window._serviceFormReturnTo = null;
     // اگر کاربر در «حالتِ انتخاب» بود (از بلِ فروش/خرید آمده)، برگشت از فرمِ خدمت
     // نباید نشست را پاک کند — پس همان پرچمِ ورودِ مجاز را دوباره می‌گذاریم.
@@ -34786,6 +34881,14 @@ function saveService() {
     try { localStorage.setItem('services', JSON.stringify(services)); } catch (e) {}
     delete f.dataset.editId;
     if (typeof showToast === 'function') showToast('خدمت با موفقیت ذخیره شد', 'success');
+
+    // (APEX) ثبت از آیکنِ «ثبت خدمت» داخلِ بل → برگشت به همان بل و افزودنِ همین خدمت
+    if (window._apexSvcQuickAdd && !editId) {
+        var _q = window._apexSvcQuickAdd;
+        window._apexSvcQuickAdd = null;
+        _apexSvcQuickReturn(_q, data.id);
+        return;
+    }
 
     // در حالتِ انتخاب: خدمتِ تازه از پیش انتخاب می‌شود و نشست دست‌نخورده می‌ماند
     if (_svcMode() && !editId && _svcSel().indexOf(data.id) < 0) _svcSel().push(data.id);
@@ -41732,7 +41835,10 @@ function ndRenderRecent() {
     var rows = [];
     try {
         var txs = (db.getTransactions() || []).slice();
+        // (APEX) همان ترتیبِ «فهرست معاملات» (روزنامچه): تاریخ و ساعت به عددِ زمانی تبدیل و
+        //  مقایسه می‌شوند؛ آخرین معامله در سطرِ اول. (مقایسهٔ رشته‌ای ساعت/AM-PM را اشتباه می‌چید.)
         txs.sort(function (a, b) {
+            if (typeof __hbRepAsc === 'function') return __hbRepAsc(b, a);
             var ta = String(a && (a.date || a.createdAt) || ''), tbb = String(b && (b.date || b.createdAt) || '');
             if (ta === tbb) return (parseFloat(b && b.id) || 0) - (parseFloat(a && a.id) || 0);
             return ta < tbb ? 1 : -1;
@@ -46152,6 +46258,12 @@ function _apexBsetTabs() {
                '<span class="apex-bset-cl"><b>' + label + '</b>' + (hint ? '<small>' + hint + '</small>' : '') + '</span></label>';
     };
     var fld = function (label, inner) { return '<div class="apex-bset-field"><label>' + label + '</label>' + inner + '</div>'; };
+    // (APEX) فیلدِ جستجوی شخص — همان جستجوی درجای فورم‌های فروش/خرید (نام در فیلد، شناسه در فیلدِ پنهان)
+    var psn = function (id, ph) {
+        return '<input type="text" class="apex-psn-input" id="' + id + '-search" data-apex-psn="' + id + '" autocomplete="off" placeholder="' + ph + '"' +
+               ' oninput="apexPersonSearch(this, event)" onkeydown="apexPersonSearchKey(event, this)">' +
+               '<input type="hidden" id="' + id + '">';
+    };
     var img = function (label, fileId, prevId, key) {
         return '<div class="apex-bset-img">' +
                    '<div class="apex-bset-imgbox"><img id="' + prevId + '" alt=""><i class="fas fa-image"></i></div>' +
@@ -46166,6 +46278,9 @@ function _apexBsetTabs() {
             fld('نام فروشگاه (روی بل)', '<input type="text" id="ssb-bill-store-name" placeholder="نام فروشگاه">') +
             fld('نام انگلیسی (اختیاری)', '<input type="text" id="ssb-bill-store-name-en" placeholder="Store Name (English)" dir="ltr">') +
             fld('شعار / معرفی فروشگاه', '<input type="text" id="ssb-bill-slogan" placeholder="عرضه کننده انواع کالاهای با کیفیت">') },
+        { key: 'defaults', icon: 'fas fa-user-check', title: 'مشتریان و تامین کننده های پیشفرض', sub: 'شخصِ خودکارِ بل‌های تازهٔ فروش و خرید', html:
+            fld('مشتری پیش‌فرض (بل فروش)', psn('ssb-bill-def-customer', 'نام یا شماره را جستجو کنید — خالی = بدون پیش‌فرض')) +
+            fld('تامین کنندهٔ پیش‌فرض (بل خرید)', psn('ssb-bill-def-supplier', 'نام یا شماره را جستجو کنید — خالی = بدون پیش‌فرض')) },
         { key: 'paper', icon: 'fas fa-ruler-combined', title: 'اندازه و رنگ بل', sub: 'اندازهٔ ورق، جهت، حاشیه‌ها و رنگ‌ها', html:
             fld('اندازهٔ ورق', '<select id="ssb-bill-size"><option value="A4">A4 (بزرگ)</option><option value="A5">A5 (متوسط)</option><option value="80mm">۸۰ میلی‌متر (حرارتی)</option><option value="58mm">۵۸ میلی‌متر (حرارتی کوچک)</option></select>') +
             fld('جهت صفحه (برای A4 و A5)', '<select id="ssb-bill-orientation"><option value="portrait">عمودی</option><option value="landscape">افقی</option></select>') +
@@ -47506,6 +47621,8 @@ function _apexPsnPlace(dd, input) {
     var left = Math.max(8, Math.min(wr.right - w, window.innerWidth - 8 - w));
     dd.style.left = left + 'px';
     dd.style.width = w + 'px';
+    // فیلدِ داخلِ پنجره‌های تمام‌صفحه (مثلِ «تنظیمات بل») → فهرست بالای همان پنجره
+    dd.style.zIndex = (input.closest && input.closest('.apex-ovl')) ? '2147483600' : '';
     if (below >= 120 || below >= above) {
         dd.style.top = (wr.bottom + 2) + 'px'; dd.style.bottom = 'auto';
         dd.style.maxHeight = Math.min(maxH, Math.max(below, 80)) + 'px';
@@ -47759,24 +47876,29 @@ function _apexQuickAddCancel(kind) {
 function _apexEnsureProductAddBtn(wrapper) {
     if (!wrapper) return;
     var inBill = wrapper.closest('#sales-items-body') || wrapper.closest('#purchase-items-body');
-    var btn = wrapper.querySelector('.apex-field-add');
+    var btns = wrapper.querySelectorAll('.apex-field-add');
     var has = false;
     if (inBill) {
         var hid = wrapper.querySelector('input[type="hidden"]');
         var row = wrapper.closest('tr');
         has = !!((hid && String(hid.value || '').trim()) || (row && row.dataset && row.dataset.serviceId));
     }
-    if (!inBill || has) { if (btn) btn.remove(); return; }
-    if (btn) return;
-    btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'apex-field-add';
-    btn.tabIndex = -1;
-    btn.title = 'ثبت جنس جدید';
-    btn.innerHTML = '<i class="fas fa-cart-plus"></i>';
-    btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
-    btn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); apexBillAddProduct(btn); });
-    wrapper.appendChild(btn);
+    if (!inBill || has) { Array.prototype.forEach.call(btns, function (b) { b.remove(); }); return; }
+    var mk = function (cls, title, icon, fn) {
+        if (wrapper.querySelector('.' + cls)) return;
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'apex-field-add ' + cls;
+        btn.tabIndex = -1;
+        btn.title = title;
+        btn.innerHTML = '<i class="fas ' + icon + '"></i>';
+        btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+        btn.addEventListener('click', function (e) { e.preventDefault(); e.stopPropagation(); fn(btn); });
+        wrapper.appendChild(btn);
+    };
+    // آیکنِ «ثبت جنس» و کنارِ آن آیکنِ متفاوتِ «ثبت خدمت»
+    mk('apex-add-prod', 'ثبت جنس جدید', 'fa-cart-plus', apexBillAddProduct);
+    mk('apex-add-svc', 'ثبت خدمت جدید', 'fa-concierge-bell', apexBillAddService);
 }
 function _apexRefreshProductAddBtns() {
     ['sales-items-body', 'purchase-items-body'].forEach(function (id) {
@@ -47849,4 +47971,118 @@ function _apexClogWhen(log) {
     var f = ms ? _apexFmtJalaliTs(ms) : '';
     if (f) return f;
     return d.replace(/\s*HH:mm\s*$/, '');
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) خدمات در جستجوی «اجناس و خدمات» و آیکنِ «ثبت خدمت» در بلِ فروش/خرید فوری
+//  افزودنِ خدمت به بل از همان توابعِ موجود (addServiceToSale / addServiceToPurchase)
+//  انجام می‌شود؛ هیچ منطقِ محاسبه‌ای تغییر نکرده است.
+// ════════════════════════════════════════════════════════════════════════════════
+function _apexCloseProductDD() {
+    try {
+        var bdd = document.getElementById('_psr_body_dd');
+        if (bdd) {
+            bdd.style.display = 'none'; bdd.innerHTML = '';
+            if (bdd._scrollHandler) { window.removeEventListener('scroll', bdd._scrollHandler, true); bdd._scrollHandler = null; }
+            bdd._activeWrapper = null; bdd._activeInput = null;
+        }
+    } catch (e) {}
+}
+function _apexAddServiceToBill(svcId, isPurchase, srcInput) {
+    if (isPurchase) {
+        if (typeof addServiceToPurchase !== 'function') return;
+        var tb = document.getElementById('purchase-items-body');
+        // ردیفی که کاربر در آن جستجو کرد، اگر خالی است، همان ردیف پر شود
+        var srcRow = srcInput && srcInput.closest ? srcInput.closest('.purchase-item-row') : null;
+        if (srcRow && tb) {
+            var sh = srcRow.querySelector('.purchase-item-product');
+            var rows = tb.querySelectorAll('.purchase-item-row');
+            if (sh && !sh.value && rows.length && rows[rows.length - 1] !== srcRow) {
+                // ردیف‌های خالیِ بعد از آن کنار بروند تا همین ردیف «آخرین ردیفِ خالی» باشد
+                for (var i = rows.length - 1; i >= 0 && rows[i] !== srcRow; i--) {
+                    var h = rows[i].querySelector('.purchase-item-product');
+                    if (h && !h.value) rows[i].remove();
+                }
+            }
+        }
+        addServiceToPurchase(svcId);
+        // مثلِ انتخابِ جنس: یک ردیفِ خالی برای قلمِ بعدی
+        try {
+            var all = tb ? tb.querySelectorAll('.purchase-item-row') : [];
+            var hasEmpty = false;
+            for (var j = 0; j < all.length; j++) { var hh = all[j].querySelector('.purchase-item-product'); if (hh && !hh.value) { hasEmpty = true; break; } }
+            if (!hasEmpty && typeof addPurchaseItem === 'function') addPurchaseItem();
+        } catch (e) {}
+    } else {
+        if (typeof addServiceToSale === 'function') addServiceToSale(svcId);
+    }
+}
+function _apexPickServiceFromSearch(el, svcId, isPurchase) {
+    var bdd = document.getElementById('_psr_body_dd');
+    var input = (el && el.classList && el.classList.contains('product-search-input')) ? el
+        : ((bdd && bdd._activeInput) || null);
+    _apexCloseProductDD();
+    if (input) { input.dataset.matchId = ''; input.dataset.matchName = ''; input.dataset.matchSvc = ''; }
+    _apexAddServiceToBill(svcId, !!isPurchase, input);
+}
+function apexBillAddService(btn) {
+    var wrapper = btn && btn.closest ? btn.closest('.product-search-wrapper') : null;
+    if (!wrapper) return;
+    var isPurchase = !!wrapper.closest('#purchase-items-body');
+    _apexCloseProductDD();
+    if (typeof showServiceForm !== 'function') return;
+    showServiceForm();
+    window._apexSvcQuickAdd = { section: isPurchase ? 'purchase-form' : 'sales-form', isPurchase: isPurchase };
+}
+function _apexSvcQuickReturn(q, svcId) {
+    if (!q || !q.section) return;
+    window._returningFromProductPicker = q.section;   // بل ریست نشود (همان مسیرِ برگشت از انتخابگر)
+    try { showSection(q.section); } finally { window._returningFromProductPicker = null; }
+    if (svcId != null) {
+        setTimeout(function () {
+            try { _apexAddServiceToBill(svcId, !!q.isPurchase, null); } catch (e) { console.warn('add service to bill:', e); }
+        }, 60);
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) «تنظیمات بل › مشتریان و تامین کننده های پیشفرض»
+//  شخصِ انتخاب‌شده در بل‌های تازهٔ فروش/خرید از پیش پر می‌شود؛ کاربر می‌تواند فیلد را
+//  پاک کند و شخصِ دیگری جستجو و انتخاب کند. بل‌های ویرایشی و «فروش/خریدِ تازه برای
+//  یک شخص» همان شخصِ خودشان را می‌گیرند (بعد از این مقدار نوشته می‌شوند).
+//  هیچ محاسبه‌ای عوض نشده؛ فقط مقدارِ اولیهٔ فیلدِ شخص پر می‌شود.
+// ════════════════════════════════════════════════════════════════════════════════
+function _apexFindPersonById(pid) {
+    if (pid == null || pid === '') return null;
+    var persons = (typeof db !== 'undefined' && db.getPersons) ? (db.getPersons() || []) : [];
+    for (var i = 0; i < persons.length; i++) { if (persons[i] && String(persons[i].id) === String(pid)) return persons[i]; }
+    return null;
+}
+/** شناسهٔ شخصِ فیلدِ تنظیمات؛ اگر نام تایپ شده ولی از فهرست انتخاب نشده، نامِ دقیق جستجو می‌شود */
+function _apexBsetPsnId(hiddenId) {
+    var h = document.getElementById(hiddenId);
+    var inp = document.getElementById(hiddenId + '-search');
+    var txt = inp ? String(inp.value || '').trim() : '';
+    if (!txt) return '';
+    if (h && h.value && _apexFindPersonById(h.value)) return String(h.value);
+    var persons = (typeof db !== 'undefined' && db.getPersons) ? (db.getPersons() || []) : [];
+    var lq = txt.toLowerCase();
+    for (var i = 0; i < persons.length; i++) {
+        if (persons[i] && String(persons[i].name || '').trim().toLowerCase() === lq) return String(persons[i].id);
+    }
+    return '';
+}
+function _apexApplyBillDefaultPerson(kind) {
+    var st = {};
+    try { st = (typeof db !== 'undefined' && db.getSettings) ? (db.getSettings() || {}) : {}; } catch (e) {}
+    var map = kind === 'purchase'
+        ? { pid: st.billDefaultSupplierId, input: 'qp-supplier-search', hidden: 'qp-supplier' }
+        : { pid: st.billDefaultCustomerId, input: 'qs-customer-search', hidden: 'qs-customer' };
+    var p = _apexFindPersonById(map.pid);
+    if (!p) return;
+    var inp = document.getElementById(map.input), h = document.getElementById(map.hidden);
+    if (!inp || !h) return;
+    if (String(inp.value || '').trim() || h.value) return;   // فیلد پر است → دست نمی‌خورد
+    h.value = p.id;
+    inp.value = p.name || '';
 }

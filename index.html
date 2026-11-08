@@ -2212,10 +2212,10 @@
                                     <div class="bill-field">
                                         <div class="search-wrapper bill-search">
                                             <i class="fas fa-user bill-field-icon"></i>
-                                            <input type="text" class="form-control" id="sr-customer-search"
-                                                   placeholder="خریدار" autocomplete="off"
-                                                   onfocus="showAllPersonsForField(this,'sr-customer-results','sr-customer','مشتری')"
-                                                   onkeyup="searchSaleReturnCustomer(this)">
+                                            <input type="text" class="form-control apex-psn-input" id="sr-customer-search"
+                                                   placeholder="خریدار" autocomplete="off" data-apex-psn="sr-customer"
+                                                   oninput="apexPersonSearch(this, event)"
+                                                   onkeydown="apexPersonSearchKey(event, this)">
                                             <input type="hidden" id="sr-customer" required>
                                             <div id="sr-customer-results" class="search-results-list"></div>
                                         </div>
@@ -2354,10 +2354,10 @@
                                     <div class="bill-field">
                                         <div class="search-wrapper bill-search">
                                             <i class="fas fa-user-tie bill-field-icon"></i>
-                                            <input type="text" class="form-control" id="pr-supplier-search"
-                                                   placeholder="فروشنده" autocomplete="off"
-                                                   onfocus="showAllPersonsForField(this,'pr-supplier-results','pr-supplier','تامین کننده')"
-                                                   onkeyup="searchPurchaseReturnSupplier(this)">
+                                            <input type="text" class="form-control apex-psn-input" id="pr-supplier-search"
+                                                   placeholder="فروشنده" autocomplete="off" data-apex-psn="pr-supplier"
+                                                   oninput="apexPersonSearch(this, event)"
+                                                   onkeydown="apexPersonSearchKey(event, this)">
                                             <input type="hidden" id="pr-supplier" required>
                                             <div id="pr-supplier-results" class="search-results-list"></div>
                                         </div>
