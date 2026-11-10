@@ -9709,15 +9709,12 @@ body.dark-mode .nd-upd-status.err  { color: #fca5a5; }
  * نصبی). درخواستِ کاربر: اشخاص/اجناس/امورمالی/گزارشات در اسکرین‌های کوچک زیادی بزرگ بودند.
  * زوم روی content-area محتوای مشترک (اشخاص/اجناس/گزارشات/فورم‌ها) را یک‌دست کوچک می‌کند.
  * «نه خیلی کوچک» → ۰٫۹۰ (۱۰٪). روی اسکرین‌های خیلی بزرگ کمی بیشتر تا تناسب حفظ شود. */
-body:not(:has(#dashboard.section.active)) .content-area ,
-body:not(:has(#dashboard.section.apex-dlg-host)) .content-area { zoom: 0.90; }
+body:not(:has(#dashboard.section.active)):not(:has(#dashboard.section.apex-dlg-host)) .content-area { zoom: 0.90; }
 @media (min-width: 1600px) and (max-width: 1919px) {
-    body:not(:has(#dashboard.section.active)) .content-area ,
-    body:not(:has(#dashboard.section.apex-dlg-host)) .content-area { zoom: 0.88; }
+    body:not(:has(#dashboard.section.active)):not(:has(#dashboard.section.apex-dlg-host)) .content-area { zoom: 0.88; }
 }
 @media (min-width: 1920px) {
-    body:not(:has(#dashboard.section.active)) .content-area ,
-    body:not(:has(#dashboard.section.apex-dlg-host)) .content-area { zoom: 0.86; }
+    body:not(:has(#dashboard.section.active)):not(:has(#dashboard.section.apex-dlg-host)) .content-area { zoom: 0.86; }
 }
 /* «امور مالی» خارج از content-area و به‌صورت سکشنِ جداست؛ پس زومِ بالا آن را نمی‌گیرد.
  * برای یک‌دستی دقیقاً ۱۰٪ کوچک می‌شود (داشبورد و بقیه دست‌نخورده می‌مانند). */
