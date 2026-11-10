@@ -292,8 +292,8 @@ getCurrentDate() {
             const person = { ...personData };
 
             // اعتبارسنجی
-            if (!person.name || !person.category) {
-                throw new Error('نام و کتگوری الزامی است');
+            if (!person.name) {
+                throw new Error('نام الزامی است');
             }
 
             if (person.id) {

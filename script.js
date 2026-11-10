@@ -502,7 +502,7 @@ function switchFinancialTab(tabName) {
         if (tabName === 'expenses') {
             btnHTML = '<button type="button" class="person-fab-add" onclick="showExpenseForm()"><i class="fas fa-plus"></i> هزینه جدید</button>';
         } else if (tabName === 'cashbox') {
-            btnHTML = '<button type="button" class="person-fab-add" onclick="showCashboxForm()"><i class="fas fa-plus"></i> حساب جدید</button>';
+            btnHTML = '<button type="button" class="person-fab-add" onclick="showCashboxForm()"><i class="fas fa-plus"></i> خزانه جدید</button>';
         } else if (tabName === 'employee-management') {
             btnHTML = '<button type="button" class="person-fab-add" onclick="showEmployeeForm()"><i class="fas fa-plus"></i> کارمند جدید</button>';
         }
@@ -554,7 +554,7 @@ function loadFinancialTabContent(tabName) {
         <th>کتگوری</th>
         <th>مبلغ</th>
         <th>ارز</th>
-        <th>حساب</th>
+        <th>خزانه</th>
         <th>یادداشت</th>
         <th>عملیات</th>
       </tr>
@@ -569,33 +569,33 @@ function loadFinancialTabContent(tabName) {
     case 'cashbox':
       tableHTML = `
         <div class="cash-boxes-dashboard">
-          <!-- نوار موجودی تمامی حساب‌ها (سرمه‌ای، تمام‌عرض) + دکمه انتقال مبلغ روبروی آن -->
+          <!-- نوار موجودی تمامی خزانه‌ها (سرمه‌ای، تمام‌عرض) + دکمه انتقال مبلغ روبروی آن -->
           <div class="fin-balance-bar">
             <div class="fin-balance-info">
-              <span class="fin-balance-label">موجودی تمامی حساب‌ها:</span>
+              <span class="fin-balance-label">موجودی تمامی خزانه‌ها:</span>
               <div class="fin-balance-amounts">
                 <span class="fin-bal-amt" id="total-cash-usd">۰</span>
                 <span class="fin-bal-amt" id="total-cash-afn">۰</span>
               </div>
             </div>
-            <button type="button" class="fin-transfer-btn fin-transfer-btn-new" onclick="openCurrencyConversion(null)" title="تبدیل ارز بین حساب‌ها">
+            <button type="button" class="fin-transfer-btn fin-transfer-btn-new" onclick="openCurrencyConversion(null)" title="تبدیل ارز بین خزانه‌ها">
               <i class="fas fa-exchange-alt"></i>
-              <span>تبدیل ارز بین حساب‌ها</span>
+              <span>تبدیل ارز بین خزانه‌ها</span>
             </button>
           </div>
           <div class="cash-boxes-list" id="cash-boxes-list"></div>
 
-          <!-- پنل انتقال مبلغ بین حساب‌ها (در پایین صفحه — طبق درخواست کاربر) -->
+          <!-- پنل انتقال پول بین خزانه‌ها (در پایین صفحه — طبق درخواست کاربر) -->
           <div id="fin-cashbox-transfer-panel" class="cashbox-transfer-panel" style="display:none;background:var(--bg-surface,#fff);border-radius:14px;padding:20px;margin:20px 0 16px 0;box-shadow:0 4px 12px rgba(0,0,0,0.08);border:1px solid var(--border-color,#e2e8f0);color:var(--text-main,#1e293b);">
             <div class="section-header-inline" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
-              <h3 style="margin:0;font-size:16px;color:inherit;"><i class="fas fa-exchange-alt"></i> انتقال مبلغ بین حساب‌ها</h3>
+              <h3 style="margin:0;font-size:16px;color:inherit;"><i class="fas fa-exchange-alt"></i> انتقال پول بین خزانه‌ها</h3>
               <button type="button" class="btn-icon btn-secondary" onclick="toggleFinCashboxTransferPanel()" title="بستن" style="background:transparent;border:1px solid var(--border-color,#e2e8f0);border-radius:6px;padding:6px 10px;cursor:pointer;color:inherit;"><i class="fas fa-times"></i></button>
             </div>
             <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
               <div class="form-group">
-                <label for="fin-cb-tx-from" style="display:block;font-weight:600;margin-bottom:6px;font-size:13px;color:inherit;">حساب اول (مبدأ)</label>
+                <label for="fin-cb-tx-from" style="display:block;font-weight:600;margin-bottom:6px;font-size:13px;color:inherit;">خزانهٔ اول (مبدأ)</label>
                 <select id="fin-cb-tx-from" onchange="finCashboxTransferRecalc()" style="width:100%;padding:9px 12px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;font-family:inherit;font-size:14px;background:var(--bg-input,#fff);color:inherit;box-sizing:border-box;">
-                  <option value="">انتخاب حساب</option>
+                  <option value="">انتخاب خزانه</option>
                 </select>\n                <select id="fin-cb-tx-from-currency" style="width:100%;margin-top:6px;padding:7px 10px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;font-family:inherit;font-size:13px;background:var(--bg-input,#fff);color:inherit;box-sizing:border-box;" title="ارز برداشت از مبدأ"></select>
               </div>
               <div class="form-group">
@@ -603,9 +603,9 @@ function loadFinancialTabContent(tabName) {
                 <input type="number" id="fin-cb-tx-amount" step="0.01" placeholder="مبلغ" oninput="finCashboxTransferRecalc()" style="width:100%;padding:9px 12px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;font-family:inherit;font-size:14px;background:var(--bg-input,#fff);color:inherit;box-sizing:border-box;">
               </div>
               <div class="form-group">
-                <label for="fin-cb-tx-to" style="display:block;font-weight:600;margin-bottom:6px;font-size:13px;color:inherit;">حساب مقصد (دوم)</label>
+                <label for="fin-cb-tx-to" style="display:block;font-weight:600;margin-bottom:6px;font-size:13px;color:inherit;">خزانهٔ مقصد (دوم)</label>
                 <select id="fin-cb-tx-to" onchange="finCashboxTransferRecalc()" style="width:100%;padding:9px 12px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;font-family:inherit;font-size:14px;background:var(--bg-input,#fff);color:inherit;box-sizing:border-box;">
-                  <option value="">انتخاب حساب</option>
+                  <option value="">انتخاب خزانه</option>
                 </select>\n                <select id="fin-cb-tx-to-currency" style="width:100%;margin-top:6px;padding:7px 10px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;font-family:inherit;font-size:13px;background:var(--bg-input,#fff);color:inherit;box-sizing:border-box;" title="ارز واریز به مقصد"></select>
               </div>
             </div>
@@ -625,7 +625,7 @@ function loadFinancialTabContent(tabName) {
                 </div>
               </div>
               <div class="form-group">
-                <label for="fin-cb-tx-result" style="display:block;font-weight:600;margin-bottom:6px;font-size:13px;color:inherit;">مبلغ نهایی (در حساب مقصد)</label>
+                <label for="fin-cb-tx-result" style="display:block;font-weight:600;margin-bottom:6px;font-size:13px;color:inherit;">مبلغ نهایی (در خزانهٔ مقصد)</label>
                 <input type="text" id="fin-cb-tx-result" readonly placeholder="۰" style="width:100%;padding:9px 12px;border:1px solid var(--border-color,#e2e8f0);border-radius:8px;font-family:inherit;font-size:14px;font-weight:700;color:#6366f1;background:var(--bg-secondary,#f1f5f9);box-sizing:border-box;">
               </div>
             </div>
@@ -1359,6 +1359,31 @@ function _computeFifoProfitMaps() {
                 });
             }
         });
+
+        // (APEX) «ورودی/خروجیِ» مستقیمِ جنس (رکوردهای adj در دفترِ warehouseTransfers):
+        //  ورودی = یک سریِ تازه با همان قیمت و ارز و نرخِ قفل‌شدهٔ لحظهٔ ثبت (مثلِ سریِ خرید)؛
+        //  خروجی = خروجِ بدونِ مفاد (مثلِ برگشت از خرید) که بهای خودش را از سری‌های FIFO برمی‌دارد.
+        //  انتقال‌های عادیِ میان گدام (بدونِ adj) مثلِ قبل این‌جا وارد نمی‌شوند.
+        try {
+            ((typeof db !== 'undefined' && db.getTransfers) ? (db.getTransfers() || []) : []).forEach(function (rec) {
+                if (!rec || (rec.adj !== 'in' && rec.adj !== 'out') || !Array.isArray(rec.items)) return;
+                var _ats = rec.createdAt || '';
+                var _aseq = rec.id || 0;
+                rec.items.forEach(function (it) {
+                    var _aq = parseFloat(it && it.quantity) || 0;
+                    if (!(_aq > 0)) return;
+                    if (rec.adj === 'in' && it.destProductId != null) {
+                        var _acur = it.currency || _base;
+                        var _ac = {}; _ac[_acur] = parseFloat(it.price) || 0;
+                        ensure(it.destProductId).push({ ts: _ats, kind: 0, seq: _aseq, qty: _aq, cost: _ac, buyCur: _acur,
+                            buyTx: { currency: _acur, rateUsed: parseFloat(it.rateUsed) || null } });
+                    } else if (rec.adj === 'out' && it.srcProductId != null) {
+                        ensure(it.srcProductId).push({ ts: _ats, kind: 1, seq: _aseq, qty: _aq, baseQty: _aq, currency: _base, saleTx: null,
+                            isPurchaseReturn: true, costAcc: 0, costAccBase: 0, estAcc: false });
+                    }
+                });
+            });
+        } catch (e) {}
 
         // بهای «یک واحد» از سریِ b، به ارزِ مرجع (پایه).
         //  اصلاحِ ب-۱/ب-۲: پیش‌تر بهای ۱۰۰ افغانی مستقیماً به‌عنوان ۱۰۰ دالر کم می‌شد.
@@ -2761,7 +2786,7 @@ function filterCashboxTransactions() {
             tbody.appendChild(row);
         });
     } catch (error) {
-        console.error('خطا در فیلتر تراکنش‌های حساب:', error);
+        console.error('خطا در فیلتر تراکنش‌های خزانه:', error);
     }
 }
 // تابع کمکی برای تبدیل اعداد فرمت شده به عدد
@@ -2864,7 +2889,14 @@ function showSection(sectionId) {
     // ⬆ به‌جای ریستِ بی‌قیدوشرط، موقعیتِ اسکرولِ بخشی که داریم ترکش می‌کنیم ذخیره می‌شود و
     //   در انتهای همین تابع، موقعیتِ ذخیره‌شدهٔ بخشِ مقصد بازگردانی می‌شود (اگر داشته باشد،
     //   وگرنه از بالا). این قاعده برای همهٔ بخش‌های اسکرول‌شونده یکسان است.
+    // (APEX) خروج از پنجرهٔ فرم (دسکتاپ) → برگشت به همان صفحه‌ای که پنجره روی آن باز شده بود
+    try { if (typeof _apexDlgRedirect === 'function') sectionId = _apexDlgRedirect(sectionId); } catch (_e) {}
+    // (APEX) «ثبت جنس» از داخلِ فورمِ ورودی/خروجی: ناوبری به جای دیگر یعنی پایانِ آن حالت
+    try { if (window.__padjQuickAdd && sectionId !== 'product-form' && sectionId !== 'product-adj-form') window.__padjQuickAdd = null; } catch (_e) {}
     try { _jqScrollSave(); } catch (_e) {}
+    // (APEX) فرم‌های «پنجرهٔ جداگانه» در دسکتاپ — محاسبهٔ پشتهٔ پنجره پیش از هر تغییر
+    var __apexDlg = null;
+    try { if (typeof _apexDlgBegin === 'function') __apexDlg = _apexDlgBegin(sectionId); } catch (_e) { __apexDlg = null; }
     // هر ناوبری (از جمله بازشدنِ «گدام») کارتِ شناورِ نتایجِ جست‌وجوی جنس را حذف کند تا روی
     // صفحهٔ بعدی «فریز/شناور» نماند. (رفعِ باگِ کارتِ شناورِ قرمز در تصویر.)
     try {
@@ -2872,7 +2904,8 @@ function showSection(sectionId) {
         if (_bddNav) { _bddNav.style.display = 'none'; _bddNav.innerHTML = '';
             if (_bddNav._scrollHandler) { window.removeEventListener('scroll', _bddNav._scrollHandler, true); _bddNav._scrollHandler = null; } }
     } catch (_e) {}
-    try {
+    // (APEX) هنگامِ بازشدنِ پنجره، صفحهٔ پشتِ آن جابه‌جا (اسکرول) نشود
+    if (!(__apexDlg && __apexDlg.dialog)) try {
         window.scrollTo(0, 0);
         var _scArea = document.querySelector('.content-area'); if (_scArea) _scArea.scrollTop = 0;
         var _scMain = document.querySelector('.main-content'); if (_scMain) _scMain.scrollTop = 0;
@@ -2989,6 +3022,7 @@ if (sectionId === 'transactions-list') {
     if (targetSection) {
         targetSection.classList.add('active');
         targetSection.style.display = 'block';
+        try { if (typeof _apexDlgApply === 'function') _apexDlgApply(__apexDlg); } catch (_e) {}
 // پنهان کردن کامل هدر اصلی عنوان (فضا آزاد شود)
 const pageTitleElement = document.getElementById('page-title');
 const pageHeader = pageTitleElement ? pageTitleElement.parentElement : null;
@@ -3048,13 +3082,13 @@ if (headerFilter) {
             titleText = 'لیست آخرین تغییرات';
             break;
         case 'cashbox-transactions-list':
-            titleText = 'معاملات حساب';
+            titleText = 'معاملات خزانه';
             break;
         case 'cashbox-transfer-form-section':
-            titleText = 'انتقال مبلغ بین حساب‌ها';
+            titleText = 'انتقال پول بین خزانه‌ها';
             break;
         case 'cashbox-deposit-form-section':
-            titleText = 'اضافه کردن مبلغ به حساب';
+            titleText = 'اضافه کردن مبلغ به خزانه';
             break;
         case 'expenses':
             titleText = 'مصارفات';
@@ -3064,6 +3098,9 @@ if (headerFilter) {
             break;
         case 'employee-management':
             titleText = 'کارمندان';
+            break;
+        case 'fx-list':
+            titleText = 'لیست تبادلات';
             break;
         // سایر caseها را هم اگر لازم دارید اضافه کنید
         default:
@@ -3177,8 +3214,8 @@ if (fab) {
           fab.onclick = () => showExpenseForm(); // هزینه جدید
           fab.innerHTML = '<i class="fas fa-plus"></i> هزینه جدید';
         } else if (activeTab === 'cashbox') {
-          fab.onclick = () => showCashboxForm(); // حساب جدید
-          fab.innerHTML = '<i class="fas fa-plus"></i> حساب جدید';
+          fab.onclick = () => showCashboxForm(); // خزانه جدید
+          fab.innerHTML = '<i class="fas fa-plus"></i> خزانه جدید';
         } else if (activeTab === 'reports') {
           fab.onclick = () => generateReport(); // گزارش جدید (اگر دارید)
           fab.innerHTML = '<i class="fas fa-plus"></i> گزارش جدید';
@@ -3291,7 +3328,7 @@ const pageTitle = document.getElementById('page-title');
                     if (!_returningFromPicker && !(_expF && _expF.dataset.editId)) initExpenseForm();
                     break;
                 case 'cashbox-form':
-                    pageTitle.textContent = 'ایجاد حساب جدید';
+                    pageTitle.textContent = 'ایجاد خزانه جدید';
                     break;
 
                 const headerFilter = targetSection.querySelector('.list-header-filter');
@@ -3365,11 +3402,11 @@ if (pageHeader) pageHeader.style.display = (sectionId === 'dashboard') ? 'block'
                     initExpenseForm();
                     break;
                 case 'cash-boxes':
-                    pageTitle.textContent = 'حساب‌ها';
+                    pageTitle.textContent = 'خزانه‌ها';
                     loadCashboxes();
                     break;
                 case 'cashbox-form':
-                    pageTitle.textContent = 'ایجاد حساب جدید';
+                    pageTitle.textContent = 'ایجاد خزانه جدید';
                     break;
                 case 'reports':
                     pageTitle.textContent = 'گزارشات';
@@ -3427,13 +3464,13 @@ if (pageHeader) pageHeader.style.display = (sectionId === 'dashboard') ? 'block'
                     loadChangelogList();
                     break;
                 case 'cashbox-transactions-list':
-                    pageTitle.textContent = 'معاملات حساب';
+                    pageTitle.textContent = 'معاملات خزانه';
                     break;
                 case 'cashbox-transfer-form-section':
-                    pageTitle.textContent = 'انتقال مبلغ';
+                    pageTitle.textContent = 'انتقال پول بین خزانه‌ها';
                     break;
                 case 'cashbox-deposit-form-section':
-                    pageTitle.textContent = 'اضافه کردن مبلغ به حساب';
+                    pageTitle.textContent = 'اضافه کردن مبلغ به خزانه';
                     break;
                 case 'financial':
                     pageTitle.textContent = 'امور مالی';
@@ -3665,7 +3702,7 @@ function saveCashbox() {
     var _cbTypeEl = document.getElementById('cashbox-type');
     const cbType = _cbTypeEl ? (_cbTypeEl.value || 'خزانه') : 'خزانه';
     
-    if (!name) { showMessage('خطا', 'لطفاً نام حساب را وارد کنید.'); return; }
+    if (!name) { showMessage('خطا', 'لطفاً نام خزانه را وارد کنید.'); return; }
     // اگر موجودی اولیه وارد شده، ارزِ آن الزامی است تا در ارزِ درست ثبت شود
     // موجودیِ اولیه می‌تواند مثبت، منفی (بدهیِ آغازینِ حساب) یا اعشاری باشد؛ هر مقدارِ غیرصفر ارز می‌خواهد
     if (initialBalance !== 0 && !currency) { showMessage('خطا', 'لطفاً ارزِ موجودی اولیه را انتخاب کنید (از کارت نرخ ارز).'); return; }
@@ -3692,7 +3729,7 @@ function saveCashbox() {
     }
     
     const result = db.saveCashbox(cashbox);
-    if (!result.success) { showMessage('خطا', result.error || 'خطا در ذخیره حساب'); return; }
+    if (!result.success) { showMessage('خطا', result.error || 'خطا در ذخیره خزانه'); return; }
     
     // ====== درخواست کاربر: مبلغ اولیه حساب در فهرست معاملات حساب ثبت شود ======
     //  موجودیِ اولیهٔ منفی هم (مثلاً ‎-5000‎) با علامتِ خودش ثبت می‌شود تا در معاملاتِ حساب، مانده‌ها
@@ -3749,14 +3786,14 @@ function saveCashbox() {
         } catch (e) { console.warn('cashbox edit balance sync failed:', e); }
     }
     
-    showMessage('موفقیت', 'حساب با موفقیت ذخیره شد.'); addChangelog(editId ? 'ویرایش' : 'ثبت', 'صندوق', cashbox, (editId ? 'ویرایش' : 'ثبت') + ' حساب');
+    showMessage('موفقیت', 'خزانه با موفقیت ذخیره شد.'); addChangelog(editId ? 'ویرایش' : 'ثبت', 'صندوق', cashbox, (editId ? 'ویرایش' : 'ثبت') + ' خزانه');
     
     // ریست فرم و برگشت به تب حساب‌ها
     document.getElementById('cashboxForm').reset();
     var _ibReset = document.getElementById('cashbox-initial-balance'); if (_ibReset) _ibReset.value = '';
     delete document.getElementById('cashboxForm').dataset.editId;
     const formTitle = document.querySelector('#cashbox-form .jf-title');
-    if (formTitle) formTitle.textContent = 'ایجاد حساب جدید';
+    if (formTitle) formTitle.textContent = 'ایجاد خزانه جدید';
     
     showSection('financial');
     setTimeout(() => { switchFinancialTab('cashbox'); }, 100);
@@ -3786,6 +3823,8 @@ function savePerson() {
         previousAccount: parseFloat(document.getElementById('person-previous-account').value) || 0,
         notes: document.getElementById('person-notes').value
     };
+    // (APEX) تصویرِ شخص — فقط وقتی تصویرِ تازه انتخاب شده باشد (در ویرایش، تصویرِ قبلی حفظ می‌شود)
+    if (window._apexPendingPersonImage) personData.image = window._apexPendingPersonImage;
     
     if (editId) {
         personData.id = parseInt(editId);
@@ -3981,7 +4020,9 @@ function saveProduct() {
         delete document.getElementById('productForm').dataset.editId;
         _pendingProductImageData = null;
         if (typeof resetProductForm === 'function') resetProductForm();
-        if (_productPickerInput && result.data) {
+        if (!editId && typeof _padjAfterProductSaved === 'function' && _padjAfterProductSaved(result.data)) {
+            // (APEX) از فیلدِ جنسِ فورمِ «ورودی/خروجی جدید» آمده بود → جنسِ تازه همان‌جا انتخاب شد
+        } else if (_productPickerInput && result.data) {
             // در حالت picker: جنس جدید را مستقیم انتخاب کن
             _selectProductForPicker(result.data);
         } else if (_productDetailReturnForForm != null) {
@@ -4026,7 +4067,7 @@ function saveSale() {
     // ====== درخواست کاربر: بدون انتخاب حساب نباید فروش صورت گیرد ======
     var _cashboxIdCheck = document.getElementById('sales-cashbox')?.value || '';
     if (!_cashboxIdCheck) {
-        showMessage('خطا', 'لطفاً حساب را انتخاب کنید. بدون اتصال به حساب، فروش امکان‌پذیر نیست.');
+        showMessage('خطا', 'لطفاً خزانه را انتخاب کنید. بدون اتصال به خزانه، فروش امکان‌پذیر نیست.');
         return;
     }
     
@@ -5382,7 +5423,7 @@ function savePurchase() {
         var _purchaseCashbox = db.getCashboxes().find(c => c.id == cashboxId);
         var _purchasePaid = _isForeignPur ? paidForeign : paidAfn;
         if (_purchaseCashbox && _purchasePaid > 0 && parseFloat(_purchaseCashbox.balance || 0) < _purchasePaid) {
-            if (!_confirmNegBalance('موجودی حساب «' + (_purchaseCashbox.name || '') + '» کافی نیست.\nموجودی فعلی: ' + formatNumber(parseFloat(_purchaseCashbox.balance || 0)) + '\nمبلغ پرداخت: ' + formatNumber(_purchasePaid) + '\n\nآیا می‌خواهید با وجود کمبود موجودی، خرید را ثبت کنید؟ (موجودی حساب منفی خواهد شد)', savePurchase)) return;
+            if (!_confirmNegBalance('موجودی خزانه «' + (_purchaseCashbox.name || '') + '» کافی نیست.\nموجودی فعلی: ' + formatNumber(parseFloat(_purchaseCashbox.balance || 0)) + '\nمبلغ پرداخت: ' + formatNumber(_purchasePaid) + '\n\nآیا می‌خواهید با وجود کمبود موجودی، خرید را ثبت کنید؟ (موجودی خزانه منفی خواهد شد)', savePurchase)) return;
         }
     }
     
@@ -5660,7 +5701,7 @@ function saveReceipt() {
     let transaction;
     {
         if (!personId) { showMessage('خطا', 'لطفاً شخص را انتخاب کنید.'); return; }
-        if (!cashboxId) { showMessage('خطا', 'حساب را مشخص کنید.'); return; }
+        if (!cashboxId) { showMessage('خطا', 'خزانه را مشخص کنید.'); return; }
         transaction = {
             type: 'دریافت', personId: parseInt(personId), personName, date, amount, currency,
             receiptType: type, cashboxId: parseInt(cashboxId), reference, description, status: 'انجام شد',
@@ -5727,7 +5768,7 @@ function savePayment() {
 
     if (!personId) { showMessage('خطا', 'لطفاً گیرنده را انتخاب کنید.'); return; }
     if (amount <= 0) { showMessage('خطا', 'مبلغ معتبر وارد کنید.'); return; }
-    if (!noTrack && !cashboxId) { showMessage('خطا', 'حساب را مشخص کنید.'); return; }
+    if (!noTrack && !cashboxId) { showMessage('خطا', 'خزانه را مشخص کنید.'); return; }
 
     const cashboxes = db.getCashboxes();
     const cashbox = noTrack ? null : cashboxes.find(c => c.id == cashboxId);
@@ -5737,7 +5778,7 @@ function savePayment() {
     var _cbBal = (cashbox && typeof db.getCashboxBalance === 'function')
         ? db.getCashboxBalance(cashbox, currency) : (cashbox ? parseFloat(cashbox.balance || 0) : 0);
     if (!noTrack && cashbox && _cbBal < amount) {
-        if (!_confirmNegBalance('موجودی حساب «' + (cashbox.name || '') + '» در ارز ' + getCurrencyLabel(currency) + ' کافی نیست.\nموجودی فعلی: ' + formatNumber(_cbBal) + '\nمبلغ پرداخت: ' + formatNumber(amount) + '\n\nآیا می‌خواهید با وجود کمبود موجودی، پرداخت را ثبت کنید؟ (موجودی حساب منفی خواهد شد)', savePayment)) return;
+        if (!_confirmNegBalance('موجودی خزانه «' + (cashbox.name || '') + '» در ارز ' + getCurrencyLabel(currency) + ' کافی نیست.\nموجودی فعلی: ' + formatNumber(_cbBal) + '\nمبلغ پرداخت: ' + formatNumber(amount) + '\n\nآیا می‌خواهید با وجود کمبود موجودی، پرداخت را ثبت کنید؟ (موجودی خزانه منفی خواهد شد)', savePayment)) return;
     }
 
     const transaction = {
@@ -5809,7 +5850,7 @@ function saveExpense() {
     if (!title) { showMessage('خطا', 'لطفاً عنوان را وارد کنید.'); return; }
     // دسته‌بندی اختیاری است
     if (amount <= 0) { showMessage('خطا', 'لطفاً مبلغ معتبر وارد کنید.'); return; }
-    if (!cashboxId) { showMessage('خطا', 'لطفاً حساب را انتخاب کنید.'); return; }
+    if (!cashboxId) { showMessage('خطا', 'لطفاً خزانه را انتخاب کنید.'); return; }
     
     const cashboxes = db.getCashboxes();
     const cashbox = cashboxes.find(c => c.id == cashboxId);
@@ -5817,7 +5858,7 @@ function saveExpense() {
     var _cbBalE = (cashbox && typeof db.getCashboxBalance === 'function')
         ? db.getCashboxBalance(cashbox, currency) : (cashbox ? parseFloat(cashbox.balance || 0) : 0);
     if (cashbox && _cbBalE < amount) {
-        if (!_confirmNegBalance('موجودی حساب «' + (cashbox.name || '') + '» در ارز ' + getCurrencyLabel(currency) + ' کافی نیست.\nموجودی فعلی: ' + formatNumber(_cbBalE) + '\nمبلغ مصرف: ' + formatNumber(amount) + '\n\nآیا می‌خواهید با وجود کمبود موجودی، مصرف را ثبت کنید؟ (موجودی حساب منفی خواهد شد)', saveExpense)) return;
+        if (!_confirmNegBalance('موجودی خزانه «' + (cashbox.name || '') + '» در ارز ' + getCurrencyLabel(currency) + ' کافی نیست.\nموجودی فعلی: ' + formatNumber(_cbBalE) + '\nمبلغ مصرف: ' + formatNumber(amount) + '\n\nآیا می‌خواهید با وجود کمبود موجودی، مصرف را ثبت کنید؟ (موجودی خزانه منفی خواهد شد)', saveExpense)) return;
     }
     
     const expense = {
@@ -6016,10 +6057,10 @@ function showCashBoxForm(cashboxId = null) {
     if (typeof _populateCurrencySelect === 'function') _populateCurrencySelect('cashbox-currency');
     
     if (cashboxId) {
-        if (formTitle) formTitle.textContent = 'ویرایش حساب';
+        if (formTitle) formTitle.textContent = 'ویرایش خزانه';
         loadCashboxData(cashboxId);
     } else {
-        if (formTitle) formTitle.textContent = 'ایجاد حساب جدید';
+        if (formTitle) formTitle.textContent = 'ایجاد خزانه جدید';
         resetCashboxForm();
     }
     
@@ -7599,7 +7640,7 @@ function loadPersonsList() {
             <td class="person-card-cell">
                 <div class="person-card">
                     <div class="person-card-main">
-                        <span class="person-card-avatar"><i class="fas fa-user"></i></span>
+                        ${(typeof _apexPersonAvatar === 'function') ? _apexPersonAvatar(person) : '<span class="person-card-avatar"><i class="fas fa-user"></i></span>'}
                         <span class="person-card-name">${person.name}</span>
                     </div>
                     <div class="person-card-balance">باقیداری: <span>${baqi}</span></div>
@@ -7655,6 +7696,7 @@ function resetPersonForm() {
     document.getElementById('personForm').reset();
     document.getElementById('person-previous-account').value = '';
     delete document.getElementById('personForm').dataset.editId;
+    try { if (typeof _apexPersonFormReset === 'function') _apexPersonFormReset(); } catch (e) {}
 }
 
 function loadPersonData(personId) {
@@ -7672,6 +7714,8 @@ function loadPersonData(personId) {
         document.getElementById('person-currency').value = person.currency || _baseCur();
         document.getElementById('person-notes').value = person.notes || '';
         document.getElementById('personForm').dataset.editId = personId;
+        // (APEX) «آدرس و اطلاعات بیشتر» یک فیلد + تصویرِ شخص
+        try { if (typeof _apexPersonFormLoaded === 'function') _apexPersonFormLoaded(person); } catch (e) {}
     }
 }
 // تابع برای باز کردن مودال ثبت کارمند جدید
@@ -9116,6 +9160,8 @@ function _populateCurrencySelect(selectId, selectedCode) {
     var _sel = selectedCode || (curs[0] && curs[0].code) || '';
     sel.innerHTML = curs.map(function (c) {
         var lbl = c.nameLocal || c.name || c.code;
+        // (APEX) انتخابگرِ ارزِ داخلِ فیلدِ مبلغ فقط کدِ ارز را نشان می‌دهد (مثل AFN / USD)
+        if (sel.classList && sel.classList.contains('apex-amt-cur')) return '<option value="' + c.code + '"' + (c.code === _sel ? ' selected' : '') + '>' + c.code + '</option>';
         return '<option value="' + c.code + '"' + (c.code === _sel ? ' selected' : '') + '>' + lbl + ' (' + c.code + ')</option>';
     }).join('');
 }
@@ -9461,7 +9507,7 @@ function initPurchaseForm() {
     const cashboxSelect = document.getElementById('purchase-cashbox');
     if (cashboxSelect) {
         const cashboxes = db.getCashboxes();
-        cashboxSelect.innerHTML = '<option value="">انتخاب حساب</option>';
+        cashboxSelect.innerHTML = '<option value="">انتخاب خزانه</option>';
         cashboxes.forEach(cashbox => {
             const option = document.createElement('option');
             option.value = cashbox.id;
@@ -9892,7 +9938,7 @@ function loadPersonsForReceipt() {
 function loadCashboxesForReceipt() {
     const cashboxSelect = document.getElementById('receipt-cashbox');
     const cashboxes = db.getCashboxes();
-    cashboxSelect.innerHTML = '<option value="">انتخاب حساب</option>';
+    cashboxSelect.innerHTML = '<option value="">انتخاب خزانه</option>';
     cashboxes.forEach(cashbox => {
         const option = document.createElement('option');
         option.value = cashbox.id;
@@ -9976,7 +10022,7 @@ function loadPersonsForPayment() {
 function loadCashboxesForPayment() {
     const cashboxSelect = document.getElementById('payment-cashbox');
     const cashboxes = db.getCashboxes();
-    cashboxSelect.innerHTML = '<option value="">انتخاب حساب</option>';
+    cashboxSelect.innerHTML = '<option value="">انتخاب خزانه</option>';
     cashboxes.forEach(cashbox => {
         const option = document.createElement('option');
         option.value = cashbox.id;
@@ -10221,7 +10267,7 @@ function loadExpensesList() {
                     <div class="product-card-cell-data">کتگوری: <span>${exp.category || '-'}</span></div>
                     <div class="product-card-cell-data">زمان: <span>${formatAfghanDateTime(exp.date, exp.createdAt) || '-'}</span></div>
                     <div class="product-card-cell-data">مبلغ: <span>${formatNumber(expAmount)} ${getCurrencyLabel(exp.currency)}</span></div>
-                    <div class="product-card-cell-data">حساب: <span>${cashboxName || '-'}</span></div>
+                    <div class="product-card-cell-data">خزانه: <span>${cashboxName || '-'}</span></div>
                     <div class="product-card-cell-data">اطلاعات: <span>${exp.notes || '-'}</span></div>
                     <div class="product-card-actions">
                         <button class="product-card-kebab" onclick="togglePersonRowMenu(this, event)" title="عملیات"><i class="fas fa-ellipsis-v"></i></button>
@@ -10260,7 +10306,7 @@ function initExpenseForm() {
     // حساب‌ها
     const cashboxes = db.getCashboxes();
     const cashboxSelect = document.getElementById('expense-cashbox');
-    cashboxSelect.innerHTML = '<option value="">انتخاب حساب</option>';
+    cashboxSelect.innerHTML = '<option value="">انتخاب خزانه</option>';
     cashboxes.forEach(cashbox => {
         const option = document.createElement('option');
         option.value = cashbox.id;
@@ -10409,7 +10455,7 @@ function loadExpenseData(expenseId) {
     if (cashboxEl) {
         var cbVal = String(expense.cashboxId || '');
         if (cbVal && !Array.from(cashboxEl.options).find(function(o){ return String(o.value) === cbVal; })) {
-            var cbName = expense.cashboxName || ('حساب ' + cbVal);
+            var cbName = expense.cashboxName || ('خزانه ' + cbVal);
             var opt2 = document.createElement('option'); opt2.value = cbVal; opt2.textContent = cbName; cashboxEl.appendChild(opt2);
         }
         cashboxEl.value = cbVal;
@@ -10506,7 +10552,7 @@ function loadCashboxes() {
     container.innerHTML = '';
 
     if (cashboxes.length === 0) {
-        container.innerHTML = '<p style="text-align:center;padding:20px;">هیچ حسابی ثبت نشده است</p>';
+        container.innerHTML = '<p style="text-align:center;padding:20px;">هیچ خزانه‌ای ثبت نشده است</p>';
     } else {
         var grid = document.createElement('div');
         grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:18px 16px;padding:6px 0;';
@@ -10593,7 +10639,7 @@ function loadCashboxes() {
 
     const filterSelect = document.getElementById('cashbox-transaction-filter');
     if (filterSelect) {
-        filterSelect.innerHTML = '<option value="all">همه حساب‌ها</option>';
+        filterSelect.innerHTML = '<option value="all">همه خزانه‌ها</option>';
         cashboxes.forEach(cashbox => {
             const option = document.createElement('option');
             option.value = cashbox.id;
@@ -10646,12 +10692,12 @@ function showCashboxActionBar(event, cashboxId) {
     const isDefault = !!cashbox.isDefault;
     const actions = [
         { icon: 'fa-edit', color: '#3b82f6', title: 'ویرایش', action: 'edit' },
-        { icon: 'fa-history', color: '#8b5cf6', title: 'معاملات حساب', action: 'transactions' },
-        { icon: 'fa-exchange-alt', color: '#f59e0b', title: 'انتقال مبلغ', action: 'transfer' },
-        { icon: 'fa-plus-circle', color: '#10b981', title: 'افزودن به حساب', action: 'deposit' },
-        { icon: 'fa-minus-circle', color: '#ef4444', title: 'برداشت از حساب', action: 'withdraw' },
-        { icon: 'fa-right-left', color: '#7c3aed', title: 'تبدیل ارز داخل صندوق', action: 'convertInside' },
-        { icon: 'fa-file-alt', color: '#0ea5e9', title: 'گزارش معاملات حساب', action: 'report' },
+        { icon: 'fa-history', color: '#8b5cf6', title: 'معاملات خزانه', action: 'transactions' },
+        { icon: 'fa-exchange-alt', color: '#f59e0b', title: 'انتقال پول بین خزانه‌ها', action: 'transfer' },
+        { icon: 'fa-plus-circle', color: '#10b981', title: 'افزودن به خزانه', action: 'deposit' },
+        { icon: 'fa-minus-circle', color: '#ef4444', title: 'برداشت از خزانه', action: 'withdraw' },
+        { icon: 'fa-right-left', color: '#7c3aed', title: 'تبدیل ارز داخل خزانه', action: 'convertInside' },
+        { icon: 'fa-file-alt', color: '#0ea5e9', title: 'گزارش معاملات خزانه', action: 'report' },
         { icon: isDefault ? 'fa-star' : 'fa-star', color: isDefault ? '#94a3b8' : '#eab308', title: isDefault ? 'حذف از پیش‌فرض' : 'پیش‌فرض قرار دادن', action: 'toggleDefault' },
         { icon: 'fa-trash', color: '#dc2626', title: 'حذف', action: 'delete' }
     ];
@@ -10783,7 +10829,7 @@ function performCashboxAction(cashboxId, action) {
 function toggleDefaultCashbox(cashboxId) {
     var cashboxes = db.getCashboxes() || [];
     var target = cashboxes.find(function(c) { return c.id == cashboxId; });
-    if (!target) { showMessage('خطا', 'حساب یافت نشد'); return; }
+    if (!target) { showMessage('خطا', 'خزانه یافت نشد'); return; }
 
     var willBecomeDefault = !target.isDefault;
     var currency = target.currency || _baseCur();
@@ -10795,7 +10841,7 @@ function toggleDefaultCashbox(cashboxId) {
         }
         // fallback: ساخت آبجکت کامل با نام موجود
         var box = (db.getCashboxes() || []).find(function(c) { return c.id == id; });
-        if (!box) return { success: false, error: 'حساب یافت نشد' };
+        if (!box) return { success: false, error: 'خزانه یافت نشد' };
         return db.saveCashbox(Object.assign({}, box, patch));
     };
 
@@ -10808,8 +10854,8 @@ function toggleDefaultCashbox(cashboxId) {
         });
         var r = doUpdate(target.id, { isDefault: true });
         if (r && r.success !== false) {
-            showMessage('موفقیت', 'این حساب به‌عنوان پیش‌فرض ' + getCurrencyLabel(currency) + ' تنظیم شد.');
-            if (typeof addChangelog === 'function') addChangelog('ویرایش', 'صندوق', { id: target.id, name: target.name }, 'پیش‌فرض قرار دادن حساب');
+            showMessage('موفقیت', 'این خزانه به‌عنوان پیش‌فرض ' + getCurrencyLabel(currency) + ' تنظیم شد.');
+            if (typeof addChangelog === 'function') addChangelog('ویرایش', 'صندوق', { id: target.id, name: target.name }, 'پیش‌فرض قرار دادن خزانه');
             loadCashboxes();
         } else {
             showMessage('خطا', (r && r.error) || 'خطا در تنظیم پیش‌فرض');
@@ -10817,8 +10863,8 @@ function toggleDefaultCashbox(cashboxId) {
     } else {
         var r2 = doUpdate(target.id, { isDefault: false });
         if (r2 && r2.success !== false) {
-            showMessage('موفقیت', 'این حساب از حالت پیش‌فرض خارج شد.');
-            if (typeof addChangelog === 'function') addChangelog('ویرایش', 'صندوق', { id: target.id, name: target.name }, 'حذف حساب از حالت پیش‌فرض');
+            showMessage('موفقیت', 'این خزانه از حالت پیش‌فرض خارج شد.');
+            if (typeof addChangelog === 'function') addChangelog('ویرایش', 'صندوق', { id: target.id, name: target.name }, 'حذف خزانه از حالت پیش‌فرض');
             loadCashboxes();
         } else {
             showMessage('خطا', (r2 && r2.error) || 'خطا در حذف از پیش‌فرض');
@@ -11017,9 +11063,9 @@ function loadCashboxTransactionsList(cashboxId) {
         }).map(function(log){
             var typeLabel = ({
                 'deposit_in': 'اضافه به صندوق',
-                'deposit_out': 'برداشت از حساب',
+                'deposit_out': 'برداشت از خزانه',
                 'deposit_external': 'ورود مبلغ خارجی',
-                'withdraw_external': 'برداشت مبلغ از حساب',
+                'withdraw_external': 'برداشت مبلغ از خزانه',
                 'shipping_charge': 'هزینه حمل و نقل',
                 'transfer_in': 'انتقال ورودی',
                 'transfer_out': 'انتقال خروجی'
@@ -11071,7 +11117,7 @@ function loadCashboxTransactionsList(cashboxId) {
     if (allItems.length === 0) {
         // در چیدمانِ کارتی، tbody بلوکی است؛ پس ردیفِ پیام هم بلوکی نوشته می‌شود
         // تا وسط‌چین و کامل دیده شود.
-        tbody.innerHTML = '<tr class="cbtx-empty-row" style="display:block;"><td style="display:block;text-align:center;padding:24px;color:var(--text-muted,#64748b);">هیچ معامله‌ای در این حساب ثبت نشده است</td></tr>';
+        tbody.innerHTML = '<tr class="cbtx-empty-row" style="display:block;"><td style="display:block;text-align:center;padding:24px;color:var(--text-muted,#64748b);">هیچ معامله‌ای در این خزانه ثبت نشده است</td></tr>';
         return;
     }
     
@@ -11237,7 +11283,7 @@ function editCashboxLogEntry(logId, cashboxId) {
     try {
         var logs = JSON.parse(localStorage.getItem('cashboxTransactions') || '[]');
         var log = logs.find(function(l) { return l.id == logId; });
-        if (!log) { showMessage('خطا', 'این معامله حساب یافت نشد.'); return; }
+        if (!log) { showMessage('خطا', 'این معامله خزانه یافت نشد.'); return; }
 
         // برای انتقال‌های میان حساب‌ها، فرم انتقال را با مقادیر قبلی باز می‌کنیم
         if (log.type === 'transfer_in' || log.type === 'transfer_out') {
@@ -11297,7 +11343,7 @@ function editCashboxLogEntry(logId, cashboxId) {
         _openCashboxLogEditModal(log, cashboxId);
     } catch (e) {
         console.error('editCashboxLogEntry error:', e);
-        showMessage('خطا', 'خطا در ویرایش معامله حساب.');
+        showMessage('خطا', 'خطا در ویرایش معامله خزانه.');
     }
 }
 
@@ -11318,7 +11364,7 @@ function _openCashboxLogEditModal(log, cashboxId) {
     overlay.innerHTML =
         '<div style="background:#fff;border-radius:14px;padding:24px;width:92%;max-width:420px;box-shadow:0 10px 40px rgba(0,0,0,0.2);font-family:inherit;">' +
             '<h3 style="margin:0 0 16px 0;font-size:17px;color:#1e293b;text-align:right;">' +
-                '<i class="fas fa-edit" style="color:#6366f1;margin-left:8px;"></i> ویرایش معامله حساب' +
+                '<i class="fas fa-edit" style="color:#6366f1;margin-left:8px;"></i> ویرایش معامله خزانه' +
             '</h3>' +
             '<div style="margin-bottom:14px;text-align:right;">' +
                 '<label style="display:block;margin-bottom:6px;font-weight:600;color:#334155;font-size:13px;">مبلغ</label>' +
@@ -11354,7 +11400,7 @@ function _openCashboxLogEditModal(log, cashboxId) {
 
             var logs = JSON.parse(localStorage.getItem('cashboxTransactions') || '[]');
             var idx = logs.findIndex(function(l) { return l.id == log.id; });
-            if (idx === -1) { showMessage('خطا', 'این معامله حساب یافت نشد.'); closeModal(); return; }
+            if (idx === -1) { showMessage('خطا', 'این معامله خزانه یافت نشد.'); closeModal(); return; }
             var current = logs[idx];
 
             // اثر دیف مبلغ روی حساب
@@ -11379,7 +11425,7 @@ function _openCashboxLogEditModal(log, cashboxId) {
             logs[idx] = current;
             localStorage.setItem('cashboxTransactions', JSON.stringify(logs));
             closeModal();
-            showMessage('موفقیت', 'معامله حساب ویرایش شد.');
+            showMessage('موفقیت', 'معامله خزانه ویرایش شد.');
             if (typeof loadCashboxTransactionsList === 'function') loadCashboxTransactionsList(cashboxId);
             if (typeof loadCashboxes === 'function') loadCashboxes();
             if (typeof renderCashboxesList === 'function') renderCashboxesList();
@@ -11393,11 +11439,11 @@ function _openCashboxLogEditModal(log, cashboxId) {
 }
 
 function deleteCashboxLogEntry(logId, cashboxId) {
-    showConfirm('تایید حذف', 'آیا از حذف این معامله حساب مطمئن هستید؟', function() {
+    showConfirm('تایید حذف', 'آیا از حذف این معامله خزانه مطمئن هستید؟', function() {
         try {
             var logs = JSON.parse(localStorage.getItem('cashboxTransactions') || '[]');
             var log = logs.find(function(l) { return l.id == logId; });
-            if (!log) { showMessage('خطا', 'این معامله حساب یافت نشد.'); return; }
+            if (!log) { showMessage('خطا', 'این معامله خزانه یافت نشد.'); return; }
 
             // برای انتقال‌ها — هر دو طرف باید برگشت داده شوند
             if (log.type === 'transfer_in' || log.type === 'transfer_out') {
@@ -11455,7 +11501,7 @@ function deleteCashboxLogEntry(logId, cashboxId) {
                 localStorage.setItem('cashboxTransactions', JSON.stringify(remaining2));
             }
 
-            showMessage('موفقیت', 'معامله حساب حذف شد.');
+            showMessage('موفقیت', 'معامله خزانه حذف شد.');
             if (typeof loadCashboxTransactionsList === 'function') loadCashboxTransactionsList(cashboxId);
             if (typeof loadCashboxes === 'function') loadCashboxes();
             if (typeof renderCashboxesList === 'function') renderCashboxesList();
@@ -11463,7 +11509,7 @@ function deleteCashboxLogEntry(logId, cashboxId) {
             if (typeof finUpdateCashTotals === 'function') finUpdateCashTotals();
         } catch (e) {
             console.error('deleteCashboxLogEntry error:', e);
-            showMessage('خطا', 'خطا در حذف معامله حساب.');
+            showMessage('خطا', 'خطا در حذف معامله خزانه.');
         }
     });
 }
@@ -11493,7 +11539,7 @@ function showCashboxTransferForm(fromCashboxId) {
     // حسابِ مبدأ (انتخابگر — حسابِ کلیک‌شده از پیش انتخاب می‌شود)
     const fromSelect = document.getElementById('transfer-from-cashbox');
     if (fromSelect) {
-        fromSelect.innerHTML = '<option value="">از حساب</option>';
+        fromSelect.innerHTML = '<option value="">از خزانه</option>';
         cashboxes.forEach(function (c) {
             const opt = document.createElement('option');
             opt.value = c.id; opt.textContent = _optLabel(c);
@@ -11505,7 +11551,7 @@ function showCashboxTransferForm(fromCashboxId) {
     // پر کردن لیست حساب‌های مقصد
     const toSelect = document.getElementById('transfer-to-cashbox');
     if (toSelect) {
-        toSelect.innerHTML = '<option value="">به حساب</option>';
+        toSelect.innerHTML = '<option value="">به خزانه</option>';
         cashboxes.filter(c => c.id != fromCashboxId).forEach(c => {
             const opt = document.createElement('option');
             opt.value = c.id;
@@ -11547,7 +11593,7 @@ function executeCashboxTransferLegacy(fromId) {
         var section = document.getElementById('cashbox-transfer-form-section');
         fromId = section ? parseInt(section.getAttribute('data-from-cashbox-id')) : null;
     }
-    if (!fromId) { showMessage('خطا', 'حساب مبدأ مشخص نیست'); return; }
+    if (!fromId) { showMessage('خطا', 'خزانهٔ مبدأ مشخص نیست'); return; }
 
     const toId = document.getElementById('transfer-to-cashbox')?.value;
     const amount = parseFloat(document.getElementById('transfer-amount')?.value) || 0;
@@ -11555,8 +11601,8 @@ function executeCashboxTransferLegacy(fromId) {
     // تاریخِ انتخابیِ کاربر (فیلدِ تازه) — اگر خالی بود، همان رفتارِ قبلی (بدون تاریخ)
     const _trfDt = (document.getElementById('transfer-datetime')?.value) || '';
 
-    if (!toId) { showMessage('خطا', 'حساب مقصد را انتخاب کنید'); return; }
-    if (String(toId) === String(fromId)) { showMessage('خطا', 'حساب مبدأ و مقصد نمی‌توانند یکی باشند'); return; }
+    if (!toId) { showMessage('خطا', 'خزانهٔ مقصد را انتخاب کنید'); return; }
+    if (String(toId) === String(fromId)) { showMessage('خطا', 'خزانهٔ مبدأ و مقصد نمی‌توانند یکی باشند'); return; }
     if (amount <= 0) { showMessage('خطا', 'مبلغ معتبر وارد کنید'); return; }
     
     const fromBox = db.getCashboxes().find(c => c.id == fromId);
@@ -11589,21 +11635,21 @@ function executeCashboxTransferLegacy(fromId) {
     // کمبودِ موجودی دیگر جلوی کار را نمی‌گیرد: همان تأییدیه‌ای که فرمِ «پرداختی»
     // می‌گیرد این‌جا هم گرفته می‌شود و در صورتِ تأیید، حساب کسری (منفی) می‌شود.
     if (_fromBal < amount) {
-        if (!_confirmNegBalance('موجودی حساب «' + ((fromBox && fromBox.name) || '') + '» در ارز ' +
+        if (!_confirmNegBalance('موجودی خزانه «' + ((fromBox && fromBox.name) || '') + '» در ارز ' +
                 (typeof getCurrencyLabel === 'function' ? getCurrencyLabel(trfCur) : trfCur) + ' کافی نیست.\nموجودی فعلی: ' +
                 formatNumber(_fromBal) + '\nمبلغ انتقال: ' + formatNumber(amount) +
-                '\n\nآیا می‌خواهید با وجود کمبود موجودی، انتقال را ثبت کنید؟ (موجودی حساب منفی خواهد شد)',
+                '\n\nآیا می‌خواهید با وجود کمبود موجودی، انتقال را ثبت کنید؟ (موجودی خزانه منفی خواهد شد)',
                 function () { executeCashboxTransferLegacy(fromId); })) return;
     }
 
     // کسر از حساب مبدأ — در همان ارزِ انتخاب‌شده
     var _r1 = db.updateCashboxBalance(parseInt(fromId), amount, 'out', trfCur);
-    if (!_r1 || _r1.success === false) { showMessage('خطا', (_r1 && _r1.error) || 'خطا در به‌روزرسانی حساب مبدأ'); return; }
+    if (!_r1 || _r1.success === false) { showMessage('خطا', (_r1 && _r1.error) || 'خطا در به‌روزرسانی خزانه مبدأ'); return; }
     // افزایش حساب مقصد — همان ارز، همان مبلغ
     var _r2 = db.updateCashboxBalance(parseInt(toId), amount, 'in', trfCur);
     if (!_r2 || _r2.success === false) {
         db.updateCashboxBalance(parseInt(fromId), amount, 'in', trfCur);   // برگرداندنِ کسر
-        showMessage('خطا', (_r2 && _r2.error) || 'خطا در به‌روزرسانی حساب مقصد');
+        showMessage('خطا', (_r2 && _r2.error) || 'خطا در به‌روزرسانی خزانه مقصد');
         return;
     }
 
@@ -11635,7 +11681,7 @@ function executeCashboxTransferLegacy(fromId) {
         });
     }
     
-    showMessage('موفقیت', 'مبلغ انتقال یافت'); addChangelog('ثبت', 'انتقال', {amount:amount}, "انتقال بین حساب‌ها"); // ${formatNumber(amount)} با موفقیت انتقال یافت.`);
+    showMessage('موفقیت', 'مبلغ انتقال یافت'); addChangelog('ثبت', 'انتقال', {amount:amount}, "انتقال بین خزانه‌ها"); // ${formatNumber(amount)} با موفقیت انتقال یافت.`);
     setTimeout(function() {
         showSection('financial');
         setTimeout(function(){ switchFinancialTab('cashbox'); }, 100);
@@ -11645,7 +11691,7 @@ function loadCashboxesForSales() {
     const cashboxSelect = document.getElementById('sales-cashbox');
     if (!cashboxSelect) return;
     const cashboxes = db.getCashboxes();
-    cashboxSelect.innerHTML = '<option value="">انتخاب حساب</option>';
+    cashboxSelect.innerHTML = '<option value="">انتخاب خزانه</option>';
     cashboxes.forEach(cashbox => {
         const option = document.createElement('option');
         option.value = cashbox.id;
@@ -11670,13 +11716,13 @@ function saveInlineCashboxEdit(id) {
         const name = document.getElementById(`edit-cb-name-${id}`)?.value?.trim();
         const currency = document.getElementById(`edit-cb-currency-${id}`)?.value;
         const location = document.getElementById(`edit-cb-location-${id}`)?.value?.trim();
-        if (!name) { showMessage('خطا', 'نام حساب الزامی است'); return; }
+        if (!name) { showMessage('خطا', 'نام خزانه الزامی است'); return; }
         const result = db.saveCashbox({ id, name, currency, location });
         if (result.success) {
-            showMessage('موفقیت', 'حساب با موفقیت ویرایش شد.');
+            showMessage('موفقیت', 'خزانه با موفقیت ویرایش شد.');
             loadCashboxes();
         } else {
-            showMessage('خطا', result.error || 'ویرایش حساب با خطا مواجه شد.');
+            showMessage('خطا', result.error || 'ویرایش خزانه با خطا مواجه شد.');
         }
     } catch (e) {
         console.error('saveInlineCashboxEdit error:', e);
@@ -11707,12 +11753,12 @@ function editCashbox(id) {
     try {
         const cashboxes = db.getCashboxes();
         const cashbox = cashboxes.find(c => c.id == id);
-        if (!cashbox) { showMessage('خطا', 'حساب یافت نشد.'); return; }
+        if (!cashbox) { showMessage('خطا', 'خزانه یافت نشد.'); return; }
         // ابتدا editId را تنظیم کن تا showSection فرم را ریست نکند
         document.getElementById('cashboxForm').dataset.editId = id;
         showSection('cashbox-form');
         const formTitle = document.querySelector('#cashbox-form h2');
-        if (formTitle) formTitle.innerHTML = '<button class="btn-back-header" onclick="showSection(&apos;financial&apos;); setTimeout(function(){switchFinancialTab(&apos;cashbox&apos;)},100)" title="برگشت"><i class="fas fa-arrow-right"></i></button> ویرایش حساب';
+        if (formTitle) formTitle.innerHTML = '<button class="btn-back-header" onclick="showSection(&apos;financial&apos;); setTimeout(function(){switchFinancialTab(&apos;cashbox&apos;)},100)" title="برگشت"><i class="fas fa-arrow-right"></i></button> ویرایش خزانه';
         const submitBtn = document.querySelector('#cashboxForm button[type="submit"]');
         if (submitBtn) submitBtn.textContent = 'ذخیره تغییرات';
         document.getElementById('cashbox-name').value = cashbox.name || '';
@@ -11731,7 +11777,7 @@ function deleteCashbox(id) {
     var _cb = null;
     try { _cb = (db.getCashboxes() || []).find(function (c) { return c.id == id; }) || null; } catch (e) { _cb = null; }
     var _nm = _cb ? (((_cb.type ? _cb.type + ' ' : '') + (_cb.name || '')).trim()) : '';
-    var _ask = 'آیا از حذف حساب «' + (_nm || '—') + '» اطمینان دارید؟\nتمام تراکنش‌ها و مصارف مرتبط با این حساب نیز حذف می‌شوند.\n\nاین حذف در «آخرین تغییرات» ثبت می‌شود و قابل برگشت است.';
+    var _ask = 'آیا از حذف خزانه «' + (_nm || '—') + '» اطمینان دارید؟\nتمام تراکنش‌ها و مصارف مرتبط با این خزانه نیز حذف می‌شوند.\n\nاین حذف در «آخرین تغییرات» ثبت می‌شود و قابل برگشت است.';
     var _run = function () {
         // ── عکسِ کاملِ پیش از حذف، برای «برگشت از تغییر» ──
         // db.deleteCashbox حذفِ آبشاری انجام می‌دهد (تراکنش‌ها و مصارف پاک می‌شوند)، پس فقط
@@ -11762,7 +11808,7 @@ function deleteCashbox(id) {
             try {
                 if (snap && typeof addChangelog === 'function') {
                     addChangelog('حذف', 'صندوق', snap,
-                        'حذف حساب: ' + (_nm || '') +
+                        'حذف خزانه: ' + (_nm || '') +
                         ' — ' + ((snap.__transactions || []).length) + ' معامله و ' + ((snap.__expenses || []).length) + ' مصرف مرتبط');
                 }
             } catch (e) {}
@@ -11776,12 +11822,12 @@ function deleteCashbox(id) {
                 if (_s2.defaultCashboxId != null && _s2.defaultCashboxId == id && db.saveSettings) { _s2.defaultCashboxId = null; db.saveSettings(_s2); }
             } catch (e) {}
             _jqRefreshAfterCashboxChange();
-            showMessage('موفقیت', 'حساب حذف شد. در صورت نیاز می‌توانید از «آخرین تغییرات» آن را برگردانید.');
+            showMessage('موفقیت', 'خزانه حذف شد. در صورت نیاز می‌توانید از «آخرین تغییرات» آن را برگردانید.');
         } else {
-            showMessage('خطا', result.error || 'حذف حساب با خطا مواجه شد.');
+            showMessage('خطا', result.error || 'حذف خزانه با خطا مواجه شد.');
         }
     };
-    if (typeof showStyledConfirm === 'function') showStyledConfirm('حذف حساب', _ask, _run);
+    if (typeof showStyledConfirm === 'function') showStyledConfirm('حذف خزانه', _ask, _run);
     else if (window.confirm(_ask.replace(/\n/g, ' '))) _run();
 }
 
@@ -12356,6 +12402,24 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
     // (APEX) حاشیه‌های چهارطرفِ ورق (تنظیمات بل › اندازه و رنگ بل) — خالی = حاشیهٔ استندردِ قبلی
     try { css += _apexBillMarginCss(S, pageWidth, '.bill'); } catch (e) {}
 
+    // (APEX) «نصفِ A4»: بلِ کوتاه (مثلاً ۱ تا ۳ جنس) کلِ نیمهٔ بالاییِ ورقِ A4 عمودی را پُر می‌کند
+    // (برای A5 که خودش نصفِ A4 است، کلِ ورق). فقط حداقلِ ارتفاعِ کادرِ بل تعیین می‌شود و یک
+    // فاصله‌انداز (bill-grow) پس از جدولِ اقلام، بخشِ مجموع‌ها و فوتر را به پایینِ همان نیمه
+    // می‌برد؛ بلِ پُرجنس مثلِ قبل خودش بلندتر می‌شود. حاشیهٔ بالا و پایین برابر است
+    // (پیش‌فرض: ۶mm حاشیهٔ صفحه + ۶mm فاصلهٔ بدنه؛ با حاشیه‌های دلخواه: همان حاشیه‌ها).
+    var _halfH = 0;
+    if (!isThermal) {
+        if (size === 'A4' && !isLandscape) _halfH = 148.5;
+        else if (size === 'A5') _halfH = isLandscape ? 148 : 210;
+    }
+    if (_halfH) {
+        var _hT = 12, _hB = 12;
+        try { var _hm = _apexBillMargins(S, 12); if (_hm) { _hT = _hm.t; _hB = _hm.b; } } catch (e) {}
+        var _hMin = Math.max(60, _halfH - _hT - _hB);
+        css += '.bill{display:flex;flex-direction:column;box-sizing:border-box;min-height:' + _hMin + 'mm;}' +
+               '.bill > *{flex:0 0 auto;}.bill > .bill-grow{flex:1 1 auto;min-height:0;}';
+    }
+
     // ---- HTML ----
     var html = '<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="UTF-8"><title>' + docTitle + ' ' + esc(billNum) + '</title><style>' + css + '</style></head><body>' +
     '<div class="bill">' +
@@ -12391,6 +12455,7 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
             '<th class="c-total">مبلغ کل<br><small style="font-weight:400;opacity:.85;">(' + _currencyLabel + ')</small></th>' +
             (hasDetails ? '<th class="c-details">جزئیات</th>' : '') +
         '</tr></thead><tbody>' + rowsHtml + '</tbody></table>' +
+        (_halfH ? '<div class="bill-grow"></div>' : '') +
 
         '<div class="bill-bottom">' +
             '<div class="note-box">' +
@@ -14819,7 +14884,7 @@ function generatePersonReport(personId) {
             moreLines.push('باقی‌مانده: ' + fn(remaining) + ' ' + sym);
         }
         if (disc > 0) moreLines.push('تخفیف: ' + fn(disc) + ' ' + sym);
-        if (cashboxName) moreLines.push('حساب: ' + cashboxName);
+        if (cashboxName) moreLines.push('خزانه: ' + cashboxName);
         if (notes) moreLines.push('یادداشت: ' + notes);
         const moreText = moreLines.length ? moreLines.join('\n') : '—';
 
@@ -15400,7 +15465,7 @@ function generatePersonReport(personId) {
 // ==================== گزارش معاملات حساب ====================
 function generateCashboxReport(cashboxId) {
     const cashbox = db.getCashboxes().find(c => c.id == cashboxId);
-    if (!cashbox) { showMessage('خطا', 'حساب یافت نشد'); return; }
+    if (!cashbox) { showMessage('خطا', 'خزانه یافت نشد'); return; }
 
     // ---- تنظیمات بل: رنگ/فونت/مشخصاتِ بالا و پایین دقیقاً از بل خوانده می‌شود (یکنواخت با گزارشِ شخص) ----
     const settings = db.getSettings() || {};
@@ -15518,9 +15583,9 @@ function generateCashboxReport(cashboxId) {
         }).map(function(log){
             var typeLabel = ({
                 'deposit_in': 'اضافه به صندوق',
-                'deposit_out': 'برداشت از حساب',
+                'deposit_out': 'برداشت از خزانه',
                 'deposit_external': 'ورود مبلغ خارجی',
-                'withdraw_external': 'برداشت مبلغ از حساب',
+                'withdraw_external': 'برداشت مبلغ از خزانه',
                 'shipping_charge': 'هزینه حمل و نقل',
                 'transfer_in': 'انتقال ورودی',
                 'transfer_out': 'انتقال خروجی'
@@ -15625,7 +15690,7 @@ function generateCashboxReport(cashboxId) {
 <html dir="rtl" lang="fa">
 <head>
     <meta charset="UTF-8">
-    <title>گزارش معاملات حساب - ${esc(cashbox.name || '')}</title>
+    <title>گزارش معاملات خزانه - ${esc(cashbox.name || '')}</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -15775,7 +15840,7 @@ function generateCashboxReport(cashboxId) {
         </div>
         <div class="rep-label">
             <div class="lbl">گزارش</div>
-            <div class="val">معاملات حساب</div>
+            <div class="val">معاملات خزانه</div>
         </div>
     </div>
 
@@ -15786,7 +15851,7 @@ function generateCashboxReport(cashboxId) {
 
     <div class="person-info-section">
         <div class="person-info-grid">
-            <div class="field-line"><span class="fi-ico"><i class="fas fa-cash-register"></i></span><span class="field-label">نام حساب :</span> <span class="field-val">${esc(cashbox.name || '---')}</span></div>
+            <div class="field-line"><span class="fi-ico"><i class="fas fa-cash-register"></i></span><span class="field-label">نام خزانه :</span> <span class="field-val">${esc(cashbox.name || '---')}</span></div>
             <div class="field-line"><span class="fi-ico"><i class="fas fa-coins"></i></span><span class="field-label">ارزها :</span> <span class="field-val">${esc(_curListHtml)}</span></div>
             <div class="field-line"><span class="fi-ico"><i class="fas fa-map-marker-alt"></i></span><span class="field-label">موقعیت :</span> <span class="field-val">${esc(cashbox.location || '---')}</span></div>
             <div class="field-line"><span class="fi-ico"><i class="fas fa-star"></i></span><span class="field-label">وضعیت :</span> <span class="field-val">${cashbox.isDefault ? 'پیش‌فرض' : 'عادی'}</span></div>
@@ -15827,13 +15892,13 @@ function generateCashboxReport(cashboxId) {
                 <th style="width:15%"><i class="fas fa-user"></i>فرد / مرجع</th>
                 <th style="width:20%"><i class="fas fa-info-circle"></i>شرح</th>
                 <th style="width:15%"><i class="fas fa-coins"></i>مبلغ</th>
-                <th style="width:18%"><i class="fas fa-balance-scale"></i>مانده حساب</th>
+                <th style="width:18%"><i class="fas fa-balance-scale"></i>مانده خزانه</th>
             </tr>
         </thead>
         ${txRowsHTML}
         <tbody class="final-group">
             <tr style="background:#eef3fb;font-weight:bold;border-top:2px solid ${navy};">
-                <td colspan="5" style="text-align:left;color:${navy};padding:6px;">موجودی نهایی حساب</td>
+                <td colspan="5" style="text-align:left;color:${navy};padding:6px;">موجودی نهایی خزانه</td>
                 <td style="text-align:center;padding:6px;color:${navy};font-size:12px;font-weight:900;">${_finalBalHtml}</td>
                 <td style="text-align:center;padding:6px;color:${navy};font-size:12px;font-weight:900;">${_finalBalHtml}</td>
             </tr>
@@ -15865,14 +15930,14 @@ function generateCashboxReport(cashboxId) {
         +   'var wrap=document.querySelector(".bill-wrap"); var tbl=wrap?wrap.outerHTML:document.body.innerHTML;'
         +   'var xls="<html xmlns:o=\\"urn:schemas-microsoft-com:office:office\\" xmlns:x=\\"urn:schemas-microsoft-com:office:excel\\" xmlns=\\"http://www.w3.org/TR/REC-html40\\"><head><meta charset=\\"UTF-8\\"></head><body>"+tbl+"</body></html>";'
         +   'var blob=new Blob(["\\ufeff"+xls],{type:"application/vnd.ms-excel;charset=utf-8"});'
-        +   'var url=URL.createObjectURL(blob); var a=document.createElement("a"); a.href=url; a.download="گزارش-حساب.xls";'
+        +   'var url=URL.createObjectURL(blob); var a=document.createElement("a"); a.href=url; a.download="گزارش-خزانه.xls";'
         +   'document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(function(){URL.revokeObjectURL(url);},1500);'
         + ' } catch(e){ alert("خطا در ساخت فایل اکسل"); } }'
         + 'document.addEventListener("click",function(ev){ var m=document.getElementById("rep-share-menu"); var b=document.getElementById("rep-share-btn"); if(!m||!m.classList.contains("open")) return; if(m.contains(ev.target)) return; if(b&&b.contains(ev.target)) return; m.classList.remove("open"); });'
         + '</scr' + 'ipt>';
 
     // موبایل: به‌جای پنجرهٔ جدا، در اورلیِ درون‌برنامه (اشتراکِ فایلِ سالم)
-    if (__jouyaMaybeMobilePreview(html, 'گزارش-حساب-' + ((typeof cashbox !== 'undefined' && cashbox) ? (cashbox.name || '') : ''))) return;
+    if (__jouyaMaybeMobilePreview(html, 'گزارش-خزانه-' + ((typeof cashbox !== 'undefined' && cashbox) ? (cashbox.name || '') : ''))) return;
 
     var finalHtml = html.replace('</body>', scriptBlock + '</body>');
 
@@ -18607,10 +18672,17 @@ function _rpBuildReportAOA(kind) {
             (pagg2.fxRows || []).forEach(function (rw) {
                 var oldVal = R((rw.balance || 0) * (rw.refRate || 0));
                 var curVal = R((rw.balance || 0) * (rw.curRate || 0));
-                aoa.push([nowStr, 'مجموع موجودی', 'حساب‌ها و اشخاص', rw.code, R(rw.balance), rw.refRate, oldVal, rw.curRate, curVal, R(rw.gain)]);
+                aoa.push([nowStr, 'مجموع موجودی', 'خزانه‌ها و اشخاص', rw.code, R(rw.balance), rw.refRate, oldVal, rw.curRate, curVal, R(rw.gain)]);
             });
             (pagg2.fxUnknown || []).forEach(function (code) {
-                aoa.push([nowStr, 'مجموع موجودی', 'حساب‌ها و اشخاص', code, '', 'نرخِ مرجع نامشخص', '', '', '', '']);
+                aoa.push([nowStr, 'مجموع موجودی', 'خزانه‌ها و اشخاص', code, '', 'نرخِ مرجع نامشخص', '', '', '', '']);
+            });
+            // (APEX) هر تبادلهٔ ارز یک سطر: نرخِ آمد (بهای خرید) ، نرخِ رفت (فروش) و مفاد/ضررِ همان تبادله
+            (pagg2.fxRealRows || []).forEach(function (it) {
+                var rc = it.rec || {}, x = it.r || {};
+                var who = ((rc.src && rc.src.name) || '') + (rc.dst ? (' ← ' + (rc.dst.name || '')) : '');
+                aoa.push([rc.date || '', who, 'تبادله ارز', x.cur || '', R(x.qty || 0), R(x.costRate || 0), R(x.costBase || 0),
+                          R(x.dealRate || 0), R(x.baseAmt || 0), R(x.pnl || 0)]);
             });
             aoa.push([]);
             aoa.push(['', '', '', '', '', '', '', '', 'مجموع مفاد/ضرر تسعیر', R(pagg2.fxTotal)]);
@@ -18942,11 +19014,11 @@ function _rpFinancialCardHtml(agg) {
     h += '<div class="dash-card dash-card-collapsible pdc-card rp-persons-card">';
     h += '<div class="dash-card-head" onclick="this.parentElement.classList.toggle(\'collapsed\')"><span class="dash-card-title"><i class="fas fa-wallet"></i> مالی</span><i class="fas fa-chevron-down dash-card-chevron"></i></div>';
     h += '<div class="dash-card-body"><div class="pdc-rows">';
-    h += row('تمام حساب‌ها', null, '<span class="rp-metric-count">' + formatNumber(agg.boxCount) + ' حساب</span>');
+    h += row('تمام خزانه‌ها', null, '<span class="rp-metric-count">' + formatNumber(agg.boxCount) + ' خزانه</span>');
     h += row('مقدار آمد', null, money(agg.aomad));
     h += row('مقدار رفت', null, money(agg.raft));
     h += row('مصارف', 'f_expenses', money(agg.masaref));
-    h += row('موجودی حساب', null, money(agg.cashboxTotals));
+    h += row('موجودی خزانه', null, money(agg.cashboxTotals));
     h += '</div></div></div>';
     return h;
 }
@@ -19119,7 +19191,7 @@ function downloadCategoryReportFile(categoryName, fromDate, toDate) {
         + '<h3 style="color:#b91c1c;margin:0;">مجموع هزینه: ' + formatNumber(totalAFN) + ' ؋ &nbsp;|&nbsp; ' + formatNumber(totalUSD) + ' $</h3>\n'
         + '<p style="margin:6px 0 0;color:#888;">تعداد رکورد: ' + filtered.length + '</p>\n'
         + '</div>\n'
-        + '<table><thead><tr><th>#</th><th>تاریخ</th><th>عنوان</th><th>مبلغ</th><th>توضیحات</th><th>حساب</th></tr></thead>\n'
+        + '<table><thead><tr><th>#</th><th>تاریخ</th><th>عنوان</th><th>مبلغ</th><th>توضیحات</th><th>خزانه</th></tr></thead>\n'
         + '<tbody>' + (rows || '<tr><td colspan="6" style="text-align:center;color:#999;padding:16px;">رکوردی یافت نشد</td></tr>') + '</tbody>\n</table>\n'
         + '<button class="print-btn" onclick="window.print()">🖨️ چاپ / ذخیره PDF</button>\n'
         + '</body>\n</html>';
@@ -20017,6 +20089,10 @@ function _rpProfitAggregate(fromDate, toDate) {
     // مفاد و ضرر تسعیر به تفکیکِ ارزِ منبع (مقدار در ارزِ پایه)
     var fxByCur = {};
     (fx.rows || []).forEach(function (rw) { if (rw && rw.code) fxByCur[rw.code] = (fxByCur[rw.code] || 0) + (rw.gain || 0); });
+    // (APEX) مفاد/ضررِ تحقق‌یافتهٔ «تبادله ارز» (نرخِ آمد و رفت) — در همین سطرِ تسعیر، به تفکیکِ ارز
+    var _fxReal = { total: 0, byCur: {}, rows: [] };
+    try { if (typeof _fxRealizedForReport === 'function') _fxReal = _fxRealizedForReport(fromDate, toDate) || _fxReal; } catch (e) {}
+    Object.keys(_fxReal.byCur || {}).forEach(function (c) { fxByCur[c] = (fxByCur[c] || 0) + (_fxReal.byCur[c] || 0); });
 
     // مجموعهٔ ارزها
     var curSet = {};
@@ -20032,7 +20108,7 @@ function _rpProfitAggregate(fromDate, toDate) {
         debtorByCur: roundMap(debtorByCur), creditorByCur: roundMap(creditorByCur),
         grossByCur: roundMap(ps.grossByCur), discByCur: roundMap(ps.discByCur), expByCur: roundMap(ps.expByCur), netByCur: roundMap(ps.netByCur),
         grossBase: R(ps.grossBase), expBase: R(ps.expBase), netBase: R(ps.netBase),
-        fxTotal: R(fx.total || 0), fxRows: fx.rows || [], fxUnknown: fx.unknown || [],
+        fxTotal: R((fx.total || 0) + (_fxReal.total || 0)), fxRows: fx.rows || [], fxUnknown: fx.unknown || [], fxRealRows: _fxReal.rows || [],
         equityBase: R(equityBase), estimated: !!ps.estimated,
         fromDate: fromDate, toDate: toDate
     };
@@ -20085,7 +20161,7 @@ function _rpProfitCardHtml(agg) {
     var _dash = '<span class="rp-metric-count">—</span>';   // ردیفِ بدون‌داده → خالی (نه حذف‌شده)
     // در نمای شخص‌محور همهٔ ردیف‌ها نمایش داده می‌شوند؛ ردیف‌های نامرتبط به شخص خالی (—) می‌مانند.
     h += row('سرمایه گدام براساس قیمت خرید', null, (sc.goods && !pv) ? amtRow(agg.capitalByCur, agg.capitalBuyBase) : _dash);
-    h += row('موجودی حساب‌ها', null, (sc.account && !pv) ? money(agg.cashTotals) : _dash);
+    h += row('موجودی خزانه‌ها', null, (sc.account && !pv) ? money(agg.cashTotals) : _dash);
     h += row('مجموعه باقیداری', null, sc.account ? money(agg.debtorByCur) : _dash);
     h += row('مجموعه طلب', null, sc.account ? money(agg.creditorByCur) : _dash);
     h += row('مفاد', 'pr_profit', money(agg.grossByCur));
@@ -20469,7 +20545,7 @@ function downloadAllFinanceReport(fromDate, toDate) {
             + '<h3 style="color:#1e3a5f;border-bottom:2px solid #1e3a5f;padding-bottom:5px;margin-bottom:8px;">'
             + (idx+1) + '. ' + cat + ' — مجموع: <span style="color:#ef4444;">' + fn(data.total) + ' ؋</span></h3>'
             + (rows
-                ? '<table><thead><tr><th>#</th><th>تاریخ</th><th>عنوان</th><th>مبلغ</th><th>توضیحات</th><th>حساب</th></tr></thead><tbody>' + rows + '</tbody></table>'
+                ? '<table><thead><tr><th>#</th><th>تاریخ</th><th>عنوان</th><th>مبلغ</th><th>توضیحات</th><th>خزانه</th></tr></thead><tbody>' + rows + '</tbody></table>'
                 : '<p style="color:#999;padding:8px;">رکوردی یافت نشد</p>')
             + '</div>';
     });
@@ -20650,7 +20726,7 @@ const cashAfn = parseFloat(document.getElementById('sales-cash-afn').value) || 0
     
     // اعتبارسنجی حساب
     if (!cashboxId && (cashAfn > 0 || cashUsd > 0)) {
-        showMessage('خطا', 'لطفاً حساب را جهت واریز مبلغ پرداختی انتخاب کنید.');
+        showMessage('خطا', 'لطفاً خزانه را جهت واریز مبلغ پرداختی انتخاب کنید.');
         return;
     }
 
@@ -21252,7 +21328,7 @@ function viewTransaction(id) {
 
 // تابع مشاهده تراکنش‌های حساب
 function viewCashboxTransactions(id) {
-    showMessage('تراکنش‌های حساب', 'این قابلیت در نسخه بعدی کامل می‌شود. ID: ' + id);
+    showMessage('تراکنش‌های خزانه', 'این قابلیت در نسخه بعدی کامل می‌شود. ID: ' + id);
 }
 
 
@@ -22625,7 +22701,7 @@ function renderPersonsTable(personsList) {
             <td class="person-card-cell">
                 <div class="person-card" onclick="showPersonTransactions(${person.id})" style="cursor:pointer;">
                     <div class="person-card-main">
-                        <span class="person-card-avatar"><i class="fas fa-user"></i></span>
+                        ${(typeof _apexPersonAvatar === 'function') ? _apexPersonAvatar(person) : '<span class="person-card-avatar"><i class="fas fa-user"></i></span>'}
                         <span class="person-card-name">${person.name}</span>
                     </div>
                     ${baqiHtml}
@@ -24584,7 +24660,7 @@ function loadCashboxesForSaleReturn() {
     var sel = document.getElementById('sr-cashbox');
     if (!sel) return;
     var boxes = db.getCashboxes() || [];
-    sel.innerHTML = '<option value="">حساب</option>';
+    sel.innerHTML = '<option value="">خزانه</option>';
     boxes.forEach(function (cb) {
         var o = document.createElement('option');
         o.value = cb.id;
@@ -25179,7 +25255,7 @@ if (typeof window !== 'undefined') window.searchPurchaseReturnSupplier = searchP
 function loadCashboxesForPurchaseReturn() {
     var sel = document.getElementById('pr-cashbox'); if (!sel) return;
     var boxes = db.getCashboxes() || [];
-    sel.innerHTML = '<option value="">حساب</option>';
+    sel.innerHTML = '<option value="">خزانه</option>';
     boxes.forEach(function (cb) { var o = document.createElement('option'); o.value = cb.id; o.textContent = cb.name + (cb.isDefault ? ' \u2605' : ''); sel.appendChild(o); });
     var curEl = document.getElementById('pr-currency'); var cur = curEl ? curEl.value : _baseCur();
     if (typeof getDefaultCashboxIdForCurrency === 'function') { var defId = getDefaultCashboxIdForCurrency(cur); if (defId) sel.value = String(defId); }
@@ -25517,7 +25593,7 @@ function loadCashboxesForReturn() {
     const cashboxSelect = document.getElementById('return-cashbox');
     if (!cashboxSelect) return;
     const cashboxes = db.getCashboxes();
-    cashboxSelect.innerHTML = '<option value="">انتخاب حساب</option>';
+    cashboxSelect.innerHTML = '<option value="">انتخاب خزانه</option>';
     cashboxes.forEach(cashbox => {
         const option = document.createElement('option');
         option.value = cashbox.id;
@@ -25572,7 +25648,7 @@ function saveReturn() {
 
         if (!returnType) { showMessage('خطا', 'لطفاً نوع برگشت را انتخاب کنید.'); return; }
         if (amount <= 0) { showMessage('خطا', 'لطفاً مبلغ معتبر وارد کنید.'); return; }
-        if (!cashboxId) { showMessage('خطا', 'لطفاً حساب را انتخاب کنید.'); return; }
+        if (!cashboxId) { showMessage('خطا', 'لطفاً خزانه را انتخاب کنید.'); return; }
         if (!date) { showMessage('خطا', 'لطفاً تاریخ را وارد کنید.'); return; }
 
         const isSalesReturn = returnType === 'برگشت از فروش';
@@ -26215,7 +26291,7 @@ function showCashboxForm() {
     try {
         showSection('cashbox-form');
         const formTitle = document.querySelector('#cashbox-form .jf-title');
-        if (formTitle) formTitle.textContent = 'ایجاد حساب جدید';
+        if (formTitle) formTitle.textContent = 'ایجاد خزانه جدید';
         const form = document.getElementById('cashboxForm');
         if (form) {
             form.reset();
@@ -26235,7 +26311,7 @@ function showCashboxForm() {
                         var op = document.createElement('option'); op.value = t; op.textContent = t; _cbTypeSel.appendChild(op);
                     }
                 });
-                if (typeof setupProductAddSelect === 'function') setupProductAddSelect(_cbTypeSel, 'cashboxTypes', 'نوعیت حساب');
+                if (typeof setupProductAddSelect === 'function') setupProductAddSelect(_cbTypeSel, 'cashboxTypes', 'نوع خزانه');
                 // پیش‌فرضِ فیلدِ خالی: گزینهٔ placeholder «نوعیت حساب» انتخاب و نمایش داده می‌شود
                 // (مثلِ سایرِ فیلدهای فورم که نامِ فیلد داخلِ خودِ فیلد نشان داده می‌شود). اگر
                 // کاربر نوعی انتخاب نکند، هنگامِ ذخیره به‌صورتِ خودکار «خزانه» در نظر گرفته می‌شود.
@@ -27644,7 +27720,7 @@ function renderPersonsTablePickerMode(personsList) {
             '<td class="person-card-cell">' +
                 '<div class="person-card rp-pick-selectable' + (on ? ' rp-pick-selected' : '') + '" style="cursor:pointer;">' +
                     '<div class="person-card-main">' +
-                        '<span class="person-card-avatar"><i class="fas fa-user"></i></span>' +
+                        ((typeof _apexPersonAvatar === 'function') ? _apexPersonAvatar(person) : '<span class="person-card-avatar"><i class="fas fa-user"></i></span>') +
                         '<span class="person-card-name">' + (person.name || '') + '</span>' +
                     '</div>' +
                     bal.baqiHtml +
@@ -28196,6 +28272,7 @@ function ssbGetTitle(key) {
         update:   '<i class="fas fa-cloud-arrow-down"></i> بروزرسانی',
         settingsgroup: '<i class="fas fa-sliders-h"></i> تنظیمات',
         tools:    '<i class="fas fa-toolbox"></i> پلاگین ها',
+        sarafi:   '<i class="fas fa-right-left"></i> صرافی',
     };
     return titles[key] || '<i class="fas fa-cog"></i> تنظیمات';
 }
@@ -28209,6 +28286,9 @@ function ssbLoadSubContent(key) {
 
         case 'tools':
             return _ssbToolsHtml();
+
+        case 'sarafi':
+            return _ssbSarafiHtml();
 
         case 'update':
             return (typeof ndUpdPanelHtml === 'function') ? ndUpdPanelHtml() : '';
@@ -30849,7 +30929,7 @@ function saveAndPrintReceipt() {
     const amount = parseFloat(document.getElementById('receipt-amount').value) || 0;
     if (amount <= 0) { showMessage('خطا', 'مبلغ معتبر وارد کنید.'); return; }
     const cashboxId = document.getElementById('receipt-cashbox').value;
-    if (!cashboxId) { showMessage('خطا', 'حساب را مشخص کنید.'); return; }
+    if (!cashboxId) { showMessage('خطا', 'خزانه را مشخص کنید.'); return; }
 
     const personInput = document.getElementById('receive-from-search');
     const personName = (personInput && personInput.value) ? personInput.value : 'فرستنده نامشخص';
@@ -30904,7 +30984,7 @@ function saveAndPrintPayment() {
     const amount = parseFloat(document.getElementById('payment-amount').value) || 0;
     if (amount <= 0) { showMessage('خطا', 'مبلغ معتبر وارد کنید.'); return; }
     const cashboxId = document.getElementById('payment-cashbox').value;
-    if (!cashboxId) { showMessage('خطا', 'حساب را مشخص کنید.'); return; }
+    if (!cashboxId) { showMessage('خطا', 'خزانه را مشخص کنید.'); return; }
 
     // اصلاحِ باگِ TDZ: currency پیش از استفاده در محاسبهٔ موجودیِ حساب تعریف می‌شود.
     //  پیش‌تر const currency چند خط پایین‌تر بود و هر بار که حساب انتخاب می‌شد،
@@ -30917,7 +30997,7 @@ function saveAndPrintPayment() {
     var _cbBal = (cashbox && typeof db.getCashboxBalance === 'function')
         ? db.getCashboxBalance(cashbox, currency) : (cashbox ? parseFloat(cashbox.balance || 0) : 0);
     if (cashbox && _cbBal < amount) {
-        if (!_confirmNegBalance('موجودی حساب «' + (cashbox.name || '') + '» در ارز ' + getCurrencyLabel(currency) + ' کافی نیست.\nموجودی فعلی: ' + formatNumber(_cbBal) + '\nمبلغ پرداخت: ' + formatNumber(amount) + '\n\nآیا می‌خواهید با وجود کمبود موجودی، پرداخت را ثبت کنید؟ (موجودی حساب منفی خواهد شد)', saveAndPrintPayment)) return;
+        if (!_confirmNegBalance('موجودی خزانه «' + (cashbox.name || '') + '» در ارز ' + getCurrencyLabel(currency) + ' کافی نیست.\nموجودی فعلی: ' + formatNumber(_cbBal) + '\nمبلغ پرداخت: ' + formatNumber(amount) + '\n\nآیا می‌خواهید با وجود کمبود موجودی، پرداخت را ثبت کنید؟ (موجودی خزانه منفی خواهد شد)', saveAndPrintPayment)) return;
     }
 
     const personInput = document.getElementById('pay-to-search');
@@ -32418,6 +32498,8 @@ function showProductActionBar(event, productId) {
         { icon: 'fa-edit',         color: '#334155', title: 'ویرایش',           action: 'edit' },
         { icon: 'fa-cart-plus',    color: '#16a34a', title: 'افزودن به فروش',    action: 'add-to-sale' },
         { icon: 'fa-exchange-alt', color: '#0891b2', title: 'لیست ورودی و خروجی', action: 'in-out-list' },
+        { icon: 'fa-circle-arrow-down', color: '#16a34a', title: 'ورودی جدید',   action: 'adj-in' },
+        { icon: 'fa-circle-arrow-up',   color: '#dc2626', title: 'خروجی جدید',   action: 'adj-out' },
         { icon: 'fa-trash',        color: '#dc2626', title: 'حذف',              action: 'delete' }
     ];
 
@@ -32512,6 +32594,12 @@ function performProductAction(productId, action) {
             break;
         case 'in-out-list':
             showProductInOutList(productId);
+            break;
+        case 'adj-in':
+            if (typeof apexProductAdjOpen === 'function') apexProductAdjOpen('in', productId);
+            break;
+        case 'adj-out':
+            if (typeof apexProductAdjOpen === 'function') apexProductAdjOpen('out', productId);
             break;
         case 'delete':
             if (typeof deleteProduct === 'function') deleteProduct(productId);
@@ -32782,6 +32870,36 @@ function showProductInOutList(productId, fromDetail) {
                 stockCls: (runningStock < 0 ? 'is-remaining' : 'is-settled'),
                 badgeCls: pIn ? 'badge-blue' : 'badge-red',
                 kebabHtml: ''
+            });
+        } else if (ev.rec && (ev.rec.adj === 'in' || ev.rec.adj === 'out')) {
+            // (APEX) «ورودی/خروجیِ» مستقیمِ جنس — نه خرید است، نه فروش، نه انتقال
+            var arec = ev.rec, ait = ev.item || {};
+            var aq = parseFloat(ait.quantity || 0) || 0;
+            var aIn = (arec.adj === 'in');
+            runningStock += aIn ? aq : -aq;
+            var aCur = ait.currency || _baseCur();
+            var aPrice = parseFloat(ait.price);
+            tr.className = 'sales-card-row ptx-row ' + (aIn ? 'ptx-purchase' : 'ptx-return');
+            tr.style.cursor = 'pointer';
+            tr.dataset.date = (arec.createdAt || arec.date || '');
+            tr.dataset.amount = String(isNaN(aPrice) ? 0 : aPrice);
+            tr.dataset.dir = aIn ? 'ورود' : 'خروج';
+            (function(rid) { tr.onclick = function() { if (typeof _padjEdit === 'function') _padjEdit(rid); }; })(arec.id);
+            var _aKebab = '<button class="sales-card-kebab action-trigger-btn" type="button"' +
+                ' onmouseenter="_padjActionBar(event, ' + arec.id + ', ' + productId + ')"' +
+                ' onmouseleave="handleActionButtonMouseLeave(event)" title="عملیات"><i class="fas fa-ellipsis-v"></i></button>';
+            tr.innerHTML = _inoutSalesCardHtml({
+                icon: aIn ? '<i class="fas fa-circle-arrow-down"></i>' : '<i class="fas fa-circle-arrow-up"></i>',
+                moveText: aIn ? 'ورود' : 'خروج',
+                partyText: (aIn ? arec.toName : arec.fromName) || '—',
+                billNo: '—',
+                dateText: formatAfghanDateTime(arec.date, arec.createdAt),
+                qtyText: (aIn ? '+ ' : '- ') + formatNumber(aq) + ' ' + (ait.unit || product.unit || 'عدد'),
+                priceText: (isNaN(aPrice) ? '—' : (formatNumber(aPrice) + ' ' + _curSymGlobal(aCur) + ' <small style="opacity:.65;">' + aCur + '</small>')),
+                stockHtml: _formatQtyWithUnits(runningStock, product) + (runningStock < 0 ? ' <small style="color:#dc2626">(کمبود)</small>' : ''),
+                stockCls: (runningStock < 0 ? 'is-remaining' : 'is-settled'),
+                badgeCls: aIn ? 'badge-blue' : 'badge-red',
+                kebabHtml: _aKebab
             });
         } else {
             var rec = ev.rec, it2 = ev.item || {};
@@ -33280,6 +33398,8 @@ function openProductInoutFromDetail(productId) {
 }
 // دکمهٔ برگشتِ فورم ثبت جنس: اگر از مشخصات آمده به مشخصات، وگرنه به لیست اجناس
 function productFormGoBack() {
+    // (APEX) اگر از فیلدِ جنسِ فورمِ «ورودی/خروجی جدید» آمده بود → مستقیم به همان فورم
+    if (typeof _padjQuickAddCancel === 'function' && _padjQuickAddCancel()) return;
     // (APEX) اگر فورم از «ثبت جنس» داخلِ بل باز شده بود → مستقیم به همان بل
     if (typeof _apexQuickAddCancel === 'function' && _apexQuickAddCancel('product')) return;
     if (_productDetailReturnForForm != null) {
@@ -33318,7 +33438,7 @@ function toggleCashboxTransferPanel() {
         var fromSel = document.getElementById('cb-tx-from');
         var toSel   = document.getElementById('cb-tx-to');
         if (fromSel && toSel) {
-            var optionsHTML = '<option value="">انتخاب حساب</option>';
+            var optionsHTML = '<option value="">انتخاب خزانه</option>';
             boxes.forEach(function(b) {
                 var label = b.name + ' (' + getCurrencyLabel(b.currency) + ') — موجودی: ' + formatAmountWithCurrency(_cbBalInCur(b, b.currency), b.currency);
                 optionsHTML += '<option value="' + b.id + '" data-currency="' + (b.currency || _baseCur()) + '">' + label + '</option>';
@@ -33372,15 +33492,15 @@ function executeCashboxTransfer() {
     var opEl = document.querySelector('input[name="cb-tx-op"]:checked');
     var op = opEl ? opEl.value : 'multiply';
 
-    if (!fromId)  { showMessage('خطا', 'لطفاً حساب اول را انتخاب کنید.'); return; }
-    if (!toId)    { showMessage('خطا', 'لطفاً حساب مقصد را انتخاب کنید.'); return; }
-    if (fromId == toId) { showMessage('خطا', 'حساب مبدأ و مقصد نمی‌توانند یکی باشند.'); return; }
+    if (!fromId)  { showMessage('خطا', 'لطفاً خزانهٔ اول را انتخاب کنید.'); return; }
+    if (!toId)    { showMessage('خطا', 'لطفاً خزانهٔ مقصد را انتخاب کنید.'); return; }
+    if (fromId == toId) { showMessage('خطا', 'خزانهٔ مبدأ و مقصد نمی‌توانند یکی باشند.'); return; }
     if (amount <= 0) { showMessage('خطا', 'مبلغ باید بزرگ‌تر از صفر باشد.'); return; }
 
     var boxes = (db.getCashboxes && db.getCashboxes()) || [];
     var fromBox = boxes.find(function(b) { return b.id == fromId; });
     var toBox   = boxes.find(function(b) { return b.id == toId; });
-    if (!fromBox || !toBox) { showMessage('خطا', 'حساب مبدأ یا مقصد یافت نشد.'); return; }
+    if (!fromBox || !toBox) { showMessage('خطا', 'خزانهٔ مبدأ یا مقصد یافت نشد.'); return; }
 
     // ارزِ برداشت از مبدأ و ارزِ واریز به مقصد (از انتخابگرها؛ با fallback به ارزِ حساب یا پایه)
     var _fcEl = document.getElementById('cb-tx-from-currency');
@@ -33393,9 +33513,9 @@ function executeCashboxTransfer() {
     var _fromBal = (typeof db.getCashboxBalance === 'function') ? (parseFloat(db.getCashboxBalance(fromBox, fromCur)) || 0) : (parseFloat(fromBox.balance) || 0);
     // کمبودِ موجودی → تأییدیه (همان الگوی فرمِ پرداختی)، سپس کسری‌شدنِ حساب
     if (_fromBal < amount) {
-        if (!_confirmNegBalance('موجودی حساب «' + (fromBox.name || '') + '» در ارز ' + getCurrencyLabel(fromCur) +
+        if (!_confirmNegBalance('موجودی خزانه «' + (fromBox.name || '') + '» در ارز ' + getCurrencyLabel(fromCur) +
                 ' کافی نیست.\nموجودی فعلی: ' + formatNumber(_fromBal) + '\nمبلغ انتقال: ' + formatNumber(amount) +
-                '\n\nآیا می‌خواهید با وجود کمبود موجودی، انتقال را ثبت کنید؟ (موجودی حساب منفی خواهد شد)',
+                '\n\nآیا می‌خواهید با وجود کمبود موجودی، انتقال را ثبت کنید؟ (موجودی خزانه منفی خواهد شد)',
                 executeCashboxTransfer)) return;
     }
 
@@ -33404,11 +33524,11 @@ function executeCashboxTransfer() {
 
     // به‌روزرسانیِ موجودی به تفکیکِ ارز (مدل چند-ارزی balances)
     var r1 = db.updateCashboxBalance(parseInt(fromBox.id), amount, 'out', fromCur);
-    if (!r1 || r1.success === false) { showMessage('خطا', (r1 && r1.error) || 'خطا در به‌روزرسانی حساب مبدأ'); return; }
+    if (!r1 || r1.success === false) { showMessage('خطا', (r1 && r1.error) || 'خطا در به‌روزرسانی خزانه مبدأ'); return; }
     var r2 = db.updateCashboxBalance(parseInt(toBox.id), finalAmount, 'in', toCur);
     if (!r2 || r2.success === false) {
         db.updateCashboxBalance(parseInt(fromBox.id), amount, 'in', fromCur); // rollback
-        showMessage('خطا', (r2 && r2.error) || 'خطا در به‌روزرسانی حساب مقصد');
+        showMessage('خطا', (r2 && r2.error) || 'خطا در به‌روزرسانی خزانه مقصد');
         return;
     }
     // ثبت در فهرست معاملاتِ هر دو حساب (تا در لیست معاملات دیده شوند)
@@ -33446,7 +33566,7 @@ function toggleFinCashboxTransferPanel() {
         var fromSel = document.getElementById('fin-cb-tx-from');
         var toSel   = document.getElementById('fin-cb-tx-to');
         if (fromSel && toSel) {
-            var optionsHTML = '<option value="">انتخاب حساب</option>';
+            var optionsHTML = '<option value="">انتخاب خزانه</option>';
             boxes.forEach(function(b) {
                 var label = b.name + ' (' + getCurrencyLabel(b.currency) + ') — موجودی: ' + formatAmountWithCurrency(_cbBalInCur(b, b.currency), b.currency);
                 optionsHTML += '<option value="' + b.id + '" data-currency="' + (b.currency || _baseCur()) + '">' + label + '</option>';
@@ -33521,15 +33641,15 @@ function executeFinCashboxTransfer() {
         } catch(_e) { transferDate = String(new Date()); }
     }
 
-    if (!fromId)  { showMessage('خطا', 'لطفاً حساب اول را انتخاب کنید.'); return; }
-    if (!toId)    { showMessage('خطا', 'لطفاً حساب مقصد را انتخاب کنید.'); return; }
-    if (fromId == toId) { showMessage('خطا', 'حساب مبدأ و مقصد نمی‌توانند یکی باشند.'); return; }
+    if (!fromId)  { showMessage('خطا', 'لطفاً خزانهٔ اول را انتخاب کنید.'); return; }
+    if (!toId)    { showMessage('خطا', 'لطفاً خزانهٔ مقصد را انتخاب کنید.'); return; }
+    if (fromId == toId) { showMessage('خطا', 'خزانهٔ مبدأ و مقصد نمی‌توانند یکی باشند.'); return; }
     if (amount <= 0) { showMessage('خطا', 'مبلغ باید بزرگ‌تر از صفر باشد.'); return; }
 
     var boxes = (db.getCashboxes && db.getCashboxes()) || [];
     var fromBox = boxes.find(function(b) { return b.id == fromId; });
     var toBox   = boxes.find(function(b) { return b.id == toId; });
-    if (!fromBox || !toBox) { showMessage('خطا', 'حساب مبدأ یا مقصد یافت نشد.'); return; }
+    if (!fromBox || !toBox) { showMessage('خطا', 'خزانهٔ مبدأ یا مقصد یافت نشد.'); return; }
 
     // ارزِ برداشت از مبدأ و ارزِ واریز به مقصد (از انتخابگرها؛ با fallback به ارزِ حساب یا پایه)
     var _finFcEl = document.getElementById('fin-cb-tx-from-currency');
@@ -33541,9 +33661,9 @@ function executeFinCashboxTransfer() {
     var _finFromBal = (typeof db.getCashboxBalance === 'function') ? (parseFloat(db.getCashboxBalance(fromBox, finFromCur)) || 0) : (parseFloat(fromBox.balance) || 0);
     // کمبودِ موجودی → تأییدیه (همان الگوی فرمِ پرداختی)، سپس کسری‌شدنِ حساب
     if (_finFromBal < amount) {
-        if (!_confirmNegBalance('موجودی حساب «' + (fromBox.name || '') + '» در ارز ' + getCurrencyLabel(finFromCur) +
+        if (!_confirmNegBalance('موجودی خزانه «' + (fromBox.name || '') + '» در ارز ' + getCurrencyLabel(finFromCur) +
                 ' کافی نیست.\nموجودی فعلی: ' + formatNumber(_finFromBal) + '\nمبلغ انتقال: ' + formatNumber(amount) +
-                '\n\nآیا می‌خواهید با وجود کمبود موجودی، انتقال را ثبت کنید؟ (موجودی حساب منفی خواهد شد)',
+                '\n\nآیا می‌خواهید با وجود کمبود موجودی، انتقال را ثبت کنید؟ (موجودی خزانه منفی خواهد شد)',
                 executeFinCashboxTransfer)) return;
     }
 
@@ -33551,11 +33671,11 @@ function executeFinCashboxTransfer() {
 
     // به‌روزرسانیِ موجودی به تفکیکِ ارز (مدل چند-ارزی balances)
     var r1 = db.updateCashboxBalance(parseInt(fromBox.id), amount, 'out', finFromCur);
-    if (!r1 || r1.success === false) { showMessage('خطا', (r1 && r1.error) || 'خطا در به‌روزرسانی حساب مبدأ'); return; }
+    if (!r1 || r1.success === false) { showMessage('خطا', (r1 && r1.error) || 'خطا در به‌روزرسانی خزانه مبدأ'); return; }
     var r2 = db.updateCashboxBalance(parseInt(toBox.id), finalAmount, 'in', finToCur);
     if (!r2 || r2.success === false) {
         db.updateCashboxBalance(parseInt(fromBox.id), amount, 'in', finFromCur); // rollback
-        showMessage('خطا', (r2 && r2.error) || 'خطا در به‌روزرسانی حساب مقصد');
+        showMessage('خطا', (r2 && r2.error) || 'خطا در به‌روزرسانی خزانه مقصد');
         return;
     }
 
@@ -33772,9 +33892,9 @@ function _injectFinTransferButton() {
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'btn-primary fin-transfer-btn-injected';
-    btn.title = 'انتقال مبلغ بین حساب‌ها';
+    btn.title = 'انتقال پول بین خزانه‌ها';
     btn.style.cssText = 'display:inline-flex;align-items:center;gap:8px;padding:10px 18px;font-size:14px;font-weight:700;border-radius:10px;background:linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);color:#fff;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(99, 102, 241, 0.3);white-space:nowrap;font-family:inherit;';
-    btn.innerHTML = '<i class="fas fa-exchange-alt"></i><span>تبدیل ارز بین حساب‌ها</span>';
+    btn.innerHTML = '<i class="fas fa-exchange-alt"></i><span>تبدیل ارز بین خزانه‌ها</span>';
     btn.onclick = function() { openCurrencyConversion(null); };
 
     actionsRow.appendChild(btn);
@@ -33802,18 +33922,18 @@ function _showInjectedTransferPanel() {
     panel.style.cssText = 'background:var(--bg-surface,#fff);border-radius:14px;padding:20px;margin:0 0 16px 0;box-shadow:0 4px 12px rgba(0,0,0,0.08);border:1px solid var(--border-color,#e2e8f0);';
     panel.innerHTML =
         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
-            '<h3 style="margin:0;font-size:16px;"><i class="fas fa-exchange-alt"></i> انتقال مبلغ بین حساب‌ها</h3>' +
+            '<h3 style="margin:0;font-size:16px;"><i class="fas fa-exchange-alt"></i> انتقال پول بین خزانه‌ها</h3>' +
             '<button type="button" onclick="_showInjectedTransferPanel()" style="background:transparent;border:1px solid #e2e8f0;border-radius:6px;padding:6px 10px;cursor:pointer;color:inherit;"><i class="fas fa-times"></i></button>' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">' +
-            '<div><label style="display:block;font-weight:600;margin-bottom:6px;font-size:13px;">حساب اول (مبدأ)</label>' +
-                '<select id="inj-cb-from" onchange="_recalcInjected()" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-family:inherit;font-size:14px;background:inherit;color:inherit;box-sizing:border-box;"><option value="">انتخاب حساب</option></select>' +
+            '<div><label style="display:block;font-weight:600;margin-bottom:6px;font-size:13px;">خزانهٔ اول (مبدأ)</label>' +
+                '<select id="inj-cb-from" onchange="_recalcInjected()" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-family:inherit;font-size:14px;background:inherit;color:inherit;box-sizing:border-box;"><option value="">انتخاب خزانه</option></select>' +
             '</div>' +
             '<div><label style="display:block;font-weight:600;margin-bottom:6px;font-size:13px;">مبلغ</label>' +
                 '<input type="number" id="inj-cb-amount" step="0.01" placeholder="مبلغ" oninput="_recalcInjected()" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-family:inherit;font-size:14px;background:inherit;color:inherit;box-sizing:border-box;">' +
             '</div>' +
-            '<div><label style="display:block;font-weight:600;margin-bottom:6px;font-size:13px;">حساب مقصد (دوم)</label>' +
-                '<select id="inj-cb-to" onchange="_recalcInjected()" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-family:inherit;font-size:14px;background:inherit;color:inherit;box-sizing:border-box;"><option value="">انتخاب حساب</option></select>' +
+            '<div><label style="display:block;font-weight:600;margin-bottom:6px;font-size:13px;">خزانهٔ مقصد (دوم)</label>' +
+                '<select id="inj-cb-to" onchange="_recalcInjected()" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-family:inherit;font-size:14px;background:inherit;color:inherit;box-sizing:border-box;"><option value="">انتخاب خزانه</option></select>' +
             '</div>' +
         '</div>' +
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:10px;">' +
@@ -33824,7 +33944,7 @@ function _showInjectedTransferPanel() {
                     '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal;"><input type="radio" name="inj-cb-op" value="divide" onchange="_recalcInjected()"><span>تقسیم (÷)</span></label>' +
                 '</div>' +
             '</div>' +
-            '<div><label style="display:block;font-weight:600;margin-bottom:6px;font-size:13px;">مبلغ نهایی (در حساب مقصد)</label>' +
+            '<div><label style="display:block;font-weight:600;margin-bottom:6px;font-size:13px;">مبلغ نهایی (در خزانهٔ مقصد)</label>' +
                 '<input type="text" id="inj-cb-result" readonly placeholder="۰" style="width:100%;padding:9px 12px;border:1px solid #e2e8f0;border-radius:8px;font-family:inherit;font-size:14px;font-weight:700;color:#6366f1;background:#f1f5f9;box-sizing:border-box;">' +
             '</div>' +
         '</div>' +
@@ -33849,7 +33969,7 @@ function _populateInjectedPanel() {
     var fromSel = document.getElementById('inj-cb-from');
     var toSel   = document.getElementById('inj-cb-to');
     if (!fromSel || !toSel) return;
-    var optionsHTML = '<option value="">انتخاب حساب</option>';
+    var optionsHTML = '<option value="">انتخاب خزانه</option>';
     boxes.forEach(function(b) {
         var label = b.name + ' (' + getCurrencyLabel(b.currency) + ') — موجودی: ' + formatAmountWithCurrency(_cbBalInCur(b, b.currency), b.currency);
         optionsHTML += '<option value="' + b.id + '">' + label + '</option>';
@@ -33884,15 +34004,15 @@ function _executeInjectedTransfer() {
     var opEl = document.querySelector('input[name="inj-cb-op"]:checked');
     var op = opEl ? opEl.value : 'multiply';
 
-    if (!fromId)  { showMessage('خطا', 'لطفاً حساب اول را انتخاب کنید.'); return; }
-    if (!toId)    { showMessage('خطا', 'لطفاً حساب مقصد را انتخاب کنید.'); return; }
-    if (fromId == toId) { showMessage('خطا', 'حساب مبدأ و مقصد نمی‌توانند یکی باشند.'); return; }
+    if (!fromId)  { showMessage('خطا', 'لطفاً خزانهٔ اول را انتخاب کنید.'); return; }
+    if (!toId)    { showMessage('خطا', 'لطفاً خزانهٔ مقصد را انتخاب کنید.'); return; }
+    if (fromId == toId) { showMessage('خطا', 'خزانهٔ مبدأ و مقصد نمی‌توانند یکی باشند.'); return; }
     if (amount <= 0) { showMessage('خطا', 'مبلغ باید بزرگ‌تر از صفر باشد.'); return; }
 
     var boxes = db.getCashboxes() || [];
     var fromBox = boxes.find(function(b) { return b.id == fromId; });
     var toBox = boxes.find(function(b) { return b.id == toId; });
-    if (!fromBox || !toBox) { showMessage('خطا', 'حساب یافت نشد.'); return; }
+    if (!fromBox || !toBox) { showMessage('خطا', 'خزانه یافت نشد.'); return; }
     if ((parseFloat(fromBox.balance) || 0) < amount) { showMessage('خطا', 'موجودی کافی نیست.'); return; }
 
     var finalAmount = (rate > 0) ? (op === 'divide' ? (amount / rate) : (amount * rate)) : amount;
@@ -33907,11 +34027,11 @@ function _executeInjectedTransfer() {
     };
 
     var r1 = doUpdate(fromBox.id, { balance: newFromBalance });
-    if (!r1 || r1.success === false) { showMessage('خطا', 'خطا در حساب مبدأ'); return; }
+    if (!r1 || r1.success === false) { showMessage('خطا', 'خطا در خزانهٔ مبدأ'); return; }
     var r2 = doUpdate(toBox.id, { balance: newToBalance });
     if (!r2 || r2.success === false) {
         doUpdate(fromBox.id, { balance: parseFloat(fromBox.balance) || 0 });
-        showMessage('خطا', 'خطا در حساب مقصد');
+        showMessage('خطا', 'خطا در خزانهٔ مقصد');
         return;
     }
 
@@ -36078,7 +36198,7 @@ function printPurchaseBill(purchaseId, purchaseData) {
 function showCashboxDepositForm(cashboxId) {
     const cashboxes = db.getCashboxes() || [];
     const targetBox = cashboxes.find(function(c){ return c.id == cashboxId; });
-    if (!targetBox) { showMessage('خطا', 'حساب یافت نشد'); return; }
+    if (!targetBox) { showMessage('خطا', 'خزانه یافت نشد'); return; }
 
     const section = document.getElementById('cashbox-deposit-form-section');
     if (!section) return;
@@ -36092,7 +36212,7 @@ function showCashboxDepositForm(cashboxId) {
     // پر کردن لیست حساب هدف
     const toSel = document.getElementById('deposit-to-cashbox');
     if (toSel) {
-        toSel.innerHTML = '<option value="">انتخاب حساب</option>';
+        toSel.innerHTML = '<option value="">انتخاب خزانه</option>';
         cashboxes.forEach(function(c) {
             const opt = document.createElement('option');
             opt.value = c.id;
@@ -36105,7 +36225,7 @@ function showCashboxDepositForm(cashboxId) {
     // پر کردن لیست حساب برداشت (همه به‌جز حساب هدف)
     const fromSel = document.getElementById('deposit-from-cashbox');
     if (fromSel) {
-        fromSel.innerHTML = '<option value="">بدون برداشت از حساب</option>';
+        fromSel.innerHTML = '<option value="">بدون برداشت از خزانه</option>';
         cashboxes.forEach(function(c) {
             if (c.id == cashboxId) return; // حساب هدف را در لیست برداشت نگذار
             const opt = document.createElement('option');
@@ -36149,25 +36269,25 @@ function executeCashboxDeposit() {
     const _depCurEl = document.getElementById('deposit-currency');
     const depCurrency = _depCurEl ? _depCurEl.value : '';
 
-    if (!targetId) { showMessage('خطا', 'لطفاً حساب هدف را انتخاب کنید'); return; }
+    if (!targetId) { showMessage('خطا', 'لطفاً خزانهٔ هدف را انتخاب کنید'); return; }
     if (amount <= 0) { showMessage('خطا', 'لطفاً مبلغ معتبر وارد کنید'); return; }
     if (!depCurrency) { showMessage('خطا', 'لطفاً ارز را انتخاب کنید (اگر ارزی تعریف نشده، از کارت نرخ ارز اضافه کنید)'); return; }
 
     const cashboxes = db.getCashboxes() || [];
     const targetBox = cashboxes.find(function(c){ return c.id == targetId; });
-    if (!targetBox) { showMessage('خطا', 'حساب هدف یافت نشد'); return; }
+    if (!targetBox) { showMessage('خطا', 'خزانهٔ هدف یافت نشد'); return; }
 
     // اگر برداشت نیز انتخاب شده، چک موجودیِ همان ارز در حساب برداشت
     if (fromId) {
         const fromBox = cashboxes.find(function(c){ return c.id == fromId; });
-        if (!fromBox) { showMessage('خطا', 'حساب برداشت یافت نشد'); return; }
+        if (!fromBox) { showMessage('خطا', 'خزانهٔ برداشت یافت نشد'); return; }
         var _fromBal = (typeof db.getCashboxBalance === 'function') ? (parseFloat(db.getCashboxBalance(fromBox, depCurrency)) || 0) : (parseFloat(fromBox.balance) || 0);
         // کمبودِ موجودی → تأییدیه (همان الگوی فرمِ پرداختی)، سپس کسری‌شدنِ حساب
         if (_fromBal < amount) {
-            if (!_confirmNegBalance('موجودی حساب «' + (fromBox.name || '') + '» در ارز ' +
+            if (!_confirmNegBalance('موجودی خزانه «' + (fromBox.name || '') + '» در ارز ' +
                     (typeof getCurrencyLabel === 'function' ? getCurrencyLabel(depCurrency) : depCurrency) + ' کافی نیست.\nموجودی فعلی: ' +
                     formatNumber(_fromBal) + '\nمبلغ برداشت: ' + formatNumber(amount) +
-                    '\n\nآیا می‌خواهید با وجود کمبود موجودی، افزودن به حساب را ثبت کنید؟ (موجودی حساب منفی خواهد شد)',
+                    '\n\nآیا می‌خواهید با وجود کمبود موجودی، افزودن به خزانه را ثبت کنید؟ (موجودی خزانه منفی خواهد شد)',
                     executeCashboxDeposit)) return;
         }
         // انتقالِ همان ارز از حساب برداشت به حساب هدف (حساب‌ها چند-ارزی‌اند)
@@ -36181,7 +36301,7 @@ function executeCashboxDeposit() {
             relatedCashboxId: parseInt(targetId),
             relatedCashboxName: targetBox.name,
             notes: notes,
-            description: 'برداشت برای اضافه کردن به حساب ' + targetBox.name
+            description: 'برداشت برای اضافه کردن به خزانه ' + targetBox.name
         });
         _logCashboxTransaction(parseInt(targetId), {
             type: 'deposit_in',
@@ -36207,9 +36327,9 @@ function executeCashboxDeposit() {
     }
 
     if (typeof addChangelog === 'function') {
-        addChangelog('ثبت', 'اضافه مبلغ به حساب', { amount: amount, target: targetBox.name }, 'اضافه کردن مبلغ به حساب ' + targetBox.name);
+        addChangelog('ثبت', 'اضافه مبلغ به خزانه', { amount: amount, target: targetBox.name }, 'اضافه کردن مبلغ به خزانه ' + targetBox.name);
     }
-    showMessage('موفقیت', 'مبلغ با موفقیت به حساب ' + targetBox.name + ' اضافه شد.');
+    showMessage('موفقیت', 'مبلغ با موفقیت به خزانه ' + targetBox.name + ' اضافه شد.');
     setTimeout(function() {
         showSection('financial');
         setTimeout(function(){ if (typeof switchFinancialTab === 'function') switchFinancialTab('cashbox'); }, 100);
@@ -36222,7 +36342,7 @@ function executeCashboxDeposit() {
 function showCashboxWithdrawForm(cashboxId) {
     const cashboxes = db.getCashboxes() || [];
     const sourceBox = cashboxes.find(function(c){ return c.id == cashboxId; });
-    if (!sourceBox) { showMessage('خطا', 'حساب یافت نشد'); return; }
+    if (!sourceBox) { showMessage('خطا', 'خزانه یافت نشد'); return; }
 
     const section = document.getElementById('cashbox-withdraw-form-section');
     if (!section) return;
@@ -36236,7 +36356,7 @@ function showCashboxWithdrawForm(cashboxId) {
     // پر کردن لیست حساب منبع
     const fromSel = document.getElementById('withdraw-from-cashbox');
     if (fromSel) {
-        fromSel.innerHTML = '<option value="">انتخاب حساب</option>';
+        fromSel.innerHTML = '<option value="">انتخاب خزانه</option>';
         cashboxes.forEach(function(c) {
             const opt = document.createElement('option');
             opt.value = c.id;
@@ -36289,13 +36409,13 @@ function executeCashboxWithdraw() {
     const _wCurEl = document.getElementById('withdraw-currency');
     const wCurrency = _wCurEl ? _wCurEl.value : '';
 
-    if (!sourceId) { showMessage('خطا', 'لطفاً حساب منبع را انتخاب کنید'); return; }
+    if (!sourceId) { showMessage('خطا', 'لطفاً خزانهٔ منبع را انتخاب کنید'); return; }
     if (amount <= 0) { showMessage('خطا', 'لطفاً مبلغ معتبر وارد کنید'); return; }
     if (!wCurrency) { showMessage('خطا', 'لطفاً ارز را انتخاب کنید (اگر ارزی تعریف نشده، از کارت نرخ ارز اضافه کنید)'); return; }
 
     const cashboxes = db.getCashboxes() || [];
     const sourceBox = cashboxes.find(function(c){ return c.id == sourceId; });
-    if (!sourceBox) { showMessage('خطا', 'حساب منبع یافت نشد'); return; }
+    if (!sourceBox) { showMessage('خطا', 'خزانهٔ منبع یافت نشد'); return; }
 
     // کمبودِ موجودی → همان تأییدیهٔ فرمِ پرداختی؛ با تأیید، حساب کسری (منفی) می‌شود.
     // پیش از این، برداشت بدونِ هیچ پرسشی حساب را منفی می‌کرد.
@@ -36303,10 +36423,10 @@ function executeCashboxWithdraw() {
         ? (parseFloat(db.getCashboxBalance(sourceBox, wCurrency)) || 0)
         : (parseFloat(sourceBox.balance) || 0);
     if (_wBal < amount) {
-        if (!_confirmNegBalance('موجودی حساب «' + (sourceBox.name || '') + '» در ارز ' +
+        if (!_confirmNegBalance('موجودی خزانه «' + (sourceBox.name || '') + '» در ارز ' +
                 (typeof getCurrencyLabel === 'function' ? getCurrencyLabel(wCurrency) : wCurrency) + ' کافی نیست.\nموجودی فعلی: ' +
                 formatNumber(_wBal) + '\nمبلغ برداشت: ' + formatNumber(amount) +
-                '\n\nآیا می‌خواهید با وجود کمبود موجودی، برداشت را ثبت کنید؟ (موجودی حساب منفی خواهد شد)',
+                '\n\nآیا می‌خواهید با وجود کمبود موجودی، برداشت را ثبت کنید؟ (موجودی خزانه منفی خواهد شد)',
                 executeCashboxWithdraw)) return;
     }
 
@@ -36314,9 +36434,9 @@ function executeCashboxWithdraw() {
     const _toEl = document.getElementById('withdraw-to-cashbox');
     const destId = _toEl ? _toEl.value : '';
     if (destId) {
-        if (destId == sourceId) { showMessage('خطا', 'حساب مبدأ و مقصد نمی‌توانند یکی باشند'); return; }
+        if (destId == sourceId) { showMessage('خطا', 'خزانهٔ مبدأ و مقصد نمی‌توانند یکی باشند'); return; }
         const destBox = cashboxes.find(function(c){ return c.id == destId; });
-        if (!destBox) { showMessage('خطا', 'حساب مقصد یافت نشد'); return; }
+        if (!destBox) { showMessage('خطا', 'خزانهٔ مقصد یافت نشد'); return; }
         // کسر از مبدأ و افزودن به مقصد با همان ارز
         db.updateCashboxBalance(parseInt(sourceId), amount, 'out', wCurrency);
         db.updateCashboxBalance(parseInt(destId), amount, 'in', wCurrency);
@@ -36333,9 +36453,9 @@ function executeCashboxWithdraw() {
             });
         }
         if (typeof addChangelog === 'function') {
-            addChangelog('ثبت', 'انتقال بین حساب‌ها', { amount: amount, source: sourceBox.name, dest: destBox.name, currency: wCurrency }, 'انتقال از ' + sourceBox.name + ' به ' + destBox.name);
+            addChangelog('ثبت', 'انتقال بین خزانه‌ها', { amount: amount, source: sourceBox.name, dest: destBox.name, currency: wCurrency }, 'انتقال از ' + sourceBox.name + ' به ' + destBox.name);
         }
-        showMessage('موفقیت', 'مبلغ با موفقیت از حساب ' + sourceBox.name + ' به حساب ' + destBox.name + ' انتقال یافت.');
+        showMessage('موفقیت', 'مبلغ با موفقیت از خزانه ' + sourceBox.name + ' به خزانه ' + destBox.name + ' انتقال یافت.');
         setTimeout(function() {
             showSection('financial');
             setTimeout(function(){ if (typeof switchFinancialTab === 'function') switchFinancialTab('cashbox'); }, 100);
@@ -36354,14 +36474,14 @@ function executeCashboxWithdraw() {
             currency: wCurrency,
             datetime: dt,
             notes: notes,
-            description: 'برداشت مبلغ از حساب (خروج خارجی)'
+            description: 'برداشت مبلغ از خزانه (خروج خارجی)'
         });
     }
 
     if (typeof addChangelog === 'function') {
-        addChangelog('ثبت', 'برداشت مبلغ از حساب', { amount: amount, source: sourceBox.name, sourceId: sourceBox.id, currency: wCurrency }, 'برداشت مبلغ از حساب ' + sourceBox.name);
+        addChangelog('ثبت', 'برداشت مبلغ از خزانه', { amount: amount, source: sourceBox.name, sourceId: sourceBox.id, currency: wCurrency }, 'برداشت مبلغ از خزانه ' + sourceBox.name);
     }
-    showMessage('موفقیت', 'مبلغ با موفقیت از حساب ' + sourceBox.name + ' برداشت شد.');
+    showMessage('موفقیت', 'مبلغ با موفقیت از خزانه ' + sourceBox.name + ' برداشت شد.');
     setTimeout(function() {
         showSection('financial');
         setTimeout(function(){ if (typeof switchFinancialTab === 'function') switchFinancialTab('cashbox'); }, 100);
@@ -36874,7 +36994,7 @@ if (typeof window.showCashboxTransactions !== 'function') {
         var boxName = box ? box.name : ('حساب ' + cashboxId);
 
         var html = '<div style="padding:20px;direction:rtl;">';
-        html += '<h3 style="margin:0 0 12px;"><i class="fas fa-history"></i> معاملات حساب: ' + boxName + '</h3>';
+        html += '<h3 style="margin:0 0 12px;"><i class="fas fa-history"></i> معاملات خزانه: ' + boxName + '</h3>';
         if (!related.length) {
             html += '<p style="color:#94a3b8;text-align:center;padding:30px;">هنوز معامله‌ای ثبت نشده است</p>';
         } else {
@@ -36890,7 +37010,7 @@ if (typeof window.showCashboxTransactions !== 'function') {
                     'deposit_in': 'ورود',
                     'deposit_out': 'برداشت',
                     'deposit_external': 'ورود خارجی',
-                    'withdraw_external': 'برداشت مبلغ از حساب',
+                    'withdraw_external': 'برداشت مبلغ از خزانه',
                     'shipping_charge': 'هزینه حمل و نقل',
                     'transfer_in': 'انتقال ورودی',
                     'transfer_out': 'انتقال خروجی',
@@ -40786,13 +40906,25 @@ function billEnableEdit(which) {
 })();
 
 // ============================================================================
-//  تبدیل ارز بین حساب‌ها — ۴ حالت: بین حساب‌ها / بین اشخاص / داخل حساب / داخل مشتری
-//  توجه: این توابع به‌صورت «تعریف تابع» (hoisted) نوشته شده‌اند تا حتی اگر اجرای
-//  سطح‌بالای اسکریپت جایی متوقف شود، در دسترس بمانند (نقاط ورود همیشه کار کنند).
-//  حساب‌ها: updateCashboxBalance + لاگِ transfer_in/out (نمایش و ماندهٔ درست).
-//  اشخاص: تراکنشِ «صرافی» (بدون cashboxId → روی حساب اثر نمی‌گذارد) + موتور دفتر.
+//  (APEX) «تبادله ارز» — فرمِ واحد و منعطف (جایگزینِ کاملِ فرمِ ۴ حالتهٔ قبلی)
+//  ----------------------------------------------------------------------------
+//  مبدأ و مقصد هر کدام «شخص» یا «خزانه»اند؛ مقصدِ خالی = تبدیل داخلِ همان مبدأ.
+//    • خزانه (بدونِ مقصد)  → داخلِ خزانه   : همان مسیرِ قبلیِ «داخل صندوق»
+//    • خزانه → خزانه        → بینِ خزانه‌ها : همان مسیرِ قبلیِ «بین صندوق‌ها»
+//    • شخص (بدونِ مقصد)    → داخلِ حسابِ شخص: همان سندِ «صرافی» با convSign قبلی
+//    • شخص → شخص           → بینِ حسابِ اشخاص: همان دو سندِ «صرافی» قبلی
+//    • خزانه → شخص          → «مبلغ آمد» از خزانه خارج و «مبلغ رفت» بر حسابِ شخص (باقیداری)
+//    • شخص → خزانه          → «مبلغ آمد» به طلبِ شخص و «مبلغ رفت» واردِ خزانه
+//  اثرها فقط با ابزارهای موجود ثبت می‌شوند: db.updateCashboxBalance + _logCashboxTransaction
+//  (خزانه) و db.saveTransaction({type:'صرافی'}) (اشخاص) — یعنی موتورهای مانده، بازسازی و
+//  گزارش‌ها همان قبلی‌اند. روی هر سند یک fxId و خلاصهٔ تبادله (fx) نوشته می‌شود تا «لیست
+//  تبادلات» و «مفاد و ضرر تسعیر» آن را بشناسند.
+//  مفاد/ضرر: میانگینِ موزونِ بهای خریدِ هر ارز از همین تبادلاتِ ثبت‌شده؛ با فروشِ آن ارز به
+//  ارزِ پایه مفاد/ضرر تحقق می‌یابد. نرخِ داشبورد فقط پیشنهاد است و مبنای معامله نیست.
+//  تبادلاتِ قبلی (فرمِ قدیم) در لیست می‌آیند ولی مفاد/ضررشان صفر است (نرخِ مرجعشان ثبت نشده).
+//  همهٔ توابع «تعریفِ تابع»اند (hoisted) تا مستقل از توقفِ اجرای سطح‌بالا در دسترس بمانند.
 // ============================================================================
-var _ccReturn = 'financial';
+var _ccReturn;
 
 function _ccCurLabel(code) {
     try { if (typeof getCurrencyLabel === 'function') return getCurrencyLabel(code); } catch (e) {}
@@ -40803,40 +40935,65 @@ function _ccFmt(v) {
 }
 function _ccV(id) { var e = document.getElementById(id); return e ? e.value : ''; }
 function _ccShow(id, on) { var e = document.getElementById(id); if (e) e.style.display = on ? '' : 'none'; }
-function _ccBoxOptions(selectId, selectedId) {
+function _ccBoxOptions(selectId, selectedId, placeholder) {
     var sel = document.getElementById(selectId); if (!sel) return;
     var boxes = (typeof db !== 'undefined' && db.getCashboxes) ? (db.getCashboxes() || []) : [];
-    var html = '<option value="">انتخاب حساب</option>';
+    var html = '<option value="">' + (placeholder || 'انتخاب خزانه') + '</option>';
     boxes.forEach(function (b) {
-        html += '<option value="' + b.id + '"' + ((selectedId != null && b.id == selectedId) ? ' selected' : '') + '>' + b.name + '</option>';
+        html += '<option value="' + b.id + '"' + ((selectedId != null && b.id == selectedId) ? ' selected' : '') + '>' + _fxEsc(b.name) + '</option>';
     });
     sel.innerHTML = html;
+}
+function _fxEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function _fxBase() { try { if (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) return CurrencySystem.getBaseCode(); } catch (e) {} return 'AFN'; }
+function _fxNum(v) { var n = parseFloat(String(v == null ? '' : v).replace(/,/g, '')); return isFinite(n) ? n : 0; }
+function _fxRound(v, cur) {
+    try {
+        if (typeof CurrencySystem !== 'undefined' && CurrencySystem.round) {
+            return CurrencySystem.round(v, CurrencySystem.getDecimals ? CurrencySystem.getDecimals(cur) : 2);
+        }
+    } catch (e) {}
+    return Math.round((parseFloat(v) || 0) * 100) / 100;
+}
+function _fxRateRound(v) { return Math.round((parseFloat(v) || 0) * 1000000) / 1000000; }
+function _fxSt() {
+    if (!window.__fxForm) window.__fxForm = { src: 'cashbox', dst: 'cashbox', op: 'multiply', last: 'a' };
+    return window.__fxForm;
 }
 
 function openCurrencyConversion(lockType, preset) {
     preset = preset || null;
     var active = document.querySelector('.section.active');
     _ccReturn = (preset && preset.returnSection) ? preset.returnSection : (active ? active.id : 'financial');
+    if (!_ccReturn || _ccReturn === 'currency-convert-form') _ccReturn = 'financial';
+
+    var st = window.__fxForm = { src: 'cashbox', dst: 'cashbox', op: 'multiply', last: 'a' };
+    if (lockType === 'between_person' || lockType === 'inside_person') { st.src = 'person'; st.dst = 'person'; }
 
     showSection('currency-convert-form');
 
+    // ارزها: «مبلغ آمد» اولین ارزِ غیرپایه، «مبلغ رفت» ارزِ پایه (قابلِ تغییر داخلِ خودِ فیلد)
+    var base = _fxBase();
     if (typeof _populateCurrencySelect === 'function') {
         _populateCurrencySelect('cc-from-cur');
-        _populateCurrencySelect('cc-to-cur');
+        _populateCurrencySelect('cc-to-cur', base);
     }
-    _ccBoxOptions('cc-from-cashbox', preset && preset.cashboxId);
-    _ccBoxOptions('cc-to-cashbox');
+    try {
+        var fc = document.getElementById('cc-from-cur');
+        if (fc) {
+            var nb = Array.prototype.filter.call(fc.options, function (o) { return o.value && o.value !== base; })[0];
+            fc.value = nb ? nb.value : base;
+        }
+        var tc = document.getElementById('cc-to-cur'); if (tc) tc.value = base;
+    } catch (e) {}
 
-    var typeSel = document.getElementById('cc-type');
-    var t = lockType || 'between_cashbox';
-    if (typeSel) { typeSel.value = t; typeSel.disabled = !!lockType; }
+    _ccBoxOptions('cc-from-cashbox', preset && preset.cashboxId, 'انتخاب خزانه');
+    _ccBoxOptions('cc-to-cashbox', null, 'انتخاب خزانه (اختیاری)');
 
-    ['cc-amount', 'cc-rate', 'cc-final', 'cc-notes', 'cc-from-person', 'cc-to-person',
+    ['cc-amount', 'cc-rate', 'cc-final', 'cc-notes', 'cc-profit', 'cc-from-person', 'cc-to-person',
      'cc-from-person-search', 'cc-to-person-search'].forEach(function (id) {
         var e = document.getElementById(id); if (e) e.value = '';
     });
-    var opM = document.querySelector('input[name="cc-op"][value="multiply"]'); if (opM) opM.checked = true;
-
     if (preset && preset.personId && typeof db !== 'undefined') {
         var p = (db.getPersons() || []).find(function (x) { return x.id == preset.personId; });
         if (p) {
@@ -40844,15 +41001,14 @@ function openCurrencyConversion(lockType, preset) {
             if (fh) fh.value = p.id; if (fs) fs.value = p.name;
         }
     }
-
     var dt = document.getElementById('cc-datetime');
     if (dt) {
         try { dt.value = (typeof _nowJalaliDateTime === 'function') ? _nowJalaliDateTime() : ''; } catch (e) { dt.value = ''; }
         if (!dt._dpAttached && typeof _attachDateTimePickerToInput === 'function') { _attachDateTimePickerToInput(dt); dt._dpAttached = true; }
     }
-
-    _ccSetType(t);
-    _ccAutoRate();
+    _fxApplyKinds();
+    _fxSetOp('multiply', true);
+    _fxCurChanged();
 }
 
 function _ccBack() {
@@ -40862,151 +41018,458 @@ function _ccBack() {
         setTimeout(function () { if (typeof switchFinancialTab === 'function') switchFinancialTab('cashbox'); }, 100);
     } else {
         showSection(r);
+        if (r === 'fx-list' && typeof loadFxList === 'function') { try { loadFxList(); } catch (e) {} }
     }
 }
 
-function _ccSetType(type) {
-    var titles = {
-        between_cashbox: 'تبدیل ارز بین صندوق‌ها',
-        between_person: 'تبدیل ارز بین حساب اشخاص',
-        inside_cashbox: 'تبدیل ارز داخل صندوق',
-        inside_person: 'تبدیل ارز داخل حساب مشتری'
-    };
-    var ttl = document.getElementById('cc-title'); if (ttl) ttl.textContent = titles[type] || 'تبدیل ارز';
-
-    var isPerson = (type === 'between_person' || type === 'inside_person');
-    var isBetween = (type === 'between_cashbox' || type === 'between_person');
-
-    _ccShow('cc-field-from-cashbox', !isPerson);
-    _ccShow('cc-field-from-person', isPerson);
-    _ccShow('cc-field-to-cashbox', isBetween && !isPerson);
-    _ccShow('cc-field-to-person', isBetween && isPerson);
-
-    var fromCbLbl = document.getElementById('cc-from-cashbox-label');
-    var fromPrLbl = document.getElementById('cc-from-person-label');
-    if (fromCbLbl) fromCbLbl.textContent = (type === 'inside_cashbox') ? 'انتخاب حساب' : 'از حساب';
-    if (fromPrLbl) fromPrLbl.textContent = (type === 'inside_person') ? 'انتخاب شخص' : 'از شخص';
+// ── کنترل‌های فرم ──
+function _fxApplyKinds() {
+    var st = _fxSt();
+    ['src', 'dst'].forEach(function (side) {
+        var box = document.querySelector('#currency-convert-form .apex-fx-side[data-side="' + side + '"]');
+        if (!box) return;
+        Array.prototype.forEach.call(box.querySelectorAll('.apex-fx-pill'), function (b) {
+            b.classList.toggle('is-on', b.getAttribute('data-kind') === st[side]);
+        });
+        Array.prototype.forEach.call(box.querySelectorAll('.apex-fx-pick'), function (f) {
+            f.classList.toggle('is-on', f.getAttribute('data-kind') === st[side]);
+        });
+    });
 }
-
-function _ccAutoRate() {
-    var from = _ccV('cc-from-cur'), to = _ccV('cc-to-cur');
+function _fxSetKind(side, kind) {
+    var st = _fxSt();
+    st[side] = (kind === 'person') ? 'person' : 'cashbox';
+    _fxApplyKinds();
+    _fxPreviewProfit();
+}
+function _fxPersonTyped(side) { setTimeout(_fxPreviewProfit, 0); }
+function _fxSetOp(op, silent) {
+    var st = _fxSt();
+    st.op = (op === 'divide') ? 'divide' : 'multiply';
+    var h = document.getElementById('cc-op'); if (h) h.value = st.op;
+    Array.prototype.forEach.call(document.querySelectorAll('#currency-convert-form .apex-fx-op'), function (b) {
+        b.classList.toggle('is-on', b.getAttribute('data-op') === st.op);
+    });
+    if (!silent) _fxRecalc('r');
+}
+// نرخِ پیشنهادی از کارتِ نرخِ داشبورد (فقط پیشنهاد؛ کاربر می‌تواند تغییرش دهد)
+function _fxCurChanged() {
+    var f = _ccV('cc-from-cur'), t = _ccV('cc-to-cur');
     var rateEl = document.getElementById('cc-rate');
-    if (from && to && from !== to && typeof CurrencySystem !== 'undefined' && CurrencySystem.convert) {
-        var r = CurrencySystem.convert(1, from, to, 'rate');
-        if (r != null && r > 0 && rateEl) {
-            rateEl.value = (Math.round(r * 10000) / 10000);
-            var opM = document.querySelector('input[name="cc-op"][value="multiply"]'); if (opM) opM.checked = true;
+    if (f && t && rateEl) {
+        if (f === t) { rateEl.value = 1; _fxSetOp('multiply', true); }
+        else if (typeof CurrencySystem !== 'undefined' && CurrencySystem.convert) {
+            var r = CurrencySystem.convert(1, f, t, 'rate');
+            if (r != null && r > 0) {
+                if (r >= 1) { rateEl.value = _fxRateRound(r); _fxSetOp('multiply', true); }
+                else { rateEl.value = _fxRateRound(1 / r); _fxSetOp('divide', true); }
+            }
         }
-    } else if (from && to && from === to && rateEl) {
-        rateEl.value = 1;
     }
-    _ccRecalc();
+    _fxRecalc('r');
+}
+function _fxEdited(which) { _fxSt().last = which; _fxRecalc(which); }
+function _fxRecalc(which) {
+    var st = _fxSt();
+    var aEl = document.getElementById('cc-amount'), bEl = document.getElementById('cc-final'), rEl = document.getElementById('cc-rate');
+    if (!aEl || !bEl || !rEl) return;
+    var a = _fxNum(aEl.value), b = _fxNum(bEl.value), r = _fxNum(rEl.value);
+    var tc = _ccV('cc-to-cur'), fc = _ccV('cc-from-cur');
+    if (which === 'b') {
+        if (a > 0 && b > 0) { r = (st.op === 'divide') ? (a / b) : (b / a); rEl.value = _fxRateRound(r); }
+        else if (r > 0 && b > 0) { aEl.value = _fxRound((st.op === 'divide') ? (b * r) : (b / r), fc); }
+    } else if (a > 0 && r > 0) {
+        bEl.value = _fxRound((st.op === 'divide') ? (a / r) : (a * r), tc);
+    }
+    _fxPreviewProfit();
 }
 
-function _ccRecalc() {
-    var amt = parseFloat(_ccV('cc-amount')) || 0;
-    var rate = parseFloat(_ccV('cc-rate')) || 0;
-    var op = (document.querySelector('input[name="cc-op"]:checked') || {}).value || 'multiply';
-    var out = 0;
-    if (amt > 0) { out = (rate > 0) ? ((op === 'divide') ? (amt / rate) : (amt * rate)) : amt; }
-    var fe = document.getElementById('cc-final');
-    if (fe) fe.value = out ? _ccFmt(Math.round(out * 100) / 100) : '';
+// ── خواندنِ فرم ──
+function _fxReadForm() {
+    var st = _fxSt();
+    var side = function (s, k) {
+        if (k === 'person') {
+            var id = _ccV(s === 'src' ? 'cc-from-person' : 'cc-to-person');
+            if (!id) return null;
+            var p = (db.getPersons() || []).find(function (x) { return String(x.id) === String(id); });
+            return p ? { k: 'person', id: p.id, name: p.name || '' } : null;
+        }
+        var cid = _ccV(s === 'src' ? 'cc-from-cashbox' : 'cc-to-cashbox');
+        if (!cid) return null;
+        var b = (db.getCashboxes() || []).find(function (x) { return String(x.id) === String(cid); });
+        return b ? { k: 'cashbox', id: b.id, name: b.name || '' } : null;
+    };
+    return {
+        src: side('src', st.src), dst: side('dst', st.dst),
+        a: { amt: _fxNum(_ccV('cc-amount')), cur: _ccV('cc-from-cur') },
+        b: { amt: _fxNum(_ccV('cc-final')), cur: _ccV('cc-to-cur') },
+        rate: _fxNum(_ccV('cc-rate')), op: st.op,
+        date: _ccV('cc-datetime') || '', notes: _ccV('cc-notes') || ''
+    };
+}
+// موقعیتِ خودِ فروشگاه در این تبادله: کدام ارز «گرفته» و کدام «داده» شد (برای مفاد/ضرر)
+function _fxStoreSides(f, cs) {
+    var S = f.src && f.src.k, D = f.dst && f.dst.k;
+    var A = { cur: f.a.cur, amt: f.a.amt }, B = { cur: f.b.cur, amt: f.b.amt };
+    if (S === 'person' && D === 'person') return { inn: A, out: B };
+    if (S === 'person' && !D) return (cs < 0) ? { inn: A, out: B } : { inn: B, out: A };
+    return { inn: B, out: A };   // داخل/بینِ خزانه‌ها، خزانه→شخص، شخص→خزانه
 }
 
+// ── موتورِ مفاد/ضرر (میانگینِ موزونِ بهای هر ارز از همین تبادلات) ──
+function _fxPnlRun(records, extra) {
+    var base = _fxBase();
+    var pool = {}, res = {};
+    var P = function (c) { if (!pool[c]) pool[c] = { q: 0, c: 0 }; return pool[c]; };
+    var list = (records || []).filter(function (r) { return r && !r.legacy && r.store; });
+    if (typeof __hbRepAsc === 'function') list.sort(__hbRepAsc);
+    if (extra) list.push(extra);
+    list.forEach(function (r) {
+        var i = r.store.inn, o = r.store.out;
+        if (!i || !o || !(i.amt > 0) || !(o.amt > 0) || i.cur === o.cur) return;
+        var p, m, avg, cost;
+        if (o.cur === base) {                       // خریدِ ارزِ خارجی با ارزِ پایه
+            p = P(i.cur); p.q += i.amt; p.c += o.amt;
+            res[r.id] = { pnl: 0, kind: 'buy', cur: i.cur, qty: i.amt, dealRate: o.amt / i.amt };
+        } else if (i.cur === base) {                // فروشِ ارزِ خارجی به ارزِ پایه → تحققِ مفاد/ضرر
+            p = P(o.cur);
+            m = Math.min(o.amt, p.q);
+            avg = p.q > 0 ? (p.c / p.q) : 0;
+            cost = avg * m;
+            var rev = i.amt * (m / o.amt);
+            var pnl = _fxRound(rev - cost, base);
+            p.q -= m; p.c -= cost; if (p.q < 1e-9) { p.q = 0; p.c = 0; }
+            res[r.id] = { pnl: (m > 0 ? pnl : 0), kind: 'sell', cur: o.cur, qty: o.amt, matched: m,
+                          costRate: avg, dealRate: i.amt / o.amt, costBase: _fxRound(cost, base), baseAmt: _fxRound(rev, base) };
+        } else {                                    // ارز به ارز (هیچ‌کدام پایه نیست) → انتقالِ بها
+            p = P(o.cur);
+            m = Math.min(o.amt, p.q);
+            avg = p.q > 0 ? (p.c / p.q) : 0;
+            cost = avg * m;
+            p.q -= m; p.c -= cost; if (p.q < 1e-9) { p.q = 0; p.c = 0; }
+            if (m > 0) { var q2 = P(i.cur); q2.q += i.amt * (m / o.amt); q2.c += cost; }
+            res[r.id] = { pnl: 0, kind: 'cross' };
+        }
+    });
+    return res;
+}
+
+// پیش‌نمایشِ «مفاد» همین تبادله در فرم (فقط نمایشی)
+function _fxPreviewProfit() {
+    var el = document.getElementById('cc-profit'); if (!el) return;
+    el.classList.remove('is-gain', 'is-loss');
+    try {
+        var f = _fxReadForm();
+        if (!f.src || !(f.a.amt > 0) || !(f.b.amt > 0) || !f.a.cur || !f.b.cur || f.a.cur === f.b.cur) { el.value = ''; return; }
+        var cs = (f.src.k === 'person' && !f.dst && typeof _ccPersonSign === 'function') ? _ccPersonSign(f.src.id, f.a.cur) : 1;
+        var draft = { id: '__draft__', store: _fxStoreSides(f, cs) };
+        var r = _fxPnlRun(_fxCollect().filter(function (x) { return !x.legacy; }), draft)['__draft__'];
+        var v = r ? (r.pnl || 0) : 0;
+        el.value = _ccFmt(v) + ' ' + _fxBase();
+        if (v > 0) el.classList.add('is-gain'); else if (v < 0) el.classList.add('is-loss');
+    } catch (e) { el.value = ''; }
+}
+
+// ── ثبت ──
 function _ccSubmit() {
-    var type = _ccV('cc-type');
-    var fromCur = _ccV('cc-from-cur'), toCur = _ccV('cc-to-cur');
-    var amt = parseFloat(_ccV('cc-amount')) || 0;
-    var rate = parseFloat(_ccV('cc-rate')) || 0;
-    var op = (document.querySelector('input[name="cc-op"]:checked') || {}).value || 'multiply';
-    var dt = _ccV('cc-datetime') || '';
-    var notes = _ccV('cc-notes') || '';
-    var finalAmt = amt > 0 ? (rate > 0 ? ((op === 'divide') ? (amt / rate) : (amt * rate)) : amt) : 0;
-    finalAmt = Math.round(finalAmt * 100) / 100;
+    if (typeof db === 'undefined') return;
+    var f = _fxReadForm();
+    if (!f.src) { showMessage('خطا', 'مبدأ را انتخاب کنید.'); return; }
+    if (!f.a.cur || !f.b.cur) { showMessage('خطا', 'لطفاً ارزِ «مبلغ آمد» و «مبلغ رفت» را انتخاب کنید.'); return; }
+    if (!(f.a.amt > 0) || !(f.b.amt > 0)) { showMessage('خطا', '«مبلغ آمد» و «مبلغ رفت» باید بزرگ‌تر از صفر باشند.'); return; }
+    if (f.dst && f.dst.k === f.src.k && String(f.dst.id) === String(f.src.id)) { showMessage('خطا', 'مبدأ و مقصد نباید یکی باشند.'); return; }
+    if (!f.dst && f.a.cur === f.b.cur) { showMessage('خطا', 'برای تبدیلِ داخلِ همان حساب باید دو ارزِ متفاوت انتخاب شود.'); return; }
 
-    if (!fromCur || !toCur) { showMessage('خطا', 'لطفاً نوع ارز (از/به) را انتخاب کنید.'); return; }
-    if (amt <= 0) { showMessage('خطا', 'مقدار باید بزرگ‌تر از صفر باشد.'); return; }
-    if (finalAmt <= 0) { showMessage('خطا', 'مبلغ نهایی نامعتبر است.'); return; }
-    var rateUsed = (amt > 0) ? (finalAmt / amt) : 0;
+    var A = _fxRound(f.a.amt, f.a.cur), B = _fxRound(f.b.amt, f.b.cur);
+    var fromCur = f.a.cur, toCur = f.b.cur, dt = f.date, notes = f.notes;
+    var rateUsed = A > 0 ? (B / A) : 0;
+    var fxId = 'fx_' + Date.now() + '_' + Math.floor(Math.random() * 100000);
+    var S = f.src.k, D = f.dst ? f.dst.k : null;
+    var cs = (S === 'person' && !D && typeof _ccPersonSign === 'function') ? _ccPersonSign(f.src.id, fromCur) : 1;
+    var meta = {
+        v: 2, id: fxId, src: f.src, dst: f.dst || null,
+        a: { amt: A, cur: fromCur }, b: { amt: B, cur: toCur },
+        rate: f.rate, op: f.op, date: dt, notes: notes, createdAt: new Date().toISOString()
+    };
+    meta.store = _fxStoreSides({ src: f.src, dst: f.dst, a: meta.a, b: meta.b }, cs);
+    var _amtTxt = _ccFmt(A) + ' ' + _ccCurLabel(fromCur) + ' → ' + _ccFmt(B) + ' ' + _ccCurLabel(toCur);
+    var _log = function (boxId, o) {
+        if (typeof _logCashboxTransaction !== 'function') return;
+        _logCashboxTransaction(parseInt(boxId), Object.assign({ datetime: dt, notes: notes, fxId: fxId, fx: meta }, o));
+    };
+    var _ptx = function (o) {
+        return db.saveTransaction(Object.assign({ type: 'صرافی', rateUsed: rateUsed, date: dt, createdAt: dt || undefined,
+            notes: notes, fxId: fxId, fx: meta }, o));
+    };
 
-    if (type === 'between_cashbox') {
-        var fId = _ccV('cc-from-cashbox'), tId = _ccV('cc-to-cashbox');
-        if (!fId) { showMessage('خطا', 'حساب مبدأ را انتخاب کنید.'); return; }
-        if (!tId) { showMessage('خطا', 'حساب مقصد را انتخاب کنید.'); return; }
-        if (fId === tId) { showMessage('خطا', 'حساب مبدأ و مقصد نباید یکی باشند.'); return; }
-        var boxes = db.getCashboxes() || [];
-        var fb = boxes.find(function (b) { return b.id == fId; });
-        var tb = boxes.find(function (b) { return b.id == tId; });
-        db.updateCashboxBalance(parseInt(fId), amt, 'out', fromCur);
-        db.updateCashboxBalance(parseInt(tId), finalAmt, 'in', toCur);
-        if (typeof _logCashboxTransaction === 'function') {
-            _logCashboxTransaction(parseInt(fId), { type: 'transfer_out', amount: amt, currency: fromCur, datetime: dt,
-                relatedCashboxId: parseInt(tId), relatedCashboxName: tb ? tb.name : '', notes: notes,
-                description: 'تبدیل ارز به حساب ' + (tb ? tb.name : '') + ' (' + _ccFmt(finalAmt) + ' ' + _ccCurLabel(toCur) + ')' });
-            _logCashboxTransaction(parseInt(tId), { type: 'transfer_in', amount: finalAmt, currency: toCur, datetime: dt,
-                relatedCashboxId: parseInt(fId), relatedCashboxName: fb ? fb.name : '', notes: notes,
-                description: 'تبدیل ارز از حساب ' + (fb ? fb.name : '') + ' (' + _ccFmt(amt) + ' ' + _ccCurLabel(fromCur) + ')' });
-        }
-        if (typeof addChangelog === 'function') addChangelog('ثبت', 'تبدیل ارز بین صندوق‌ها',
-            { fromCur: fromCur, amount: amt, toCur: toCur, finalAmount: finalAmt }, 'تبدیل ارز از ' + (fb ? fb.name : '') + ' به ' + (tb ? tb.name : ''));
-    }
-    else if (type === 'inside_cashbox') {
-        var cId = _ccV('cc-from-cashbox');
-        if (!cId) { showMessage('خطا', 'حساب را انتخاب کنید.'); return; }
-        if (fromCur === toCur) { showMessage('خطا', 'برای تبدیل داخل حساب باید دو ارزِ متفاوت انتخاب شود.'); return; }
-        db.updateCashboxBalance(parseInt(cId), amt, 'out', fromCur);
-        db.updateCashboxBalance(parseInt(cId), finalAmt, 'in', toCur);
-        if (typeof _logCashboxTransaction === 'function') {
-            _logCashboxTransaction(parseInt(cId), { type: 'transfer_out', amount: amt, currency: fromCur, datetime: dt, notes: notes,
-                description: 'تبدیل ارز داخل صندوق: ' + _ccFmt(amt) + ' ' + _ccCurLabel(fromCur) + ' → ' + _ccFmt(finalAmt) + ' ' + _ccCurLabel(toCur) });
-            _logCashboxTransaction(parseInt(cId), { type: 'transfer_in', amount: finalAmt, currency: toCur, datetime: dt, notes: notes,
-                description: 'تبدیل ارز داخل صندوق: ' + _ccFmt(amt) + ' ' + _ccCurLabel(fromCur) + ' → ' + _ccFmt(finalAmt) + ' ' + _ccCurLabel(toCur) });
-        }
-        if (typeof addChangelog === 'function') addChangelog('ثبت', 'تبدیل ارز داخل صندوق',
-            { fromCur: fromCur, amount: amt, toCur: toCur, finalAmount: finalAmt }, 'تبدیل ارز داخل صندوق');
-    }
-    else if (type === 'inside_person') {
-        var pId = _ccV('cc-from-person');
-        if (!pId) { showMessage('خطا', 'شخص را انتخاب کنید.'); return; }
-        if (fromCur === toCur) { showMessage('خطا', 'برای تبدیل داخل حساب باید دو ارزِ متفاوت انتخاب شود.'); return; }
-        // علامتِ حساب: طلبکار(-1) یا بدهکار(+1) در ارزِ مبدأ — تا تبدیل، ماهیتِ حساب را حفظ کند
-        var _csIn = _ccPersonSign(pId, fromCur);
-        db.saveTransaction({ type: 'صرافی', personId: parseInt(pId), currency: fromCur,
-            fromCurrency: fromCur, fromAmount: amt, toCurrency: toCur, toAmount: finalAmt, convSign: _csIn,
-            rateUsed: rateUsed, date: dt, createdAt: dt || undefined, notes: notes,
-            description: 'تبدیل ارز داخل حساب مشتری: ' + _ccFmt(amt) + ' ' + _ccCurLabel(fromCur) + ' → ' + _ccFmt(finalAmt) + ' ' + _ccCurLabel(toCur) });
-        if (typeof addChangelog === 'function') addChangelog('ثبت', 'تبدیل ارز داخل حساب مشتری',
-            { personId: pId, fromCur: fromCur, amount: amt, toCur: toCur, finalAmount: finalAmt }, 'تبدیل ارز داخل حساب مشتری');
-    }
-    else if (type === 'between_person') {
-        var aId = _ccV('cc-from-person'), bId = _ccV('cc-to-person');
-        if (!aId) { showMessage('خطا', 'شخص مبدأ را انتخاب کنید.'); return; }
-        if (!bId) { showMessage('خطا', 'شخص مقصد را انتخاب کنید.'); return; }
-        if (aId === bId) { showMessage('خطا', 'شخص مبدأ و مقصد نباید یکی باشند.'); return; }
+    if (S === 'cashbox' && !D) {
+        db.updateCashboxBalance(parseInt(f.src.id), A, 'out', fromCur);
+        db.updateCashboxBalance(parseInt(f.src.id), B, 'in', toCur);
+        var _d1 = 'تبدیل ارز داخل خزانه: ' + _amtTxt;
+        _log(f.src.id, { type: 'transfer_out', amount: A, currency: fromCur, pairKey: fxId, description: _d1 });
+        _log(f.src.id, { type: 'transfer_in', amount: B, currency: toCur, pairKey: fxId, description: _d1 });
+    } else if (S === 'cashbox' && D === 'cashbox') {
+        db.updateCashboxBalance(parseInt(f.src.id), A, 'out', fromCur);
+        db.updateCashboxBalance(parseInt(f.dst.id), B, 'in', toCur);
+        _log(f.src.id, { type: 'transfer_out', amount: A, currency: fromCur, pairKey: fxId,
+            relatedCashboxId: parseInt(f.dst.id), relatedCashboxName: f.dst.name,
+            description: 'تبدیل ارز به خزانه ' + f.dst.name + ' (' + _ccFmt(B) + ' ' + _ccCurLabel(toCur) + ')' });
+        _log(f.dst.id, { type: 'transfer_in', amount: B, currency: toCur, pairKey: fxId,
+            relatedCashboxId: parseInt(f.src.id), relatedCashboxName: f.src.name,
+            description: 'تبدیل ارز از خزانه ' + f.src.name + ' (' + _ccFmt(A) + ' ' + _ccCurLabel(fromCur) + ')' });
+    } else if (S === 'person' && !D) {
+        _ptx({ personId: parseInt(f.src.id), currency: fromCur, fromCurrency: fromCur, fromAmount: A,
+            toCurrency: toCur, toAmount: B, convSign: cs,
+            description: 'تبدیل ارز داخل حساب مشتری: ' + _amtTxt });
+    } else if (S === 'person' && D === 'person') {
         var _grp = 'ccx_' + Date.now();
-        db.saveTransaction({ type: 'صرافی', personId: parseInt(aId), currency: fromCur,
-            fromCurrency: fromCur, fromAmount: amt, toCurrency: fromCur, toAmount: 0, convSign: -1,
-            rateUsed: rateUsed, convGroup: _grp, date: dt, createdAt: dt || undefined, notes: notes,
-            description: 'تبدیل ارز بین حساب اشخاص (مبدأ): کسرِ ' + _ccFmt(amt) + ' ' + _ccCurLabel(fromCur) });
-        db.saveTransaction({ type: 'صرافی', personId: parseInt(bId), currency: toCur,
-            fromCurrency: toCur, fromAmount: 0, toCurrency: toCur, toAmount: finalAmt, convSign: -1,
-            rateUsed: rateUsed, convGroup: _grp, date: dt, createdAt: dt || undefined, notes: notes,
-            description: 'تبدیل ارز بین حساب اشخاص (مقصد): افزودنِ ' + _ccFmt(finalAmt) + ' ' + _ccCurLabel(toCur) });
-        if (typeof addChangelog === 'function') addChangelog('ثبت', 'تبدیل ارز بین حساب اشخاص',
-            { fromId: aId, toId: bId, fromCur: fromCur, amount: amt, toCur: toCur, finalAmount: finalAmt }, 'تبدیل ارز بین حساب اشخاص');
+        _ptx({ personId: parseInt(f.src.id), currency: fromCur, fromCurrency: fromCur, fromAmount: A,
+            toCurrency: fromCur, toAmount: 0, convSign: -1, convGroup: _grp,
+            description: 'تبدیل ارز بین حساب اشخاص (مبدأ): کسرِ ' + _ccFmt(A) + ' ' + _ccCurLabel(fromCur) });
+        _ptx({ personId: parseInt(f.dst.id), currency: toCur, fromCurrency: toCur, fromAmount: 0,
+            toCurrency: toCur, toAmount: B, convSign: -1, convGroup: _grp,
+            description: 'تبدیل ارز بین حساب اشخاص (مقصد): افزودنِ ' + _ccFmt(B) + ' ' + _ccCurLabel(toCur) });
+    } else if (S === 'cashbox' && D === 'person') {
+        // «مبلغ آمد» از خزانه خارج می‌شود و «مبلغ رفت» بر حسابِ شخص (باقیداری) ثبت می‌شود
+        db.updateCashboxBalance(parseInt(f.src.id), A, 'out', fromCur);
+        _log(f.src.id, { type: 'transfer_out', amount: A, currency: fromCur,
+            description: 'تبادله ارز به حساب ' + f.dst.name + ' (' + _ccFmt(B) + ' ' + _ccCurLabel(toCur) + ')' });
+        _ptx({ personId: parseInt(f.dst.id), currency: toCur, fromCurrency: toCur, fromAmount: 0,
+            toCurrency: toCur, toAmount: B, convSign: 1,
+            description: 'تبادله ارز از خزانه ' + f.src.name + ': ' + _amtTxt });
+    } else if (S === 'person' && D === 'cashbox') {
+        // «مبلغ آمد» به طلبِ شخص افزوده و «مبلغ رفت» واردِ خزانه می‌شود
+        _ptx({ personId: parseInt(f.src.id), currency: fromCur, fromCurrency: fromCur, fromAmount: A,
+            toCurrency: fromCur, toAmount: 0, convSign: 1,
+            description: 'تبادله ارز به خزانه ' + f.dst.name + ': ' + _amtTxt });
+        db.updateCashboxBalance(parseInt(f.dst.id), B, 'in', toCur);
+        _log(f.dst.id, { type: 'transfer_in', amount: B, currency: toCur,
+            description: 'تبادله ارز از حساب ' + f.src.name + ' (' + _ccFmt(A) + ' ' + _ccCurLabel(fromCur) + ')' });
     }
 
-    showMessage('موفقیت', 'تبدیل ارز با موفقیت ثبت شد.');
+    if (typeof addChangelog === 'function') {
+        addChangelog('ثبت', 'تبادله ارز', { fxId: fxId, src: f.src.name, dst: f.dst ? f.dst.name : '', fromCur: fromCur, amount: A, toCur: toCur, finalAmount: B },
+            'تبادله ارز: ' + f.src.name + (f.dst ? (' → ' + f.dst.name) : '') + ' — ' + _amtTxt);
+    }
+    showMessage('موفقیت', 'تبادله ارز با موفقیت ثبت شد.');
     try { if (typeof loadCashboxes === 'function') loadCashboxes(); } catch (e) {}
     try { if (typeof loadPersonsList === 'function') loadPersonsList(); } catch (e) {}
+    try { if (typeof finUpdateCashTotals === 'function') finUpdateCashTotals(); } catch (e) {}
     setTimeout(function () { _ccBack(); }, 700);
 }
 
-// نمایش به‌صورت global (سازگاری با فراخوانی از onclickهای HTML)
+// ── جمع‌آوریِ همهٔ تبادلات (تازه + قبلی) ──
+function _fxCollect() {
+    var out = [], seen = {};
+    var txs = (typeof db !== 'undefined' && db.getTransactions) ? (db.getTransactions() || []) : [];
+    var logs = [];
+    try { logs = JSON.parse(localStorage.getItem('cashboxTransactions') || '[]') || []; } catch (e) { logs = []; }
+    if (!Array.isArray(logs)) logs = [];
+    var boxes = (typeof db !== 'undefined' && db.getCashboxes) ? (db.getCashboxes() || []) : [];
+    var boxName = function (id) { var b = boxes.find(function (x) { return String(x.id) === String(id); }); return b ? (b.name || '') : ''; };
+    var persons = (typeof db !== 'undefined' && db.getPersons) ? (db.getPersons() || []) : [];
+    var psnName = function (id) { var p = persons.find(function (x) { return String(x.id) === String(id); }); return p ? (p.name || '') : ''; };
+    var push = function (r) { if (r && r.id && !seen[r.id]) { seen[r.id] = true; out.push(r); } };
+
+    // (۱) تبادلاتِ ثبت‌شده با فرمِ تازه — خلاصهٔ fx روی هر سند
+    txs.forEach(function (t) { if (t && t.fxId && t.fx && t.fx.v === 2) push(Object.assign({}, t.fx, { createdAt: t.fx.createdAt || t.createdAt })); });
+    logs.forEach(function (l) { if (l && l.fxId && l.fx && l.fx.v === 2) push(Object.assign({}, l.fx)); });
+
+    // (۲) تبادلاتِ قبلیِ اشخاص (سندِ «صرافی» بدونِ fxId)
+    var grp = {};
+    txs.forEach(function (t) {
+        if (!t || t.type !== 'صرافی' || t.fxId || t.cashboxId) return;
+        if (t.convGroup) { (grp[t.convGroup] = grp[t.convGroup] || []).push(t); return; }
+        push({ legacy: true, id: 'lgp_' + t.id, src: { k: 'person', id: t.personId, name: psnName(t.personId) }, dst: null,
+               a: { amt: _fxNum(t.fromAmount), cur: t.fromCurrency || t.currency }, b: { amt: _fxNum(t.toAmount), cur: t.toCurrency || t.currency },
+               rate: _fxNum(t.rateUsed), op: 'multiply', date: t.date || t.createdAt || '', notes: t.notes || '', createdAt: t.createdAt });
+    });
+    Object.keys(grp).forEach(function (g) {
+        var L = grp[g];
+        var s = L.find(function (x) { return _fxNum(x.fromAmount) > 0; }) || L[0];
+        var d = L.find(function (x) { return _fxNum(x.toAmount) > 0; }) || L[1] || null;
+        push({ legacy: true, id: 'lgg_' + g, src: { k: 'person', id: s.personId, name: psnName(s.personId) },
+               dst: d ? { k: 'person', id: d.personId, name: psnName(d.personId) } : null,
+               a: { amt: _fxNum(s.fromAmount), cur: s.fromCurrency || s.currency }, b: { amt: d ? _fxNum(d.toAmount) : 0, cur: d ? (d.toCurrency || d.currency) : '' },
+               rate: _fxNum(s.rateUsed), op: 'multiply', date: s.date || s.createdAt || '', notes: s.notes || '', createdAt: s.createdAt });
+    });
+
+    // (۳) تبادلاتِ قبلیِ خزانه‌ها (لاگِ «تبدیل ارز …» بدونِ fxId) — جفت‌کردنِ خروج/ورود
+    var cand = logs.filter(function (l) { return l && !l.fxId && /^تبدیل ارز/.test(String(l.description || '')) && (l.type === 'transfer_out' || l.type === 'transfer_in'); });
+    var used = {};
+    cand.forEach(function (o) {
+        if (o.type !== 'transfer_out' || used[o.id]) return;
+        var inside = /داخل صندوق/.test(String(o.description || ''));
+        var mate = cand.find(function (x) {
+            if (used[x.id] || x.type !== 'transfer_in' || String(x.datetime || '') !== String(o.datetime || '')) return false;
+            if (inside) return String(x.cashboxId) === String(o.cashboxId) && String(x.description || '') === String(o.description || '');
+            return String(x.cashboxId) === String(o.relatedCashboxId) && String(x.relatedCashboxId) === String(o.cashboxId);
+        });
+        if (!mate) return;
+        used[o.id] = used[mate.id] = true;
+        push({ legacy: true, id: 'lgc_' + o.id, src: { k: 'cashbox', id: o.cashboxId, name: boxName(o.cashboxId) || o.relatedCashboxName || '' },
+               dst: inside ? null : { k: 'cashbox', id: mate.cashboxId, name: boxName(mate.cashboxId) || mate.relatedCashboxName || '' },
+               a: { amt: _fxNum(o.amount), cur: o.currency }, b: { amt: _fxNum(mate.amount), cur: mate.currency },
+               rate: _fxNum(o.amount) > 0 ? (_fxNum(mate.amount) / _fxNum(o.amount)) : 0, op: 'multiply',
+               date: o.datetime || '', notes: o.notes || '', createdAt: o.createdAt });
+    });
+    return out;
+}
+
+// مفاد/ضررِ تحقق‌یافتهٔ تبادلات برای گزارشِ «مفاد و سرمایه» (فقط تبادلاتِ داخلِ بازهٔ تاریخ)
+function _fxRealizedForReport(fromDate, toDate) {
+    var res = { total: 0, byCur: {}, rows: [] };
+    try {
+        var recs = _fxCollect();
+        var pn = _fxPnlRun(recs);
+        if (typeof __hbRepAsc === 'function') recs.sort(__hbRepAsc);
+        recs.forEach(function (r) {
+            var x = pn[r.id];
+            if (!x || x.kind !== 'sell' || !x.pnl) return;
+            if (typeof isInNewReportDateRange === 'function' && !isInNewReportDateRange(r.date || r.createdAt || '', fromDate, toDate)) return;
+            res.total += x.pnl;
+            res.byCur[x.cur] = (res.byCur[x.cur] || 0) + x.pnl;
+            res.rows.push({ rec: r, r: x });
+        });
+        res.total = _fxRound(res.total, _fxBase());
+    } catch (e) { console.warn('fx realized:', e); }
+    return res;
+}
+
+// ── «لیست تبادلات» ──
+function _fxSideLabel(sd, isDst) {
+    if (!sd) return '';
+    var lbl = (sd.k === 'cashbox') ? 'خزانه' : 'حساب';
+    return '<b class="sales-meta-label">' + (isDst ? ('به ' + lbl) : lbl) + ':</b><span class="sales-meta-val">' + _fxEsc(sd.name || '-') + '</span>';
+}
+function loadFxList() {
+    var tbody = document.getElementById('fx-tbody'); if (!tbody) return;
+    var recs = _fxCollect();
+    var pn = _fxPnlRun(recs);
+    var q = String(_ccV('global-search-fx') || '').trim().toLowerCase();
+    var fcur = _ccV('fx-filter-cur') || 'all';
+    var sort = _ccV('fx-sort') || 'date-desc';
+    // فیلترِ ارز — گزینه‌ها از ارزهای موجود
+    try {
+        var fsel = document.getElementById('fx-filter-cur');
+        if (fsel) {
+            var have = {}; recs.forEach(function (r) { if (r.a && r.a.cur) have[r.a.cur] = 1; if (r.b && r.b.cur) have[r.b.cur] = 1; });
+            var html = '<option value="all">همه</option>';
+            Object.keys(have).forEach(function (c) { html += '<option value="' + _fxEsc(c) + '">' + _fxEsc(_ccCurLabel(c)) + ' (' + _fxEsc(c) + ')</option>'; });
+            if (fsel.innerHTML !== html) { fsel.innerHTML = html; fsel.value = have[fcur] ? fcur : 'all'; }
+        }
+    } catch (e) {}
+    var list = recs.filter(function (r) {
+        if (fcur !== 'all' && !((r.a && r.a.cur === fcur) || (r.b && r.b.cur === fcur))) return false;
+        if (!q) return true;
+        var hay = [(r.src && r.src.name) || '', (r.dst && r.dst.name) || '', r.notes || ''].join(' ').toLowerCase();
+        return hay.indexOf(q) !== -1;
+    });
+    if (typeof __hbRepAsc === 'function') list.sort(__hbRepAsc);
+    if (sort !== 'date-asc') list.reverse();
+    if (!list.length) {
+        tbody.innerHTML = '<tr><td style="text-align:center;padding:24px;color:var(--text-muted,#64748b);">هیچ تبادله‌ای ثبت نشده است</td></tr>';
+        return;
+    }
+    var fmtTime = function (r) {
+        try { if (typeof formatAfghanDateTime === 'function') { var s = formatAfghanDateTime(r.date, r.createdAt); if (s) return s; } } catch (e) {}
+        return r.date || '';
+    };
+    tbody.innerHTML = list.map(function (r) {
+        var x = pn[r.id];
+        var amts = '<span class="apex-fx-amts"><span>' + _ccFmt(r.a.amt) + '-' + _fxEsc(r.a.cur || '') + '</span>' +
+                   '<span>' + _ccFmt(r.b.amt) + '-' + _fxEsc(r.b.cur || '') + '</span></span>';
+        var rate = r.a.amt > 0 && r.b.amt > 0 ? (r.op === 'divide' ? (r.a.amt / r.b.amt) : (r.b.amt / r.a.amt)) : (r.rate || 0);
+        if (r.rate > 0) rate = r.rate;
+        var pnlHtml = '';
+        if (x && x.kind === 'sell' && x.pnl) {
+            pnlHtml = '<span class="sales-card-meta-item"><b class="sales-meta-label">' + (x.pnl > 0 ? 'مفاد' : 'ضرر') + ':</b><span class="sales-meta-val ' +
+                (x.pnl > 0 ? 'fx-pnl-gain' : 'fx-pnl-loss') + '">' + _ccFmt(Math.abs(x.pnl)) + ' ' + _fxEsc(_fxBase()) + '</span></span>';
+        }
+        var kebab = r.legacy ? '' :
+            '<button class="sales-card-kebab" type="button" onclick="event.stopPropagation();_fxRowMenu(event,\'' + _fxEsc(r.id) + '\')" title="عملیات"><i class="fas fa-ellipsis-v"></i></button>';
+        return '<tr class="sales-card-row ptx-row ptx-neutral" data-fx-id="' + _fxEsc(r.id) + '">' +
+            '<td class="sales-card-cell"><div class="sales-card ptx-sales-card">' +
+                '<div class="sales-card-main"><span class="sales-card-icon"><i class="far fa-circle-down"></i></span><span class="sales-card-name">تبدیل ارز</span></div>' +
+                '<div class="sales-card-meta">' +
+                    '<span class="sales-card-meta-item">' + _fxSideLabel(r.src, false) + '</span>' +
+                    (r.dst ? '<span class="sales-card-meta-item">' + _fxSideLabel(r.dst, true) + '</span>'
+                           : '<span class="sales-card-meta-item"><span class="sales-meta-val">داخلِ همان ' + (r.src && r.src.k === 'cashbox' ? 'خزانه' : 'حساب') + '</span></span>') +
+                    '<span class="sales-card-meta-item"><b class="sales-meta-label">نرخ:</b><span class="sales-meta-val">' + _ccFmt(_fxRateRound(rate)) + '</span></span>' +
+                    '<span class="sales-card-meta-item"><b class="sales-meta-label">زمان:</b><span class="sales-meta-val">' + _fxEsc(fmtTime(r)) + '</span></span>' +
+                    '<span class="sales-card-meta-item"><b class="sales-meta-label">اطلاعات بیشتر:</b><span class="sales-meta-val">' + _fxEsc(r.notes || '') + '</span></span>' +
+                    pnlHtml +
+                '</div>' +
+                '<div class="sales-card-amount">' + amts + '</div>' +
+                '<div class="sales-card-actions">' + kebab + '</div>' +
+            '</div></td><td class="sales-card-hidden-cell" aria-hidden="true"></td></tr>';
+    }).join('');
+}
+function _fxToggleSort() { var m = document.getElementById('sort-menu-fx'); if (m) m.classList.toggle('show'); var f = document.getElementById('filter-menu-fx'); if (f) f.classList.remove('show'); }
+function _fxToggleFilter() { var m = document.getElementById('filter-menu-fx'); if (m) m.classList.toggle('show'); var s = document.getElementById('sort-menu-fx'); if (s) s.classList.remove('show'); }
+function _fxRowMenu(ev, fxId) {
+    var old = document.getElementById('_fx_row_menu'); if (old) old.remove();
+    var btn = ev && (ev.currentTarget || ev.target);
+    var r = btn && btn.getBoundingClientRect ? btn.getBoundingClientRect() : { left: 20, bottom: 20 };
+    var m = document.createElement('div');
+    m.id = '_fx_row_menu'; m.className = 'floating-action-toolbar';
+    Object.assign(m.style, { position: 'fixed', top: (r.bottom + 4) + 'px', left: Math.max(8, r.left - 140) + 'px', zIndex: '9999',
+        display: 'flex', flexDirection: 'column', background: '#fff', padding: '8px', borderRadius: '12px',
+        boxShadow: '0 5px 20px rgba(0,0,0,0.2)', border: '1px solid #cbd5e1', minWidth: '160px' });
+    m.innerHTML = '<button type="button" style="background:transparent;border:none;cursor:pointer;padding:8px 10px;display:flex;align-items:center;gap:10px;font-family:inherit;border-radius:6px;" onclick="document.getElementById(\'_fx_row_menu\').remove();_fxDelete(\'' + _fxEsc(fxId) + '\')"><i class="fas fa-trash" style="color:#dc2626;"></i><span style="color:#1e293b;font-size:13px;">حذف تبادله</span></button>';
+    document.body.appendChild(m);
+    setTimeout(function () {
+        var close = function (e) { if (!m.contains(e.target)) { m.remove(); document.removeEventListener('mousedown', close, true); } };
+        document.addEventListener('mousedown', close, true);
+    }, 0);
+}
+// حذفِ کاملِ یک تبادلهٔ تازه: برگشتِ اثرِ خزانه‌ها + حذفِ سندهای «صرافی» اشخاص
+function _fxDelete(fxId) {
+    var run = function () {
+        try {
+            var logs = []; try { logs = JSON.parse(localStorage.getItem('cashboxTransactions') || '[]') || []; } catch (e) { logs = []; }
+            logs.filter(function (l) { return l && l.fxId === fxId; }).forEach(function (l) {
+                var amt = _fxNum(l.amount); if (!l.cashboxId || !(amt > 0)) return;
+                if (l.type === 'transfer_in') db.updateCashboxBalance(l.cashboxId, amt, 'out', l.currency || undefined);
+                else if (l.type === 'transfer_out') db.updateCashboxBalance(l.cashboxId, amt, 'in', l.currency || undefined);
+            });
+            localStorage.setItem('cashboxTransactions', JSON.stringify(logs.filter(function (l) { return !(l && l.fxId === fxId); })));
+            var txs = db.getTransactions() || [];
+            var keep = txs.filter(function (t) { return !(t && t.fxId === fxId); });
+            if (keep.length !== txs.length) localStorage.setItem('transactions', JSON.stringify(keep));
+            if (typeof addChangelog === 'function') addChangelog('حذف', 'تبادله ارز', { fxId: fxId }, 'حذف تبادله ارز');
+            if (typeof showToast === 'function') showToast('تبادله حذف شد', 'success');
+        } catch (e) { console.error('fx delete:', e); showMessage('خطا', 'حذفِ تبادله انجام نشد.'); }
+        try { loadFxList(); } catch (e) {}
+        try { if (typeof loadCashboxes === 'function') loadCashboxes(); } catch (e) {}
+        try { if (typeof loadPersonsList === 'function') loadPersonsList(); } catch (e) {}
+    };
+    if (typeof showStyledConfirm === 'function') showStyledConfirm('حذف تبادله', 'آیا از حذفِ این تبادلهٔ ارز اطمینان دارید؟\nاثرِ آن از خزانه‌ها و حساب‌ها برداشته می‌شود.', run);
+    else run();
+}
+
+// ── سایدبار: «صرافی» ──
+function _ssbSarafiHtml() {
+    return '<ul class="ssb-main-list ssb-group-list" style="display:block;padding:6px 4px;">' +
+        '<li onclick="apexSarafiOpen(\'form\')"><span class="ssb-item-icon"><i class="fas fa-right-left"></i></span>' +
+        '<span class="ssb-item-label">تبادله ارز</span><i class="fas fa-chevron-left ssb-arrow"></i></li>' +
+        '<li onclick="apexSarafiOpen(\'list\')"><span class="ssb-item-icon"><i class="fas fa-list"></i></span>' +
+        '<span class="ssb-item-label">لیست تبادلات</span><i class="fas fa-chevron-left ssb-arrow"></i></li>' +
+    '</ul>';
+}
+function apexSarafiOpen(what) {
+    try { if (typeof closeSidebar === 'function') closeSidebar(); } catch (e) {}
+    if (what === 'list') { showSection('fx-list'); try { loadFxList(); } catch (e) {} return; }
+    openCurrencyConversion(null);
+}
+
 if (typeof window !== 'undefined') {
     window.openCurrencyConversion = openCurrencyConversion;
-    window._ccBack = _ccBack; window._ccSetType = _ccSetType;
-    window._ccAutoRate = _ccAutoRate; window._ccRecalc = _ccRecalc; window._ccSubmit = _ccSubmit;
+    window._ccBack = _ccBack; window._ccSubmit = _ccSubmit;
+    window._fxSetKind = _fxSetKind; window._fxSetOp = _fxSetOp; window._fxEdited = _fxEdited;
+    window._fxCurChanged = _fxCurChanged; window._fxRecalc = _fxRecalc; window._fxPersonTyped = _fxPersonTyped;
+    window.loadFxList = loadFxList; window._fxDelete = _fxDelete; window._fxRowMenu = _fxRowMenu;
+    window.apexSarafiOpen = apexSarafiOpen;
 }
 
 // تاشو کردن «اطلاعات بیشتر» در فرم‌های حساب و تبدیل ارز (مانند فرم فروش)
@@ -41105,7 +41568,7 @@ function showTxDetail(id, retSection) {
         r += _pdRow('پرداخت کننده', _pdEsc(isReceipt ? partyName : meLabel));
         r += _pdRow('دریافت کننده', _pdEsc(isReceipt ? meLabel : partyName));
         r += _pdRow(isReceipt ? 'مبلغ دریافتی' : 'مبلغ پرداختی', _pdCur(total, cur), { valueClass: 'pdc-v-blue', strong: true });
-        r += _pdRow(isReceipt ? 'به حساب' : 'از حساب', _pdText(boxName));
+        r += _pdRow(isReceipt ? 'به خزانه' : 'از خزانه', _pdText(boxName));
         r += _pdRow('روش دریافت', _pdText(tx.receiptType || tx.paymentType || ''));
         r += _pdRow('زمان', _pdText(tx.date || (tx.createdAt || '').split(' ')[0]));
         r += _pdRow('رسید نمبر', _pdText(tx.reference));
@@ -41296,7 +41759,7 @@ if (typeof window !== 'undefined') { window.showStyledConfirm = showStyledConfir
 // تاییدِ «ادامه با موجودی منفیِ حساب» با دیالوگِ استایل‌دار (الگوی فراخوانیِ مجدد — بدون تغییرِ منطق)
 function _confirmNegBalance(message, proceedFn) {
     if (_negBalOK) { _negBalOK = false; return true; }   // قبلاً تایید شده → ادامه بده
-    showStyledConfirm('کمبود موجودی حساب', message, function () { _negBalOK = true; if (typeof proceedFn === 'function') proceedFn(); });
+    showStyledConfirm('کمبود موجودی خزانه', message, function () { _negBalOK = true; if (typeof proceedFn === 'function') proceedFn(); });
     return false;                                          // این بار متوقف شو تا کاربر تصمیم بگیرد
 }
 if (typeof window !== 'undefined') window._confirmNegBalance = _confirmNegBalance;
@@ -41945,7 +42408,7 @@ function ndSearchTargets() {
         { t: 'بخش', n: 'خدمات',              i: 'fa-gear',              go: function () { showSection('services-list'); } },
         { t: 'بخش', n: 'تسلیم دهی',           i: 'fa-clipboard-check',   go: function () { showSection('delivery-list'); } },
         { t: 'بخش', n: 'امور مالی',           i: 'fa-coins',             go: function () { ndGoFinancial('cashbox'); } },
-        { t: 'بخش', n: 'حساب‌ها',             i: 'fa-university',        go: function () { ndGoFinancial('cashbox'); } },
+        { t: 'بخش', n: 'خزانه‌ها',             i: 'fa-university',        go: function () { ndGoFinancial('cashbox'); } },
         { t: 'بخش', n: 'صندوق‌ها',            i: 'fa-university',        go: function () { ndGoFinancial('cashbox'); } },
         { t: 'بخش', n: 'مصارفات',            i: 'fa-clipboard',         go: function () { ndGoFinancial('expenses'); } },
         { t: 'بخش', n: 'کارمندان',           i: 'fa-users-cog',         go: function () { ndGoFinancial('employee-management'); } },
@@ -41997,7 +42460,7 @@ function ndCollectSearch(q) {
             if (!c) return;
             if (hit(c.name) || hit(c.type)) {
                 out.push({
-                    type: 'حساب', name: c.name || '', icon: 'fa-university', sub: c.type || '',
+                    type: 'خزانه', name: c.name || '', icon: 'fa-university', sub: c.type || '',
                     go: (function (id) { return function () { if (typeof showCashboxTransactions === 'function') showCashboxTransactions(id); else ndGoFinancial('cashbox'); }; })(c.id)
                 });
             }
@@ -44418,7 +44881,7 @@ function _jsrvLocalSummary() {
         var c = (J && typeof J.localCounts === 'function') ? J.localCounts() : {};
         var fa = {
             transactions: 'معاملات', products: 'اجناس', persons: 'اشخاص', expenses: 'مصارف',
-            cashboxes: 'حساب‌ها', cashbox_transactions: 'تراکنشِ حساب‌ها', returns: 'برگشتی‌ها',
+            cashboxes: 'خزانه‌ها', cashbox_transactions: 'تراکنشِ خزانه‌ها', returns: 'برگشتی‌ها',
             warehouses: 'گدام‌ها', warehouse_transfers: 'انتقالِ گدام', services: 'خدمات',
             currencies: 'ارزها', exchange_rates: 'نرخِ ارز'
         };
@@ -44580,7 +45043,7 @@ function jouyaCheckServerLink() {
             var lines = [], tb = (v && v.tables) || {};
             var fa = {
                 transactions: 'معاملات', products: 'اجناس', persons: 'اشخاص', expenses: 'مصارف',
-                cashboxes: 'حساب‌ها', cashbox_transactions: 'تراکنشِ حساب‌ها', returns: 'برگشتی‌ها',
+                cashboxes: 'خزانه‌ها', cashbox_transactions: 'تراکنشِ خزانه‌ها', returns: 'برگشتی‌ها',
                 warehouses: 'گدام‌ها', warehouse_transfers: 'انتقالِ گدام', services: 'خدمات',
                 currencies: 'ارزها', exchange_rates: 'نرخِ ارز'
             };
@@ -48085,4 +48548,697 @@ function _apexApplyBillDefaultPerson(kind) {
     if (String(inp.value || '').trim() || h.value) return;   // فیلد پر است → دست نمی‌خورد
     h.value = p.id;
     inp.value = p.name || '';
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) فرم‌ها به‌صورتِ «پنجرهٔ جداگانه» در نسخهٔ دسکتاپ (Tauri و وبِ دسکتاپ)
+//  ──────────────────────────────────────────────────────────────────────────────
+//  • فقط در دسکتاپ: پهنای پنجره بیش از 1024 و اپِ اندروید (Capacitor) نیست. در موبایل،
+//    وبِ موبایل و اپِ اندروید هیچ تغییری در نمایش نیست (همان صفحهٔ کامل).
+//  • فرم روی همان صفحه‌ای که از آن باز شده باز می‌شود؛ آن صفحه پشتِ پنجره (بلور) دیده
+//    می‌ماند. فرمِ دوم (مثلاً «ثبت شخص» از داخلِ «دریافتی») روی فرمِ اول می‌نشیند.
+//  • کلیک روی هر جای بیرونِ پنجره = همان دکمهٔ برگشتِ فرم (پس دیالوگِ تاییدِ خروجِ موجود
+//    نمایش داده می‌شود). پس از تایید، صفحه‌ای که فرم از آن باز شده بود دوباره نمایش می‌یابد.
+//  • مسیرِ پس از «ثبت» دست‌نخورده است.
+// ════════════════════════════════════════════════════════════════════════════════
+function _apexDlgIds() {
+    return {
+        'person-form': 1, 'expense-form': 1, 'receipt-form': 1, 'payment-form': 1, 'cashbox-form': 1,
+        'cashbox-transfer-form-section': 1, 'cashbox-withdraw-form-section': 1, 'cashbox-deposit-form-section': 1,
+        'currency-convert-form': 1, 'product-adj-form': 1
+    };
+}
+function _apexDlgEnabled() {
+    try {
+        var C = window.Capacitor;
+        if (C && typeof C.isNativePlatform === 'function' && C.isNativePlatform()) return false;
+        if (document.documentElement && document.documentElement.getAttribute('data-jruntime') === 'android') return false;
+    } catch (e) {}
+    return (window.innerWidth || document.documentElement.clientWidth || 0) > 1024;
+}
+/** پیش از تغییرِ بخش‌ها: پشتهٔ پنجره‌ها را برای بخشِ مقصد محاسبه می‌کند */
+function _apexDlgBegin(target) {
+    var st = (window.__apexDlgStack || []).slice();
+    if (!_apexDlgEnabled()) { window.__apexDlgStack = []; return { dialog: false }; }
+    var ids = _apexDlgIds();
+    var cur = document.querySelector('.section.active');
+    var curId = cur ? cur.id : null;
+    if (!ids[target]) { window.__apexDlgStack = []; return { dialog: false }; }
+    var idx = st.indexOf(target);
+    if (idx > 0) st = st.slice(0, idx + 1);                       // برگشت به پنجرهٔ زیرین
+    else if (curId && curId !== target) {
+        if (st.length && st[st.length - 1] === curId) st.push(target);   // پنجره روی پنجره
+        else st = [curId, target];                                       // پنجره روی صفحه
+    }
+    if (st.length < 2) {                                           // میزبانی نیست → داشبورد
+        st = ['dashboard', target];
+        if (target === 'dashboard') { window.__apexDlgStack = []; return { dialog: false }; }
+    }
+    window.__apexDlgStack = st;
+    return { dialog: true, stack: st.slice() };
+}
+/** پس از نمایشِ بخشِ مقصد: کلاس‌های پنجره و میزبان را اعمال می‌کند */
+function _apexDlgApply(info) {
+    Array.prototype.forEach.call(document.querySelectorAll('.section.apex-dlg, .section.apex-dlg-host'), function (el) {
+        el.classList.remove('apex-dlg', 'apex-dlg-host', 'apex-dlg-lvl2');
+    });
+    try { document.body.classList.toggle('apex-dlg-open', !!(info && info.dialog)); } catch (e) {}
+    if (!info || !info.dialog) return;
+    var st = info.stack || [];
+    var host = document.getElementById(st[0]);
+    if (host) { host.classList.add('apex-dlg-host'); host.style.display = 'block'; }
+    for (var i = 1; i < st.length; i++) {
+        var el = document.getElementById(st[i]);
+        if (!el) continue;
+        el.classList.add('apex-dlg');
+        if (i > 1) el.classList.add('apex-dlg-lvl2');
+        el.style.display = 'flex';
+    }
+    try { _apexDlgInstall(); } catch (e) {}
+}
+function _apexDlgInstall() {
+    if (document.__apexDlgInstalled) return;
+    document.__apexDlgInstalled = true;
+    // کلیک روی پس‌زمینهٔ پنجره (بیرونِ فرم) = دکمهٔ برگشتِ همان فرم
+    document.addEventListener('mousedown', function (e) {
+        var t = e.target;
+        if (!t || !t.classList || !t.classList.contains('apex-dlg')) return;
+        var st = window.__apexDlgStack || [];
+        if (!st.length || t.id !== st[st.length - 1]) return;
+        e.preventDefault();
+        var btn = t.querySelector('.bill-header-bar .btn-back-header') || t.querySelector('.btn-back-header');
+        if (btn) btn.click();
+    }, true);
+    // پس از تاییدِ خروج: اگر فرم به جای دیگری هدایت کرد، صفحهٔ میزبان دوباره نمایش داده شود
+    document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('.btn-back-header') : null;
+        if (!btn) return;
+        var sec = btn.closest('.section');
+        if (!sec || !sec.classList.contains('apex-dlg')) return;
+        var st = (window.__apexDlgStack || []).slice();
+        var i = st.indexOf(sec.id);
+        if (i < 1) return;
+        // تا لحظه‌ای کوتاه، هر هدایتِ دیگری (حتی با تأخیرِ داخلِ همان دکمه) به همین میزبان برمی‌گردد
+        window.__apexDlgGuard = { host: st[i - 1], t: Date.now() };
+    }, true);
+    // هر کلیک/کلیدِ تازهٔ کاربر یعنی ناوبریِ خودِ کاربر → محافظ فوراً برداشته می‌شود
+    var _clr = function () { var g = window.__apexDlgGuard; if (g && Date.now() - g.t > 60) window.__apexDlgGuard = null; };
+    document.addEventListener('mousedown', _clr, true);
+    document.addEventListener('keydown', _clr, true);
+    document.addEventListener('touchstart', _clr, { capture: true, passive: true });
+}
+/** در ابتدای showSection: پس از خروج از پنجره، مقصد = صفحه‌ای که پنجره روی آن باز شده بود */
+function _apexDlgRedirect(target) {
+    var g = window.__apexDlgGuard;
+    if (!g || !g.host) return target;
+    if (Date.now() - g.t > 450) { window.__apexDlgGuard = null; return target; }
+    if (target === g.host || _apexDlgIds()[target]) return target;
+    return document.getElementById(g.host) ? g.host : target;
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) فرمِ «ثبت شخص»: تصویرِ شخص + «آدرس و اطلاعات بیشتر» در یک فیلد
+//  تصویر کوچک‌سازی (حداکثر ۲۵۶ پیکسل) و به‌صورتِ dataURL روی person.image ذخیره می‌شود؛
+//  همان فیلدی که «مشخصات شخص» از قبل نمایش می‌دهد. در کارتِ ردیفِ اشخاص هم دیده می‌شود.
+// ════════════════════════════════════════════════════════════════════════════════
+function _apexPsnImgSet(src) {
+    var img = document.getElementById('person-image-preview');
+    var btn = img ? img.closest('.apex-psn-camera') : null;
+    if (!img) return;
+    if (src) { img.src = src; img.style.display = ''; if (btn) btn.classList.add('has-photo'); }
+    else { img.removeAttribute('src'); img.style.display = 'none'; if (btn) btn.classList.remove('has-photo'); }
+}
+function _apexPsnImgInstall() {
+    var inp = document.getElementById('person-image');
+    if (!inp || inp.__apexImg) return;
+    inp.__apexImg = true;
+    inp.addEventListener('change', function () {
+        var f = inp.files && inp.files[0];
+        if (!f) return;
+        var rd = new FileReader();
+        rd.onload = function (ev) {
+            var raw = ev.target.result;
+            var im = new Image();
+            im.onload = function () {
+                try {
+                    var MAX = 256, w = im.naturalWidth || im.width, h = im.naturalHeight || im.height;
+                    var k = Math.min(1, MAX / Math.max(w, h));
+                    var cv = document.createElement('canvas');
+                    cv.width = Math.max(1, Math.round(w * k)); cv.height = Math.max(1, Math.round(h * k));
+                    var cx = cv.getContext('2d');
+                    cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+                    cx.drawImage(im, 0, 0, cv.width, cv.height);
+                    window._apexPendingPersonImage = cv.toDataURL('image/jpeg', 0.85);
+                } catch (e) { window._apexPendingPersonImage = raw; }
+                _apexPsnImgSet(window._apexPendingPersonImage);
+            };
+            im.onerror = function () { window._apexPendingPersonImage = null; };
+            im.src = raw;
+        };
+        rd.readAsDataURL(f);
+    });
+}
+/** پس از پرشدنِ فرم برای ویرایش: ادغامِ آدرس/یادداشت، تصویر و بازکردنِ «بیشتر» */
+function _apexPersonFormLoaded(person) {
+    _apexPsnImgInstall();
+    window._apexPendingPersonImage = null;
+    if (!person) return;
+    var addr = String(person.address || '').trim(), notes = String(person.notes || '').trim();
+    var merged = addr && notes ? (addr + '\n' + notes) : (addr || notes);
+    var a = document.getElementById('person-address'); if (a) a.value = merged;
+    var n = document.getElementById('person-notes'); if (n) n.value = '';
+    _apexPsnImgSet(person.image || '');
+    var hasMore = (parseFloat(person.previousAccount) || 0) !== 0 || String(person.idNumber || '').trim() || merged ||
+                  (person.accountType && person.accountType !== 'بدون حساب');
+    var mp = document.getElementById('person-more-panel');
+    if (mp) mp.classList.toggle('open', !!hasMore);
+}
+function _apexPersonFormReset() {
+    _apexPsnImgInstall();
+    window._apexPendingPersonImage = null;
+    _apexPsnImgSet('');
+    var n = document.getElementById('person-notes'); if (n) n.value = '';
+    try { var fi = document.getElementById('person-image'); if (fi) fi.value = ''; } catch (e) {}
+}
+function _apexPersonAvatar(person) {
+    var src = person && person.image ? String(person.image) : '';
+    if (!src || !/^data:image\//.test(src) && !/^https?:\/\//.test(src)) return '<span class="person-card-avatar"><i class="fas fa-user"></i></span>';
+    return '<span class="person-card-avatar has-photo"><img src="' + src.replace(/"/g, '&quot;') + '" alt=""></span>';
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) «ورودی جدید» / «خروجی جدید» جنس — از سه‌نقطهٔ ردیفِ اجناس
+//  ──────────────────────────────────────────────────────────────────────────────
+//  نه خرید است و نه فروش: هیچ شخص، خزانه، حساب یا مفادِ فروشی را تغییر نمی‌دهد.
+//  رکورد در همان دفترِ «warehouseTransfers» (همان که انتقالِ گدام‌ها در آن است، همگام با
+//  ابر) با نشانِ adj:'in'|'out' ذخیره می‌شود؛ پس بازسازیِ موجودی (Rebuilder) و امضای
+//  کشِ FIFO بدونِ هیچ تغییری آن را می‌بینند:
+//    • ورودی: قلمِ { destProductId } ⇒ موجودی + ، و در FIFO یک «سری» با همان قیمت و ارز
+//      (نرخِ لحظهٔ ثبت قفل می‌شود، مثلِ خرید) ⇒ سرمایهٔ گدام و سرمایهٔ کل بالا می‌رود.
+//    • خروجی: قلمِ { srcProductId } ⇒ موجودی − ، و در FIFO یک «خروجِ بدونِ مفاد» (مثلِ
+//      برگشت از خرید) ⇒ ارزشِ همان واحدها به بهای تمام‌شدهٔ انبار از سرمایه کم می‌شود.
+// ════════════════════════════════════════════════════════════════════════════════
+function _padjSt() { if (!window.__padj) window.__padj = {}; return window.__padj; }
+function _padjEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function _padjEn(v) { try { return (typeof toEnglishDigits === 'function') ? toEnglishDigits(String(v == null ? '' : v)) : String(v == null ? '' : v); } catch (e) { return String(v == null ? '' : v); } }
+function _padjNum(v) { var n = parseFloat(_padjEn(v).replace(/[,٬\s]/g, '').replace(/٫/g, '.')); return isNaN(n) ? NaN : n; }
+function _padjAllProducts() {
+    var a = [];
+    try { a = (db.getAllProducts && db.getAllProducts()) || (db.getProducts && db.getProducts()) || []; } catch (e) { a = []; }
+    return a.filter(function (p) { return p && p.id != null && !p.deleted && !p._deleted; });
+}
+function _padjWhOf(p) { return (p && p.warehouseId) || 'wh_main'; }
+function _padjWarehouses() {
+    var list = [];
+    try { list = (db.getWarehouses && db.getWarehouses()) || []; } catch (e) { list = []; }
+    if (!list.length) list = [{ id: 'wh_main', name: 'گدام اصلی' }];
+    return list;
+}
+function _padjProductsIn(whId) {
+    return _padjAllProducts().filter(function (p) { return String(_padjWhOf(p)) === String(whId); });
+}
+function _padjFind(id) {
+    var a = _padjAllProducts();
+    for (var i = 0; i < a.length; i++) if (String(a[i].id) === String(id)) return a[i];
+    return null;
+}
+/** ارزِ پیش‌فرضِ قیمت: ارزی که جنس در آن قیمتِ خرید دارد (اولویت با ارزِ پایه) */
+function _padjDefaultCur(p) {
+    var base = (typeof _baseCur === 'function') ? _baseCur() : 'AFN';
+    var codes = [];
+    try { codes = ((typeof CurrencySystem !== 'undefined' && CurrencySystem.getCurrencies) ? (CurrencySystem.getCurrencies() || []) : []).map(function (c) { return c.code; }); } catch (e) { codes = []; }
+    var has = function (c) { return !codes.length || codes.indexOf(c) !== -1; };
+    if (p) {
+        var m = {};
+        if (p.purchasePrices && typeof p.purchasePrices === 'object') Object.keys(p.purchasePrices).forEach(function (k) { if (parseFloat(p.purchasePrices[k]) > 0) m[k] = 1; });
+        if (parseFloat(p.purchasePriceAFN) > 0) m.AFN = 1;
+        if (parseFloat(p.purchasePriceUSD) > 0) m.USD = 1;
+        if (m[base] && has(base)) return base;
+        var ks = Object.keys(m).filter(has);
+        if (ks.length) return ks[0];
+    }
+    return base;
+}
+/** قیمتِ پیشنهادیِ واحد: ورودی = قیمتِ خریدِ جنس؛ خروجی = بهای میانگینِ موجودیِ همان جنس */
+function _padjSuggestPrice(p, cur, mode) {
+    if (!p) return '';
+    var v = 0;
+    try {
+        if (mode === 'out' && typeof _wavgPurchaseCapitalEngine === 'function') {
+            var w = _wavgPurchaseCapitalEngine().wavgUnit(p, cur);
+            if (w != null && w > 0) v = w;
+        }
+        if (!(v > 0) && db.getPurchasePrice) v = parseFloat(db.getPurchasePrice(p, cur)) || 0;
+    } catch (e) { v = 0; }
+    if (!(v > 0)) return '';
+    return String(Math.round(v * 100) / 100);
+}
+function _padjQtyHint(p) {
+    var q = document.getElementById('padj-qty');
+    if (!q) return;
+    if (!p) { q.placeholder = 'تعداد'; return; }
+    var st = parseFloat(p.stock) || 0;
+    var stTxt = (typeof _formatQtyWithUnits === 'function') ? _formatQtyWithUnits(st, p) : (st + ' ' + (p.unit || 'عدد'));
+    q.placeholder = 'تعداد (' + (p.unit || 'عدد') + ') — موجودی: ' + _padjEn(stTxt).replace(/<[^>]*>/g, '');
+}
+function _padjSetProduct(p, keepPrice) {
+    var st = _padjSt();
+    var inp = document.getElementById('padj-product-search');
+    var hid = document.getElementById('padj-product');
+    if (inp) { inp.value = p ? (p.name || '') : ''; inp.dataset.matchId = ''; }
+    if (hid) hid.value = p ? p.id : '';
+    _padjQtyHint(p);
+    if (!p || keepPrice) return;
+    var cur = _padjDefaultCur(p);
+    var cs = document.getElementById('padj-currency');
+    if (cs) { try { cs.value = cur; } catch (e) {} if (cs.value !== cur && cs.options.length) cur = cs.value; }
+    var pr = document.getElementById('padj-price');
+    if (pr) pr.value = _padjSuggestPrice(p, cur, st.mode);
+}
+function _padjCurrencyChanged() {
+    var st = _padjSt();
+    var p = _padjFind((document.getElementById('padj-product') || {}).value);
+    var cs = document.getElementById('padj-currency');
+    var pr = document.getElementById('padj-price');
+    if (!p || !cs || !pr || st.editId) return;
+    pr.value = _padjSuggestPrice(p, cs.value, st.mode);
+}
+function _padjFillWarehouses(selId) {
+    var sel = document.getElementById('padj-warehouse');
+    if (!sel) return;
+    sel.innerHTML = _padjWarehouses().map(function (w) {
+        return '<option value="' + _padjEsc(w.id) + '">' + _padjEsc(w.name || w.id) + '</option>';
+    }).join('');
+    if (selId != null) { try { sel.value = String(selId); } catch (e) {} }
+    if (!sel.value && sel.options.length) sel.selectedIndex = 0;
+}
+/** تغییرِ گدام: همان جنس (هم‌نام و هم‌واحد) در گدامِ تازه انتخاب می‌شود؛ اگر نبود، فیلد خالی می‌شود */
+function _padjWarehouseChanged() {
+    var wh = (document.getElementById('padj-warehouse') || {}).value;
+    var cur = _padjFind((document.getElementById('padj-product') || {}).value);
+    _padjClose();
+    if (!cur) return;
+    if (String(_padjWhOf(cur)) === String(wh)) return;
+    var m = _padjProductsIn(wh).find(function (p) { return (p.name || '') === (cur.name || '') && (p.unit || '') === (cur.unit || ''); });
+    if (m) { _padjSetProduct(m, true); return; }
+    _padjSetProduct(null);
+    var inp = document.getElementById('padj-product-search');
+    if (inp) inp.value = '';
+    showMessage('توجه', '«' + (cur.name || '') + '» در این گدام ثبت نشده است. جنس را از همین گدام انتخاب یا ثبت کنید.');
+}
+// ── جستجوی جنس (مثلِ بلِ فروش: تا ۵ نتیجه، اول آن‌هایی که با همان حروف شروع می‌شوند) ──
+function _padjDD() {
+    var dd = document.getElementById('_apex_padj_dd');
+    if (!dd) {
+        dd = document.createElement('div');
+        dd.id = '_apex_padj_dd';
+        dd.className = 'apex-psn-dd';
+        dd.style.display = 'none';
+        document.body.appendChild(dd);
+        document.addEventListener('mousedown', function (e) {
+            if (dd.style.display === 'none') return;
+            var t = e.target;
+            if (t && t.closest && (t.closest('#_apex_padj_dd') || t === dd._input)) return;
+            _padjClose();
+        }, true);
+    }
+    return dd;
+}
+function _padjClose() {
+    var dd = document.getElementById('_apex_padj_dd');
+    if (!dd) return;
+    dd.style.display = 'none'; dd.innerHTML = ''; dd._input = null; dd._idx = -1;
+    if (dd._scrollHandler) { window.removeEventListener('scroll', dd._scrollHandler, true); dd._scrollHandler = null; }
+}
+function _padjMatches(q) {
+    var wh = (document.getElementById('padj-warehouse') || {}).value;
+    var lq = q.toLowerCase();
+    var list = _padjProductsIn(wh).filter(function (p) {
+        return String(p.name || '').toLowerCase().indexOf(lq) !== -1 || (p.code && String(p.code).toLowerCase().indexOf(lq) !== -1);
+    });
+    list.sort(function (a, b) {
+        var an = String(a.name || '').toLowerCase(), bn = String(b.name || '').toLowerCase();
+        var ap = an.indexOf(lq) === 0 ? 0 : 1, bp = bn.indexOf(lq) === 0 ? 0 : 1;
+        if (ap !== bp) return ap - bp;
+        return an.localeCompare(bn);
+    });
+    return list;
+}
+function _padjSearch(input, ev) {
+    if (!input) return;
+    var hid = document.getElementById('padj-product');
+    var typed = input.value || '', q = typed.trim();
+    if (hid) hid.value = '';
+    input.dataset.matchId = '';
+    _padjQtyHint(null);
+    if (!q) { _padjClose(); return; }
+    var list = _padjMatches(q);
+    if (!list.length) { _padjClose(); }
+    else {
+        var dd = _padjDD(), lq = q.toLowerCase(), html = '';
+        list.slice(0, 5).forEach(function (p) {
+            var name = String(p.name || ''), i = name.toLowerCase().indexOf(lq);
+            var shown = (i !== -1)
+                ? _padjEsc(name.substring(0, i)) + '<strong>' + _padjEsc(name.substring(i, i + q.length)) + '</strong>' + _padjEsc(name.substring(i + q.length))
+                : _padjEsc(name);
+            var stk = (typeof _formatQtyWithUnits === 'function') ? _formatQtyWithUnits(parseFloat(p.stock) || 0, p) : ((parseFloat(p.stock) || 0) + ' ' + (p.unit || 'عدد'));
+            html += '<div class="apex-psn-item" data-pid="' + _padjEsc(p.id) + '" onmousedown="event.preventDefault();_padjPick(this.getAttribute(\'data-pid\'))">' +
+                        '<span class="apex-psn-name">' + shown + '</span>' +
+                        (p.code ? '<span class="apex-psn-cat">' + _padjEsc(p.code) + '</span>' : '') +
+                        '<span class="apex-psn-phone">' + stk + '</span>' +
+                    '</div>';
+        });
+        dd.innerHTML = html; dd._input = input; dd._idx = -1;
+        if (typeof _apexPsnPlace === 'function') _apexPsnPlace(dd, input);
+        dd.style.zIndex = '2147483000';
+        dd.style.display = 'block';
+        if (!dd._scrollHandler) {
+            var raf = null;
+            dd._scrollHandler = function () {
+                if (raf) return;
+                raf = requestAnimationFrame(function () { raf = null; if (dd.style.display !== 'none' && dd._input && typeof _apexPsnPlace === 'function') { _apexPsnPlace(dd, dd._input); dd.style.zIndex = '2147483000'; } });
+            };
+            window.addEventListener('scroll', dd._scrollHandler, true);
+        }
+    }
+    // پیشنهادِ درجا (تکمیلِ نام) — مثلِ بلِ فروش؛ نه هنگامِ پاک‌کردن و نه روی صفحهٔ لمسی
+    var isDel = !!(ev && ev.inputType && /^delete/i.test(ev.inputType));
+    var coarse = false;
+    try { coarse = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches); } catch (e) {}
+    if (isDel || (ev && ev.isComposing) || coarse) return;
+    var best = null;
+    for (var k = 0; k < list.length; k++) { if (String(list[k].name || '').toLowerCase().indexOf(q.toLowerCase()) === 0) { best = list[k]; break; } }
+    if (!best) return;
+    var full = String(best.name || '');
+    if (full.toLowerCase().indexOf(typed.toLowerCase()) !== 0) return;
+    input.dataset.matchId = String(best.id);
+    if (full.length > typed.length) {
+        input.value = typed + full.substring(typed.length);
+        try { input.setSelectionRange(typed.length, full.length); } catch (e) {}
+    }
+}
+function _padjPick(pid) {
+    var p = _padjFind(pid);
+    _padjClose();
+    if (!p) return;
+    _padjSetProduct(p, !!_padjSt().editId);
+    var q = document.getElementById('padj-qty');
+    if (q) { try { q.focus(); } catch (e) {} }
+}
+function _padjSearchKey(ev, input) {
+    var dd = document.getElementById('_apex_padj_dd');
+    var open = !!(dd && dd.style.display !== 'none' && dd._input === input);
+    var items = open ? dd.querySelectorAll('.apex-psn-item') : [];
+    var k = ev.key;
+    if (k === 'ArrowDown' || k === 'ArrowUp') {
+        if (!items.length) return;
+        ev.preventDefault();
+        var n = items.length, idx = (typeof dd._idx === 'number') ? dd._idx : -1;
+        idx = (k === 'ArrowDown') ? (idx + 1) % n : (idx <= 0 ? n - 1 : idx - 1);
+        dd._idx = idx;
+        Array.prototype.forEach.call(items, function (el, j) { el.classList.toggle('is-active', j === idx); });
+        return;
+    }
+    if (k === 'Escape') { if (open) { ev.preventDefault(); _padjClose(); } return; }
+    if (k === 'Enter' || k === 'Tab') {
+        if (open && dd._idx >= 0 && items[dd._idx]) { ev.preventDefault(); _padjPick(items[dd._idx].getAttribute('data-pid')); return; }
+        var mid = input.dataset.matchId;
+        if (!mid) {
+            var q = (input.value || '').trim();
+            if (!q) return;
+            var list = _padjMatches(q), lq = q.toLowerCase(), ex = null;
+            for (var i = 0; i < list.length; i++) { if (String(list[i].name || '').toLowerCase() === lq) { ex = list[i]; break; } }
+            var b = ex || list[0];
+            if (!b) return;
+            mid = b.id;
+        }
+        ev.preventDefault();
+        _padjPick(mid);
+    }
+}
+// ── تصویر ──
+function _padjImgSet(src) {
+    var img = document.getElementById('padj-image-preview');
+    var btn = img ? img.closest('.apex-psn-camera') : null;
+    if (!img) return;
+    if (src) { img.src = src; img.style.display = ''; if (btn) btn.classList.add('has-photo'); }
+    else { img.removeAttribute('src'); img.style.display = 'none'; if (btn) btn.classList.remove('has-photo'); }
+}
+function _padjImagePicked(inp) {
+    var f = inp && inp.files && inp.files[0];
+    if (!f) return;
+    var rd = new FileReader();
+    rd.onload = function (ev) {
+        var raw = ev.target.result, im = new Image();
+        im.onload = function () {
+            var out = raw;
+            try {
+                var MAX = 480, w = im.naturalWidth || im.width, h = im.naturalHeight || im.height;
+                var k = Math.min(1, MAX / Math.max(w, h));
+                var cv = document.createElement('canvas');
+                cv.width = Math.max(1, Math.round(w * k)); cv.height = Math.max(1, Math.round(h * k));
+                var cx = cv.getContext('2d');
+                cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);
+                cx.drawImage(im, 0, 0, cv.width, cv.height);
+                out = cv.toDataURL('image/jpeg', 0.85);
+            } catch (e) { out = raw; }
+            _padjSt().image = out;
+            _padjImgSet(out);
+        };
+        im.src = raw;
+    };
+    rd.readAsDataURL(f);
+}
+/**
+ * بازکردنِ فورم. mode: 'in' | 'out' ؛ productId: جنسِ ردیف ؛ opts.editId: ویرایشِ یک رکوردِ موجود
+ */
+function apexProductAdjOpen(mode, productId, opts) {
+    opts = opts || {};
+    var st = window.__padj = { mode: (mode === 'out' ? 'out' : 'in'), editId: opts.editId || null, image: null, ret: null };
+    var cur = document.querySelector('.section.active');
+    var curId = cur ? cur.id : '';
+    var dlg = (typeof _apexDlgIds === 'function') ? _apexDlgIds() : {};
+    st.ret = (curId && curId !== 'product-adj-form' && curId !== 'product-form' && !dlg[curId]) ? curId : (opts.ret || 'products-list');
+    window.__padjQuickAdd = null;
+    _padjClose();
+
+    var rec = null;
+    if (st.editId) {
+        rec = ((db.getTransfers && db.getTransfers()) || []).find(function (t) { return t.id == st.editId; }) || null;
+        if (!rec || (rec.adj !== 'in' && rec.adj !== 'out')) { showMessage('خطا', 'رکورد یافت نشد'); return; }
+        st.mode = rec.adj;
+    }
+    var it = rec && rec.items && rec.items[0] ? rec.items[0] : null;
+    var pid = it ? (st.mode === 'in' ? it.destProductId : it.srcProductId) : productId;
+    var p = _padjFind(pid);
+
+    var t = document.getElementById('padj-title');
+    if (t) t.textContent = st.editId ? (st.mode === 'in' ? 'ویرایش ورودی' : 'ویرایش خروجی') : (st.mode === 'in' ? 'ورودی جدید' : 'خروجی جدید');
+    var ex = document.getElementById('padj-expiry-field');
+    if (ex) ex.style.display = (st.mode === 'in') ? '' : 'none';
+
+    var whId = rec ? (st.mode === 'in' ? rec.toId : rec.fromId) : (p ? _padjWhOf(p) : ((db.getActiveWarehouseId && db.getActiveWarehouseId()) || 'wh_main'));
+    _padjFillWarehouses(whId);
+    try { if (typeof _populateCurrencySelect === 'function') _populateCurrencySelect('padj-currency', (it && it.currency) || _padjDefaultCur(p)); } catch (e) {}
+
+    var q = document.getElementById('padj-qty'); if (q) { q.value = it ? (parseFloat(it.quantity) || '') : ''; q.removeAttribute('data-jq-touched'); }
+    var n = document.getElementById('padj-notes'); if (n) n.value = rec ? (rec.note || '') : '';
+    var e2 = document.getElementById('padj-expiry'); if (e2) e2.value = (it && it.expiryDate) ? it.expiryDate : '';
+    var fi = document.getElementById('padj-image'); if (fi) { try { fi.value = ''; } catch (e) {} }
+    _padjImgSet(rec && rec.image ? rec.image : '');
+
+    if (p) _padjSetProduct(p, !!rec);
+    else { _padjSetProduct(null); var si = document.getElementById('padj-product-search'); if (si && it) si.value = it.name || ''; }
+    if (rec && it) {
+        var pr = document.getElementById('padj-price'); if (pr) pr.value = (it.price != null ? it.price : '');
+    }
+
+    var dt = document.getElementById('padj-datetime');
+    if (dt) {
+        dt.value = rec ? (rec.date || '') : ((typeof _nowJalaliDateTime === 'function') ? _nowJalaliDateTime() : '');
+        if (!dt._dpAttached && typeof _attachDateTimePickerToInput === 'function') { try { _attachDateTimePickerToInput(dt); dt._dpAttached = true; } catch (e) {} }
+    }
+    showSection('product-adj-form');
+}
+function _padjGoBack() {
+    _padjClose();
+    var st = _padjSt();
+    var ret = st.ret || 'products-list';
+    window.__padj = null;
+    showSection(ret);
+    if (ret === 'product-inout-list' && window._currentInoutProductId != null && typeof showProductInOutList === 'function') {
+        try { showProductInOutList(window._currentInoutProductId); } catch (e) {}
+    }
+}
+// ── «ثبت جنس جدید» از داخلِ فیلد (مثلِ بلِ فروش) ──
+function _padjAddProduct() {
+    _padjClose();
+    var st = _padjSt();
+    var stack = (window.__apexDlgStack || []).slice();
+    window.__padjQuickAdd = { host: (stack.length >= 2 && stack[stack.length - 1] === 'product-adj-form') ? stack[0] : null };
+    st.snapshot = {
+        wh: (document.getElementById('padj-warehouse') || {}).value,
+        qty: (document.getElementById('padj-qty') || {}).value,
+        price: (document.getElementById('padj-price') || {}).value,
+        cur: (document.getElementById('padj-currency') || {}).value,
+        dt: (document.getElementById('padj-datetime') || {}).value,
+        exp: (document.getElementById('padj-expiry') || {}).value,
+        notes: (document.getElementById('padj-notes') || {}).value
+    };
+    if (typeof showProductForm === 'function') showProductForm();
+}
+function _padjReturnToForm(newProduct) {
+    var qa = window.__padjQuickAdd;
+    window.__padjQuickAdd = null;
+    var st = _padjSt(), sn = st.snapshot || {};
+    if (qa && qa.host) window.__apexDlgStack = [qa.host, 'product-adj-form'];
+    showSection('product-adj-form');
+    var set = function (id, v) { var el = document.getElementById(id); if (el && v != null) el.value = v; };
+    set('padj-warehouse', newProduct ? _padjWhOf(newProduct) : sn.wh);
+    set('padj-qty', sn.qty); set('padj-datetime', sn.dt); set('padj-expiry', sn.exp); set('padj-notes', sn.notes);
+    if (newProduct) {
+        _padjSetProduct(newProduct, false);
+        if (sn.price) set('padj-price', sn.price);
+    } else {
+        set('padj-currency', sn.cur); set('padj-price', sn.price);
+    }
+    st.snapshot = null;
+}
+/** فراخوانی از saveProduct پس از ثبتِ موفق — true یعنی هدایت انجام شد */
+function _padjAfterProductSaved(product) {
+    if (!window.__padjQuickAdd || !product) return false;
+    try { if (typeof loadProductsList === 'function') loadProductsList(); } catch (e) {}
+    _padjReturnToForm(_padjFind(product.id) || product);
+    return true;
+}
+/** دکمهٔ برگشتِ فورمِ ثبتِ جنس، وقتی از همین فورم باز شده بود */
+function _padjQuickAddCancel() {
+    if (!window.__padjQuickAdd) return false;
+    _padjReturnToForm(null);
+    return true;
+}
+// ── ثبت ──
+function _padjSave(ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    _padjClose();
+    var st = _padjSt();
+    var mode = st.mode === 'out' ? 'out' : 'in';
+    var base = (typeof _baseCur === 'function') ? _baseCur() : 'AFN';
+    var whId = (document.getElementById('padj-warehouse') || {}).value;
+    var wh = _padjWarehouses().find(function (w) { return String(w.id) === String(whId); });
+    if (!wh) { showMessage('خطا', 'گدام را انتخاب کنید.'); return false; }
+    var p = _padjFind((document.getElementById('padj-product') || {}).value);
+    if (!p) {
+        // نامِ کامل تایپ شده ولی از فهرست انتخاب نشده → همان جنس در همین گدام
+        var typed = ((document.getElementById('padj-product-search') || {}).value || '').trim().toLowerCase();
+        if (typed) p = _padjProductsIn(whId).find(function (x) { return String(x.name || '').trim().toLowerCase() === typed; }) || null;
+    }
+    if (!p) { showMessage('خطا', 'جنس را از فهرست انتخاب کنید.'); return false; }
+    if (String(_padjWhOf(p)) !== String(whId)) {
+        var m = _padjProductsIn(whId).find(function (x) { return (x.name || '') === (p.name || '') && (x.unit || '') === (p.unit || ''); });
+        if (!m) { showMessage('خطا', '«' + (p.name || '') + '» در گدامِ انتخاب‌شده ثبت نشده است.'); return false; }
+        p = m;
+    }
+    var qty = _padjNum((document.getElementById('padj-qty') || {}).value);
+    if (!(qty > 0)) { showMessage('خطا', 'تعداد باید بزرگ‌تر از صفر باشد.'); return false; }
+    var priceRaw = String((document.getElementById('padj-price') || {}).value || '').trim();
+    var price = _padjNum(priceRaw);
+    if (priceRaw === '' || isNaN(price) || price < 0) { showMessage('خطا', 'قیمت واحد را وارد کنید.'); return false; }
+    var cur = (document.getElementById('padj-currency') || {}).value || base;
+    var rate = 1;
+    if (cur !== base) {
+        rate = (typeof _dayRateFor === 'function') ? _dayRateFor(cur) : null;
+        if (!(rate > 0)) { showMessage('خطا', 'نرخِ ارزِ «' + cur + '» تعریف نشده است. ابتدا نرخ را در کارت نرخ ارز ثبت کنید.'); return false; }
+    }
+    var old = null;
+    if (st.editId) old = ((db.getTransfers && db.getTransfers()) || []).find(function (t) { return t.id == st.editId; }) || null;
+    var oldIt = old && old.items && old.items[0] ? old.items[0] : null;
+    if (mode === 'out') {
+        var avail = parseFloat(p.stock) || 0;
+        if (oldIt && String(oldIt.srcProductId) === String(p.id)) avail += (parseFloat(oldIt.quantity) || 0);
+        if (qty > avail + 1e-9) {
+            showMessage('خطا', 'موجودی «' + (p.name || '') + '» کافی نیست (موجودی: ' + formatNumber(avail) + '، درخواست: ' + formatNumber(qty) + ')');
+            return false;
+        }
+    }
+    // بهای واحد به ارزِ پایه: ورودی = قیمت × نرخِ لحظهٔ ثبت ؛ خروجی = بهای میانگینِ فعلیِ انبار (فقط ثبتِ نمایشی؛
+    // کاهشِ سرمایه را خودِ موتورِ FIFO از سری‌های انبار حساب می‌کند)
+    var unitCostBase = 0;
+    if (mode === 'in') unitCostBase = price * rate;
+    else {
+        try { var _w = (typeof _wavgPurchaseCapitalEngine === 'function') ? _wavgPurchaseCapitalEngine().wavgUnit(p, base) : null; unitCostBase = (_w != null && _w > 0) ? _w : price * rate; }
+        catch (e) { unitCostBase = price * rate; }
+    }
+    var dateVal = _padjEn(((document.getElementById('padj-datetime') || {}).value || '').trim());
+    if (!dateVal) dateVal = (typeof _nowJalaliDateTime === 'function') ? _nowJalaliDateTime() : (db.getCurrentDate ? db.getCurrentDate() : '');
+    var expiry = (mode === 'in') ? _padjEn(((document.getElementById('padj-expiry') || {}).value || '').trim()) : '';
+    var item = {
+        name: p.name || '', unit: p.unit || '', quantity: qty,
+        price: price, currency: cur, rateUsed: rate, baseCurrency: base,
+        unitCostBase: unitCostBase, costBase: unitCostBase * qty
+    };
+    if (mode === 'in') item.destProductId = p.id; else item.srcProductId = p.id;
+    if (expiry) item.expiryDate = expiry;
+    var rec = {
+        adj: mode,
+        date: dateVal,
+        note: ((document.getElementById('padj-notes') || {}).value || '').trim(),
+        items: [item]
+    };
+    if (mode === 'in') { rec.toId = wh.id; rec.toName = wh.name || ''; } else { rec.fromId = wh.id; rec.fromName = wh.name || ''; }
+    var img = st.image || (old && old.image) || '';
+    if (img) rec.image = img;
+
+    var res;
+    if (old) {
+        rec.id = old.id; rec.createdAt = old.createdAt;
+        res = db.updateTransfer ? db.updateTransfer(rec) : { success: false };
+        if (!res || !res.success) { showMessage('خطا', (res && res.error) || 'ویرایش ناموفق بود'); return false; }
+        if (typeof rebuildAllDerivedData === 'function') { try { rebuildAllDerivedData(); } catch (e) {} }
+    } else {
+        res = db.saveTransfer ? db.saveTransfer(rec) : { success: false };
+        if (!res || !res.success) { showMessage('خطا', (res && res.error) || 'ثبت ناموفق بود'); return false; }
+        if (db.adjustProductStockById) db.adjustProductStockById(p.id, mode === 'in' ? qty : -qty);
+        try { if (typeof _fifoProfitCache !== 'undefined' && _fifoProfitCache) { _fifoProfitCache.sig = null; _fifoProfitCache.maps = null; _fifoProfitCache.at = 0; } } catch (e) {}
+    }
+    // تاریخِ انقضای ورودی، مثلِ خرید، روی خودِ جنس هم نوشته می‌شود
+    if (expiry) {
+        try {
+            var raw = db._getProductsRaw ? db._getProductsRaw() : JSON.parse(localStorage.getItem('products') || '[]');
+            var ix = raw.findIndex(function (x) { return x && x.id == p.id; });
+            if (ix !== -1) { raw[ix].expiryDate = expiry; localStorage.setItem('products', JSON.stringify(raw)); }
+        } catch (e) {}
+    }
+    try { window.dispatchEvent(new CustomEvent('jouya-data-change', { detail: { reason: 'product-adj' } })); } catch (e) {}
+    try { if (typeof loadProductsList === 'function') loadProductsList(); } catch (e) {}
+    try { if (typeof loadDashboard === 'function') loadDashboard(); } catch (e) {}
+    showMessage('موفقیت', (mode === 'in' ? 'ورودی' : 'خروجی') + (old ? ' ویرایش شد.' : ' ثبت شد.'));
+    _padjGoBack();
+    return false;
+}
+// ── ردیفِ «ورود/خروج» در لیستِ ورودی و خروجیِ جنس: ویرایش / حذف ──
+function _padjActionBar(event, recId, productId) {
+    if (typeof _buildInoutFloatingBar !== 'function') return;
+    _buildInoutFloatingBar(event, [
+        { icon: 'fa-edit',  color: '#d97706', title: 'ویرایش', run: function () { _padjEdit(recId); } },
+        { icon: 'fa-trash', color: '#dc2626', title: 'حذف',    run: function () { _padjDelete(recId, productId); } }
+    ]);
+}
+function _padjEdit(recId) { apexProductAdjOpen(null, null, { editId: recId }); }
+function _padjDelete(recId, productId) {
+    var run = function () {
+        var res = db.deleteTransfer ? db.deleteTransfer(recId) : { success: false };
+        if (!res || !res.success) { showMessage('خطا', (res && res.error) || 'حذف ناموفق بود'); return; }
+        if (typeof rebuildAllDerivedData === 'function') { try { rebuildAllDerivedData(); } catch (e) {} }
+        try { window.dispatchEvent(new CustomEvent('jouya-data-change', { detail: { reason: 'product-adj-delete' } })); } catch (e) {}
+        try { if (typeof loadProductsList === 'function') loadProductsList(); } catch (e) {}
+        try { if (typeof loadDashboard === 'function') loadDashboard(); } catch (e) {}
+        var pid = (productId != null) ? productId : window._currentInoutProductId;
+        var sec = document.getElementById('product-inout-list');
+        if (sec && sec.classList.contains('active') && pid != null && typeof showProductInOutList === 'function') { try { showProductInOutList(pid); } catch (e) {} }
+        showMessage('موفقیت', 'حذف شد و موجودی و سرمایه دوباره محاسبه شد.');
+    };
+    var msg = 'این ردیف حذف شود؟ موجودی و سرمایهٔ جنس دوباره و دقیق محاسبه می‌شود.';
+    if (typeof showStyledConfirm === 'function') showStyledConfirm('حذف', msg, run);
+    else if (window.confirm(msg)) run();
 }

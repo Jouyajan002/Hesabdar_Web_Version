@@ -303,7 +303,8 @@ ul { list-style: none; }
 
 /* هدر اصلی در داشبورد - ارتفاع بیشتر برای زیبایی دکمه‌های سریع */
 .section#dashboard .main-header,
-body:has(#dashboard.section.active) .main-header {
+body:has(#dashboard.section.active) .main-header ,
+body:has(#dashboard.section.apex-dlg-host) .main-header {
     padding: 18px 20px;
     min-height: 80px;
 }
@@ -1239,7 +1240,8 @@ body, .main-content {
    ======================================================================= */
 
 /* 1. فقط زمانی که این بخش ACTIVE است، فیکس و فول‌اسکرین شود */
-#financial.active {
+#financial.active ,
+#financial.apex-dlg-host {
     position: fixed !important; /* فقط وقتی فعال است شناور شود */
     top: 75px !important;       
     bottom: 70px !important;    
@@ -1257,14 +1259,15 @@ body, .main-content {
 }
 
 /* مهم: وقتی فعال نیست، کاملاً مخفی شود تا روی بقیه فرم‌ها نیاید */
-#financial:not(.active) {
+#financial:not(.active):not(.apex-dlg-host) {
     display: none !important;
     z-index: -100 !important;
     position: static !important; /* برگرداندن به حالت عادی تا مزاحم نشود */
 }
 
 /* 2. هدر تب‌ها */
-#financial.active .financial-tabs-header {
+#financial.active .financial-tabs-header ,
+#financial.apex-dlg-host .financial-tabs-header {
     flex: 0 0 auto; 
     width: 100%;
     z-index: 10;
@@ -1272,7 +1275,8 @@ body, .main-content {
 }
 
 /* 3. فضای محتوا */
-#financial.active .financial-content-wrapper {
+#financial.active .financial-content-wrapper ,
+#financial.apex-dlg-host .financial-content-wrapper {
     flex: 1 1 auto; 
     width: 100% !important;
     overflow-y: auto !important; 
@@ -1284,9 +1288,13 @@ body, .main-content {
 
 /* 4. اصلاح فرم‌ها و جداول فقط داخل بخش فعال امور مالی */
 #financial.active .fin-panel,
+#financial.apex-dlg-host .fin-panel,
 #financial.active .form-container,
+#financial.apex-dlg-host .form-container,
 #financial.active .table-container,
-#financial.active .report-section {
+#financial.apex-dlg-host .table-container,
+#financial.active .report-section ,
+#financial.apex-dlg-host .report-section {
     width: 100% !important;
     max-width: 100% !important;
     min-height: auto !important; 
@@ -1304,20 +1312,24 @@ body, .main-content {
 }
 
 /* جداول داخل امور مالی - اسکرول مستقل */
-#financial.active .table-container table {
+#financial.active .table-container table ,
+#financial.apex-dlg-host .table-container table {
     overflow: visible;
 }
 
 /* مدیریت نمایش پنل‌های داخلی */
-#financial.active .fin-panel {
+#financial.active .fin-panel ,
+#financial.apex-dlg-host .fin-panel {
     display: none !important;
 }
-#financial.active .fin-panel.active {
+#financial.active .fin-panel.active ,
+#financial.apex-dlg-host .fin-panel.active {
     display: block !important;
 }
 
 /* فضای خالی پایین اسکرول */
-#financial.active .financial-content-wrapper::after {
+#financial.active .financial-content-wrapper::after ,
+#financial.apex-dlg-host .financial-content-wrapper::after {
     content: "";
     display: block;
     height: 80px;
@@ -2517,7 +2529,8 @@ main, .main-content {
    Remove extra top gap for financial (امور)
    Paste this at the end of style.css
    ------------------------------------------ */
-#financial.active {
+#financial.active ,
+#financial.apex-dlg-host {
   top: 0 !important;         /* برداشتن فاصله 75px که باعث حاشیه می‌شود */
   margin-top: 0 !important;
   padding-top: 0 !important;
@@ -6354,7 +6367,8 @@ body.dark-mode .dash-bal-row { background: #0f172a; border-color: #334155; }
 .dash-nav-col .btn-ql-delivery       { border-right-color: #1e293b !important; }
 
 /* مخفی‌کردن نوار اکشن سریع شناور در داشبورد */
-body:has(#dashboard.section.active) .quick-actions { display: none !important; }
+body:has(#dashboard.section.active) .quick-actions ,
+body:has(#dashboard.section.apex-dlg-host) .quick-actions { display: none !important; }
 
 /* واکنش‌گرا */
 @media (max-width: 1100px) {
@@ -6469,7 +6483,8 @@ body:has(#dashboard.section.active) .quick-actions { display: none !important; }
 }
 
 /* در داشبورد، آیکن منوی شناور پنهان شود تا با هدر تکراری نشود (سایر بخش‌ها بدون تغییر) */
-body:has(#dashboard.section.active) .header-floating-icons { display: none !important; }
+body:has(#dashboard.section.active) .header-floating-icons ,
+body:has(#dashboard.section.apex-dlg-host) .header-floating-icons { display: none !important; }
 
 /* جا باز کردن برای هدر: ارتفاع گرید به اندازهٔ هدر (۴۴+۱۲=۵۶px) کم می‌شود
    تا مجموع ارتفاع داشبورد دقیقاً مثل قبل بماند و نیاز به اسکرول ایجاد نشود */
@@ -9694,12 +9709,15 @@ body.dark-mode .nd-upd-status.err  { color: #fca5a5; }
  * نصبی). درخواستِ کاربر: اشخاص/اجناس/امورمالی/گزارشات در اسکرین‌های کوچک زیادی بزرگ بودند.
  * زوم روی content-area محتوای مشترک (اشخاص/اجناس/گزارشات/فورم‌ها) را یک‌دست کوچک می‌کند.
  * «نه خیلی کوچک» → ۰٫۹۰ (۱۰٪). روی اسکرین‌های خیلی بزرگ کمی بیشتر تا تناسب حفظ شود. */
-body:not(:has(#dashboard.section.active)) .content-area { zoom: 0.90; }
+body:not(:has(#dashboard.section.active)) .content-area ,
+body:not(:has(#dashboard.section.apex-dlg-host)) .content-area { zoom: 0.90; }
 @media (min-width: 1600px) and (max-width: 1919px) {
-    body:not(:has(#dashboard.section.active)) .content-area { zoom: 0.88; }
+    body:not(:has(#dashboard.section.active)) .content-area ,
+    body:not(:has(#dashboard.section.apex-dlg-host)) .content-area { zoom: 0.88; }
 }
 @media (min-width: 1920px) {
-    body:not(:has(#dashboard.section.active)) .content-area { zoom: 0.86; }
+    body:not(:has(#dashboard.section.active)) .content-area ,
+    body:not(:has(#dashboard.section.apex-dlg-host)) .content-area { zoom: 0.86; }
 }
 /* «امور مالی» خارج از content-area و به‌صورت سکشنِ جداست؛ پس زومِ بالا آن را نمی‌گیرد.
  * برای یک‌دستی دقیقاً ۱۰٪ کوچک می‌شود (داشبورد و بقیه دست‌نخورده می‌مانند). */
@@ -10404,7 +10422,8 @@ html, body { overflow-anchor: none; }
    ║  درست زیرِ همان نوار اسکرول می‌شوند. هیچ تب، دکمه یا چیدمانِ دیگری تغییر       ║
    ║  نمی‌کند و هیچ منطقِ جاوااسکریپتی لمس نشده است.                                ║
    ╚══════════════════════════════════════════════════════════════════════════════╝ */
-#financial.active .financial-content-wrapper {
+#financial.active .financial-content-wrapper ,
+#financial.apex-dlg-host .financial-content-wrapper {
     flex: 1 1 auto !important;
     min-height: 0 !important;
     max-height: none !important;
@@ -10412,15 +10431,19 @@ html, body { overflow-anchor: none; }
     overflow-y: visible !important;
     overflow-x: visible !important;
 }
-#financial.active .financial-content-wrapper::after { content: none !important; display: none !important; }
+#financial.active .financial-content-wrapper::after ,
+#financial.apex-dlg-host .financial-content-wrapper::after { content: none !important; display: none !important; }
 
-#financial.active {
+#financial.active ,
+
+#financial.apex-dlg-host {
     overflow-y: auto !important;
     overflow-x: hidden !important;
 }
 
 /* نوارِ موجودی: ثابت، درست زیرِ نوارِ تب‌ها */
-#financial.active .fin-balance-bar {
+#financial.active .fin-balance-bar ,
+#financial.apex-dlg-host .fin-balance-bar {
     position: sticky !important;
     top: 56px;                 /* ارتفاعِ نوارِ تب‌ها در دسکتاپ */
     z-index: 6;
@@ -10977,4 +11000,125 @@ body.dark-mode .apex-psn-item:hover, body.dark-mode .apex-psn-item.is-active { b
     contain: none !important;
     transform: none !important;
     z-index: 100000 !important;   /* بالاتر از ردیف‌های بعدی و نوارِ پایینِ موبایل (شیتِ پایین) */
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+   (APEX) فرم‌های «پنجرهٔ جداگانه» در نسخهٔ دسکتاپ (Tauri و وبِ دسکتاپ)
+   ────────────────────────────────────────────────────────────────────────────
+   کلاسِ apex-dlg فقط در دسکتاپ (پهنای بیش از 1024 و نه اپِ اندروید) از showSection
+   روی بخشِ فرم گذاشته می‌شود؛ بخشِ قبلی (apex-dlg-host) پشتِ پنجره دیده می‌ماند.
+   اندازهٔ پنجره هم‌اندازهٔ «ویرایش جنس در بل فروش» است؛ بدونِ خطِ بالای دکمهٔ ثبت.
+   در موبایل و اپِ اندروید هیچ‌کدام از این قواعد فعال نمی‌شود.
+   ════════════════════════════════════════════════════════════════════════════ */
+.section.apex-dlg-host { display: block !important; }
+.section.apex-dlg {
+    position: fixed !important; inset: 0 !important; z-index: 1900 !important;
+    display: flex !important; align-items: flex-start; justify-content: center;
+    margin: 0 !important; padding: 24px 16px !important; overflow-y: auto !important;
+    background: rgba(15, 23, 42, 0.38) !important;
+    -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+    animation: apexDlgFade .14s ease-out;
+}
+.section.apex-dlg.apex-dlg-lvl2 { z-index: 1950 !important; }
+@keyframes apexDlgFade { from { opacity: 0; } to { opacity: 1; } }
+.section.apex-dlg > form,
+.section.apex-dlg > .bill-form {
+    width: 560px !important; max-width: 100% !important;
+    margin: auto 0 !important;           /* وسطِ صفحه؛ اگر بلندتر شد از بالا با اسکرول */
+    flex: 0 0 auto;
+}
+.section.apex-dlg .bill-layout {
+    background: var(--bg-surface, #fff); border-radius: 12px; overflow: hidden;
+    box-shadow: 0 24px 60px rgba(2, 6, 23, 0.35); border: 1px solid var(--border-color, #e2e8f0);
+}
+.section.apex-dlg .bill-header-bar {
+    margin: 0 !important; padding: 14px 20px !important; position: static !important;
+    border-radius: 0; box-shadow: none;
+}
+.section.apex-dlg .bill-header-bar .btn-back-header { display: none !important; }
+.section.apex-dlg .bill-body { padding: 16px 18px 6px; gap: 12px; }
+/* هر فیلد در یک سطر */
+.section.apex-dlg .bill-row-fields,
+.section.apex-dlg .bill-top-row,
+.section.apex-dlg .bill-receive-row,
+.section.apex-dlg .product-grid { grid-template-columns: 1fr !important; }
+/* بدونِ خطِ جداکنندهٔ بالای دکمه‌ها */
+.section.apex-dlg .bill-footer { border-top: none !important; box-shadow: none !important; padding: 4px 0 14px 0; }
+
+/* ── پشتهٔ تک‌ستونه (ترتیبِ فیلدها در همهٔ نسخه‌ها) ── */
+.apex-stack { display: flex !important; flex-direction: column; gap: 12px; }
+.apex-stack > * { width: 100%; min-width: 0; }
+/* ترتیبِ تازهٔ دریافتی/پرداختی بر قاعدهٔ قدیمیِ order (موبایل) مقدم است */
+#receipt-bill-layout .bill-receive-row.apex-stack > .bill-receive-field:nth-child(n),
+#payment-bill-layout .bill-receive-row.apex-stack > .bill-receive-field:nth-child(n) { order: 0 !important; }
+.bill-more-panel.apex-more-always { display: block !important; }
+
+/* ── ارز داخلِ خودِ فیلدِ مبلغ (انتهای فیلد) ── */
+.apex-amt-field { gap: 8px; }
+.apex-amt-field > input { flex: 1 1 auto; min-width: 0; }
+select.apex-amt-cur,
+.bill-field select.apex-amt-cur,
+.bill-inline-field select.apex-amt-cur {
+    flex: 0 0 auto !important; width: auto !important; min-width: 72px; max-width: 46%;
+    background: #e2e8f0 !important; color: #0f172a !important; border: none !important;
+    border-radius: 8px !important; padding: 6px 10px !important; margin: 0 !important;
+    font-weight: 700; font-size: .9rem; direction: ltr; text-align: center; cursor: pointer;
+    min-height: 0 !important; height: auto !important; box-shadow: none !important;
+}
+body.dark-mode select.apex-amt-cur { background: #334155 !important; color: #f1f5f9 !important; }
+
+/* ── تصویرِ شخص داخلِ دکمهٔ کامره و آواتارِ کارتِ اشخاص ── */
+.apex-psn-camera { position: relative; overflow: hidden; }
+.apex-psn-camera .apex-psn-photo { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.apex-psn-camera.has-photo > i { visibility: hidden; }
+.person-card-avatar.has-photo { padding: 0 !important; overflow: hidden; }
+.person-card-avatar.has-photo img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; display: block; }
+
+/* ── فرم «تبادله ارز» ── */
+.apex-fx-side { display: flex; flex-direction: column; gap: 8px; }
+.apex-fx-sidehead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.apex-fx-sidelbl { font-weight: 800; color: var(--bill-navy-2, #1e293b); font-size: 1rem; }
+.apex-fx-pills { display: inline-flex; gap: 6px; direction: rtl; }
+.apex-fx-pill {
+    border: 1px solid var(--bill-line, #d8dee9); background: var(--bill-card, #fff); color: var(--bill-navy, #1e3a5f);
+    border-radius: 10px; padding: 5px 14px; font-weight: 700; font-family: inherit; cursor: pointer; font-size: .92rem;
+}
+.apex-fx-pill.is-on { background: var(--bill-navy, #1e3a5f); color: #fff; border-color: var(--bill-navy, #1e3a5f); }
+.apex-fx-pick { display: none; }
+.apex-fx-pick.is-on { display: flex; }
+.apex-fx-field .apex-fx-lbl { flex: 0 0 auto; font-weight: 800; color: var(--bill-navy-2, #1e293b); white-space: nowrap; }
+.apex-fx-field > input { text-align: center; direction: ltr; flex: 1 1 auto; min-width: 0; }
+.apex-fx-field #cc-profit.is-gain { color: #059669; font-weight: 800; }
+.apex-fx-field #cc-profit.is-loss { color: #dc2626; font-weight: 800; }
+.apex-fx-ops { display: inline-flex; flex: 0 0 auto; border-radius: 8px; overflow: hidden; }
+.apex-fx-op {
+    border: none; background: #e2e8f0; color: #334155; width: 34px; height: 34px; font-size: 1.15rem;
+    cursor: pointer; font-family: inherit; line-height: 1;
+}
+.apex-fx-op.is-on { background: var(--bill-navy, #1e3a5f); color: #fff; }
+.apex-fx-footer { justify-content: center; }
+.apex-fx-footer .bill-footer-actions { margin-inline-start: 0 !important; width: 100%; justify-content: center; }
+.apex-fx-footer .bill-btn-save, .apex-fx-footer .bill-btn-cancel { min-width: 150px; justify-content: center; }
+body.dark-mode .apex-fx-pill { background: #1e293b; color: #e2e8f0; border-color: rgba(255,255,255,.16); }
+body.dark-mode .apex-fx-pill.is-on { background: #3b82f6; border-color: #3b82f6; }
+body.dark-mode .apex-fx-op { background: #334155; color: #e2e8f0; }
+
+/* ── لیست تبادلات ── */
+.fx-cards-container .sales-card .apex-fx-amts { display: inline-flex; gap: 18px; direction: rtl; font-weight: 700; }
+.fx-cards-container .sales-card .apex-fx-amts > span { direction: ltr; unicode-bidi: isolate; }
+.fx-cards-container .sales-card-meta-item b { margin-left: 4px; }
+.fx-pnl-gain { color: #059669 !important; }
+.fx-pnl-loss { color: #dc2626 !important; }
+body.dark-mode .apex-fx-sidelbl,
+body.dark-mode .apex-fx-field .apex-fx-lbl { color: #e2e8f0 !important; }
+.apex-fx-field #cc-profit { background: transparent !important; }
+/* ارزِ داخلِ فیلد در فرم‌های خزانه (موبایل): قاعدهٔ تمام‌عرضِ انتخابگرها شاملِ این chip نمی‌شود */
+#cashbox-transfer-form-section .bill-row-fields .bill-field > select.apex-amt-cur,
+#cashbox-deposit-form-section  .bill-row-fields .bill-field > select.apex-amt-cur,
+#cashbox-withdraw-form-section .bill-row-fields .bill-field > select.apex-amt-cur,
+#cashbox-form                  .bill-row-fields .bill-field > select.apex-amt-cur,
+#expense-form                  .bill-row-fields .bill-field > select.apex-amt-cur,
+#product-adj-form              .bill-row-fields .bill-field > select.apex-amt-cur {
+    width: auto !important; min-width: 72px !important; max-width: 46% !important;
+    min-height: 0 !important; flex: 0 0 auto !important;
 }

@@ -350,6 +350,12 @@
                 <span class="ssb-item-label">اطلاعات فروشگاه</span>
                 <i class="fas fa-chevron-left ssb-arrow"></i>
             </li>
+            <!-- (APEX) «صرافی» — درست زیرِ «اطلاعات فروشگاه»: فرمِ تبادله ارز + لیست تبادلات -->
+            <li onclick="ssbOpenSub('sarafi')">
+                <span class="ssb-item-icon"><i class="fas fa-right-left"></i></span>
+                <span class="ssb-item-label">صرافی</span>
+                <i class="fas fa-chevron-left ssb-arrow"></i>
+            </li>
             <li onclick="ssbOpenSub('backup')" class="ssb-item-backup" style="display:none" hidden>
                 <span class="ssb-item-icon"><i class="fas fa-database"></i></span>
                 <span class="ssb-item-label">پشتیبان‌گیری</span>
@@ -443,7 +449,7 @@
                     </div>
                     <ul class="submenu">
                         <li><a href="#" onclick="showSection('expenses')"><i class="fas fa-receipt"></i> مصارف</a></li>
-                        <li><a href="#" onclick="showSection('cash-boxes')"><i class="fas fa-cash-register"></i> حساب ها</a></li>
+                        <li><a href="#" onclick="showSection('cash-boxes')"><i class="fas fa-cash-register"></i> خزانه‌ها</a></li>
                         <li><a href="#" onclick="showSection('reports')"><i class="fas fa-chart-bar"></i> گزارش ها</a></li>
                         <li><a href="#" onclick="showSection('employee-management')"><i class="fas fa-users-cog"></i> کارمندان</a></li>
                     </ul>
@@ -590,7 +596,7 @@
         <i class="fas fa-users"></i> کارمندان
       </button>
       <button class="fin-tab active" data-tab="cashbox" onclick="switchFinancialTab('cashbox')">
-        <i class="fas fa-university"></i> حساب‌ها
+        <i class="fas fa-university"></i> خزانه‌ها
       </button>
       <button class="fin-tab" data-tab="expenses" onclick="switchFinancialTab('expenses')">
         <i class="fas fa-clipboard"></i> مصارفات
@@ -606,24 +612,24 @@
     <div id="fin-cashbox" class="fin-panel active">
       <!-- ردیف بالایی: دکمه انتقال در گوشه چپ صفحه (در RTL = flex-end) -->
       <div class="fin-cashbox-actions-row" style="display:flex !important;justify-content:flex-end;align-items:center;margin:12px 0 16px 0;padding:0;gap:10px;width:100%;">
-        <button type="button" class="btn-primary fin-transfer-btn" onclick="openCurrencyConversion(null)" title="تبدیل ارز بین حساب‌ها"
+        <button type="button" class="btn-primary fin-transfer-btn" onclick="openCurrencyConversion(null)" title="تبدیل ارز بین خزانه‌ها"
           style="display:inline-flex !important;align-items:center;gap:8px;padding:10px 18px;font-size:14px;font-weight:700;border-radius:10px;background:linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);color:#fff;border:none;cursor:pointer;box-shadow:0 4px 12px rgba(99, 102, 241, 0.3);white-space:nowrap;">
           <i class="fas fa-exchange-alt"></i>
-          <span>تبدیل ارز بین حساب‌ها</span>
+          <span>تبدیل ارز بین خزانه‌ها</span>
         </button>
       </div>
 
-      <!-- پنل انتقال مبلغ بین حساب‌ها (نسخه fin) -->
+      <!-- پنل انتقال پول بین خزانه‌ها (نسخه fin) -->
       <div id="fin-cashbox-transfer-panel" class="cashbox-transfer-panel" style="display:none;">
         <div class="section-header-inline" style="margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;">
-          <h3 style="margin:0;"><i class="fas fa-exchange-alt"></i> انتقال مبلغ بین حساب‌ها</h3>
+          <h3 style="margin:0;"><i class="fas fa-exchange-alt"></i> انتقال پول بین خزانه‌ها</h3>
           <button type="button" class="btn-icon btn-secondary" onclick="toggleFinCashboxTransferPanel()" title="بستن"><i class="fas fa-times"></i></button>
         </div>
         <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
           <div class="form-group">
-            <label for="fin-cb-tx-from">حساب اول (مبدأ)</label>
+            <label for="fin-cb-tx-from">خزانهٔ اول (مبدأ)</label>
             <select id="fin-cb-tx-from" onchange="finCashboxTransferRecalc()">
-              <option value="">انتخاب حساب</option>
+              <option value="">انتخاب خزانه</option>
             </select>
           </div>
           <div class="form-group">
@@ -631,9 +637,9 @@
             <input type="number" id="fin-cb-tx-amount" step="0.01" placeholder="مبلغ" oninput="finCashboxTransferRecalc()">
           </div>
           <div class="form-group">
-            <label for="fin-cb-tx-to">حساب مقصد (دوم)</label>
+            <label for="fin-cb-tx-to">خزانهٔ مقصد (دوم)</label>
             <select id="fin-cb-tx-to" onchange="finCashboxTransferRecalc()">
-              <option value="">انتخاب حساب</option>
+              <option value="">انتخاب خزانه</option>
             </select>
           </div>
         </div>
@@ -653,7 +659,7 @@
             </div>
           </div>
           <div class="form-group">
-            <label for="fin-cb-tx-result">مبلغ نهایی (در حساب مقصد)</label>
+            <label for="fin-cb-tx-result">مبلغ نهایی (در خزانهٔ مقصد)</label>
             <input type="text" id="fin-cb-tx-result" readonly placeholder="۰" style="font-weight:700;color:var(--primary,#6366f1);background:var(--bg-secondary,#f1f5f9);">
           </div>
         </div>
@@ -675,7 +681,7 @@
         <table id="cashboxes-table">
           <thead>
             <tr>
-              <th>نام حساب</th>
+              <th>نام خزانه</th>
               <th>ارز</th>
               <th>موجودی</th>
               <th>مکان</th>
@@ -812,7 +818,7 @@
                                         <div class="nd-card-head"><span class="nd-card-title">وضعیت مالی</span></div>
                                         <div class="nd-card-body">
                                             <div class="nd-fin-row">
-                                                <div class="nd-fin-label">موجودی حساب ها</div>
+                                                <div class="nd-fin-label">موجودی خزانه‌ها</div>
                                                 <div class="nd-fin-vals" id="nd-fin-cash"></div>
                                             </div>
                                             <div class="nd-fin-row">
@@ -943,7 +949,7 @@
                     <div id="nd-legacy-cards" style="display:none;" aria-hidden="true">
                         <div class="dash-info-tabs">
                             <button type="button" class="dash-info-tab active" data-ditab="balance" onclick="switchDashInfoTab('balance')">بیلانس‌ها</button>
-                            <button type="button" class="dash-info-tab" data-ditab="accounts" onclick="switchDashInfoTab('accounts')">حساب‌ها</button>
+                            <button type="button" class="dash-info-tab" data-ditab="accounts" onclick="switchDashInfoTab('accounts')">خزانه‌ها</button>
                         </div>
                         <div class="dash-info-tab-pane" id="dash-info-pane-balance">
                             <div class="dash-card" id="dash-card-balance">
@@ -1255,79 +1261,68 @@
                             </div>
 
                             <div class="bill-body">
-                                <!-- آیکن کامره برای انتخاب تصویر -->
+                                <!-- آیکن کامره برای انتخاب تصویر (تصویرِ انتخاب‌شده داخلِ همین دکمه دیده می‌شود) -->
                                 <div class="product-camera">
-                                    <button type="button" class="product-camera-btn" onclick="document.getElementById('person-image').click()" title="انتخاب تصویر شخص">
+                                    <button type="button" class="product-camera-btn apex-psn-camera" onclick="document.getElementById('person-image').click()" title="انتخاب تصویر شخص">
                                         <i class="fas fa-camera"></i>
+                                        <img id="person-image-preview" class="apex-psn-photo" alt="" style="display:none;">
                                     </button>
                                     <input type="file" id="person-image" accept="image/*" style="display:none;">
                                     <span class="product-camera-name" id="person-image-name"></span>
                                 </div>
 
-                                <div class="product-grid">
-                                    <!-- ستون راست — ترتیبِ ۱ تا ۴ (در موبایل، تک‌ستونه، همین ابتدا می‌آید) -->
-                                    <div class="product-col product-col-main">
-                                        <!-- ۱) نام شخص -->
-                                        <div class="bill-field bill-field-icononly">
-                                            <i class="fas fa-user bill-field-icon"></i>
-                                            <input type="text" id="person-name" placeholder="نام و تخلص" required>
-                                        </div>
-                                        <!-- ۲) کتگوری شخص -->
-                                        <div class="bill-field bill-field-icononly">
-                                            <i class="fas fa-users bill-field-icon"></i>
-                                            <select id="person-category" class="bill-inline-input">
-                                                <option value="">کتگوری شخص</option>
-                                            </select>
-                                        </div>
-                                        <!-- ۳) شماره تماس -->
-                                        <div class="bill-field bill-field-icononly">
-                                            <i class="fas fa-phone bill-field-icon"></i>
-                                            <input type="tel" id="person-phone" placeholder="شماره تماس" dir="rtl" style="text-align:right; direction:rtl;">
-                                        </div>
-                                        <!-- ۴) حساب قبلی شخص -->
-                                        <div class="bill-field bill-field-icononly">
+                                <!-- (APEX) ترتیبِ جدید: نام، کتگوری، شماره تماس — بقیه با «بیشتر» -->
+                                <div class="apex-stack">
+                                    <!-- ۱) نام شخص -->
+                                    <div class="bill-field bill-field-icononly">
+                                        <i class="fas fa-user bill-field-icon"></i>
+                                        <input type="text" id="person-name" placeholder="نام و تخلص" required>
+                                    </div>
+                                    <!-- ۲) کتگوری شخص -->
+                                    <div class="bill-field bill-field-icononly">
+                                        <i class="fas fa-users bill-field-icon"></i>
+                                        <select id="person-category" class="bill-inline-input">
+                                            <option value="">کتگوری شخص</option>
+                                        </select>
+                                    </div>
+                                    <!-- ۳) شماره تماس -->
+                                    <div class="bill-field bill-field-icononly">
+                                        <i class="fas fa-phone bill-field-icon"></i>
+                                        <input type="tel" id="person-phone" placeholder="شماره تماس" dir="rtl" style="text-align:right; direction:rtl;">
+                                    </div>
+                                </div>
+
+                                <!-- بیشتر: بقیهٔ فیلدهای فورم -->
+                                <button type="button" class="bill-more-toggle bill-more-toggle-full" onclick="billToggleMore('person')">
+                                    <i class="fas fa-info-circle"></i> بیشتر
+                                </button>
+                                <div class="bill-more-panel" id="person-more-panel">
+                                    <div class="apex-stack">
+                                        <!-- ۴) حساب قبلی — ارز داخلِ خودِ فیلد -->
+                                        <div class="bill-field bill-field-icononly apex-amt-field">
                                             <i class="fas fa-arrow-right-to-bracket bill-field-icon"></i>
                                             <input type="number" id="person-previous-account" step="0.01" placeholder="حساب قبلی">
+                                            <select id="person-currency" class="bill-inline-input apex-amt-cur" title="ارز"></select>
                                         </div>
-                                    </div>
-
-                                    <!-- ستون چپ — ترتیبِ ۵ تا ۸ -->
-                                    <div class="product-col product-col-side">
                                         <!-- ۵) نوع حساب -->
                                         <div class="bill-field bill-field-icononly">
                                             <i class="fas fa-chevron-down bill-field-icon"></i>
                                             <select id="person-account-type" class="bill-inline-input">
                                                 <option value="بدون حساب">نوع حساب: بدون حساب</option>
-                                                <option value="بدهکار">نوع حساب: بدهکار</option>
+                                                <option value="بدهکار">نوع حساب: باقیدار</option>
                                                 <option value="طلبکار">نوع حساب: طلبکار</option>
                                             </select>
                                         </div>
-                                        <!-- ۶) ارز -->
-                                        <div class="bill-field bill-field-icononly">
-                                            <i class="fas fa-dollar-sign bill-field-icon"></i>
-                                            <select id="person-currency" class="bill-inline-input">
-                                            </select>
-                                        </div>
-                                        <!-- ۷) نمبر تذکره -->
+                                        <!-- ۶) نمبر تذکره -->
                                         <div class="bill-field bill-field-icononly">
                                             <i class="fas fa-id-card bill-field-icon"></i>
                                             <input type="text" id="person-id" placeholder="نمبر تذکره">
                                         </div>
-                                        <!-- ۸) آدرس -->
-                                        <div class="bill-field bill-field-icononly">
-                                            <i class="fas fa-map-marker-alt bill-field-icon"></i>
-                                            <input type="text" id="person-address" placeholder="آدرس">
+                                        <!-- ۷) آدرس و اطلاعات بیشتر (یک فیلد) -->
+                                        <div class="bill-field bill-field-textarea">
+                                            <textarea id="person-address" rows="3" placeholder="آدرس و اطلاعات بیشتر"></textarea>
                                         </div>
-                                    </div>
-                                </div>
-
-                                <!-- اطلاعات بیشتر (تمام‌عرض) -->
-                                <button type="button" class="bill-more-toggle bill-more-toggle-full" onclick="billToggleMore('person')">
-                                    <i class="fas fa-info-circle"></i> اطلاعات بیشتر
-                                </button>
-                                <div class="bill-more-panel" id="person-more-panel">
-                                    <div class="bill-field bill-field-textarea">
-                                        <textarea id="person-notes" rows="3" placeholder="اطلاعات بیشتر..."></textarea>
+                                        <input type="hidden" id="person-notes" value="">
                                     </div>
                                 </div>
 
@@ -1429,6 +1424,76 @@
     <button type="button" class="person-fab-add" onclick="showProductForm()">
         <i class="fas fa-plus"></i> اضافه کردن
     </button>
+</section>
+
+<!-- (APEX) فورمِ «ورودی جدید» / «خروجی جدید» جنس (از سه‌نقطهٔ اجناس) — نه خرید است و نه فروش -->
+<section id="product-adj-form" class="section">
+    <form id="productAdjForm" class="bill-form" onsubmit="return _padjSave(event)">
+        <div class="bill-layout">
+            <div class="bill-header-bar">
+                <button type="button" class="btn-back-header" onclick="_padjGoBack()" title="برگشت"><i class="fas fa-arrow-right"></i></button>
+                <h3 class="bill-header-title" id="padj-title">ورودی جدید</h3>
+            </div>
+            <div class="bill-body">
+                <!-- تصویر -->
+                <div class="product-camera">
+                    <button type="button" class="product-camera-btn apex-psn-camera" onclick="document.getElementById('padj-image').click()" title="انتخاب تصویر">
+                        <i class="fas fa-camera"></i>
+                        <img id="padj-image-preview" class="apex-psn-photo" alt="" style="display:none;">
+                    </button>
+                    <input type="file" id="padj-image" accept="image/*" style="display:none;" onchange="_padjImagePicked(this)">
+                </div>
+
+                <!-- ترتیب: نام جنس، گدام، تعداد، زمان ثبت، تاریخ انقضا (فقط ورودی)، قیمت (ارز داخلِ فیلد)، اطلاعات بیشتر -->
+                <div class="bill-row-fields apex-stack">
+                    <div class="bill-field">
+                        <div class="search-wrapper bill-search">
+                            <i class="fas fa-box bill-field-icon"></i>
+                            <input type="text" class="form-control" id="padj-product-search" placeholder="نام جنس" autocomplete="off"
+                                   oninput="_padjSearch(this, event)" onkeydown="_padjSearchKey(event, this)">
+                            <input type="hidden" id="padj-product">
+                            <button type="button" class="apex-field-add" tabindex="-1" title="ثبت جنس جدید"
+                                    onmousedown="event.preventDefault()" onclick="_padjAddProduct()"><i class="fas fa-cart-plus"></i></button>
+                        </div>
+                    </div>
+                    <div class="bill-field bill-field-icononly">
+                        <i class="fas fa-warehouse bill-field-icon"></i>
+                        <select id="padj-warehouse" class="bill-inline-input" onchange="_padjWarehouseChanged()" title="گدام"></select>
+                    </div>
+                    <div class="bill-field bill-field-icononly">
+                        <i class="fas fa-cubes bill-field-icon"></i>
+                        <input type="number" id="padj-qty" step="any" min="0" placeholder="تعداد">
+                    </div>
+                    <div class="bill-field bill-field-icononly">
+                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('padj-datetime',this)"></i>
+                        <input type="text" id="padj-datetime" class="jalali-datetime" placeholder="زمان ثبت">
+                    </div>
+                    <div class="bill-field bill-field-icononly" id="padj-expiry-field">
+                        <i class="fas fa-calendar-check bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ انقضا" style="color:#d97706;" onclick="openDateOnlyCalendarPicker('padj-expiry',this)"></i>
+                        <input type="text" id="padj-expiry" class="jalali-date" placeholder="تاریخ انقضا (اختیاری)">
+                    </div>
+                    <div class="bill-field bill-field-icononly apex-amt-field">
+                        <i class="fas fa-money-bill-wave bill-field-icon"></i>
+                        <input type="number" id="padj-price" step="any" min="0" placeholder="قیمت واحد">
+                        <select id="padj-currency" class="bill-inline-input apex-amt-cur" title="ارز" onchange="_padjCurrencyChanged()"></select>
+                    </div>
+                </div>
+
+                <!-- اطلاعات بیشتر — همیشه باز -->
+                <div class="bill-more-panel open apex-more-always">
+                    <div class="bill-field bill-field-textarea">
+                        <textarea id="padj-notes" rows="3" placeholder="اطلاعات بیشتر..."></textarea>
+                    </div>
+                </div>
+
+                <div class="bill-footer">
+                    <span class="bill-footer-actions">
+                        <button type="submit" class="bill-btn-save"><i class="fas fa-folder"></i> ثبت</button>
+                    </span>
+                </div>
+            </div>
+        </div>
+    </form>
 </section>
 
 <!-- بخش لیست ورودی و خروجی یک جنس -->
@@ -2157,11 +2222,11 @@
                                         <span class="bill-status-line" id="remaining-status" style="display:none;"></span>
                                     </div>
                                     <div class="bill-receive-field">
-                                        <!-- درخواست ۴: نام حساب داخل فیلد، با انتخاب حساب نام تغییر می‌کند -->
+                                        <!-- درخواست ۴: نام حساب داخل فیلد، با انتخاب خزانه نام تغییر می‌کند -->
                                         <div class="bill-inline-field">
                                             <i class="fas fa-cash-register bill-field-icon"></i>
                                             <select id="sales-cashbox" class="bill-inline-input" required>
-                                                <option value="">حساب</option>
+                                                <option value="">خزانه</option>
                                             </select>
                                         </div>
                                     </div>
@@ -2310,7 +2375,7 @@
                                         <div class="bill-inline-field">
                                             <i class="fas fa-cash-register bill-field-icon"></i>
                                             <select id="sr-cashbox" class="bill-inline-input">
-                                                <option value="">حساب</option>
+                                                <option value="">خزانه</option>
                                             </select>
                                         </div>
                                     </div>
@@ -2431,7 +2496,7 @@
                                     <div class="bill-receive-field">
                                         <div class="bill-inline-field">
                                             <i class="fas fa-cash-register bill-field-icon"></i>
-                                            <select id="pr-cashbox" class="bill-inline-input"><option value="">حساب</option></select>
+                                            <select id="pr-cashbox" class="bill-inline-input"><option value="">خزانه</option></select>
                                         </div>
                                     </div>
                                     <button type="button" class="bill-more-toggle" onclick="billToggleMore('pr')">
@@ -2659,11 +2724,11 @@
                                         <span class="bill-status-line" id="purchase-remaining-status" style="display:none;"></span>
                                     </div>
                                     <div class="bill-receive-field">
-                                        <!-- درخواست ۴: نام حساب داخل فیلد، با انتخاب حساب نام تغییر می‌کند -->
+                                        <!-- درخواست ۴: نام حساب داخل فیلد، با انتخاب خزانه نام تغییر می‌کند -->
                                         <div class="bill-inline-field">
                                             <i class="fas fa-cash-register bill-field-icon"></i>
                                             <select id="purchase-cashbox" class="bill-inline-input" required>
-                                                <option value="">حساب</option>
+                                                <option value="">خزانه</option>
                                             </select>
                                         </div>
                                     </div>
@@ -2724,7 +2789,7 @@
                             <div class="bill-body">
 
                                 <!-- ردیف بالا: پرداخت کننده / انتخاب ارز / تاریخ / رسید نمبر -->
-                                <div class="bill-top-row">
+                                <div class="bill-top-row apex-stack">
                                     <div class="bill-field">
                                         <div class="search-wrapper bill-search">
                                             <i class="fas fa-user bill-field-icon"></i>
@@ -2738,33 +2803,20 @@
                                             <div id="receive-from-results" class="search-results-list"></div>
                                         </div>
                                     </div>
-                                    <div class="bill-field bill-field-icononly">
-                                        <i class="fas fa-dollar-sign bill-field-icon"></i>
-                                        <select id="receipt-currency">
-                                        </select>
-                                    </div>
-                                    <div class="bill-field bill-field-icononly">
-                                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('receipt-date',this)"></i>
-                                        <input type="text" id="receipt-date" class="jalali-date" placeholder="تاریخ">
-                                    </div>
-                                    <div class="bill-field bill-field-icononly">
-                                        <i class="fas fa-file-signature bill-field-icon"></i>
-                                        <input type="text" id="receipt-reference" placeholder="رسید نمبر">
-                                    </div>
                                 </div>
 
-                                <!-- ردیف دوم: دریافتی / حساب / نوع دریافت -->
-                                <div class="bill-receive-row">
+                                <div class="bill-receive-row apex-stack">
                                     <div class="bill-receive-field">
                                         <div class="bill-amount-notrack">
                                             <div class="bill-inline-field bill-inline-field--amount">
                                                 <i class="fas fa-money-bill-wave bill-field-icon"></i>
                                                 <input type="number" id="receipt-amount" class="bill-inline-input" step="0.01" placeholder="دریافتی" required>
+                                                <select id="receipt-currency" class="bill-inline-input apex-amt-cur" title="ارز"></select>
                                                 <span class="bill-inline-icons">
                                                     <span class="bill-inline-iconbtn is-active apex-fillbal" role="button" tabindex="0" title="پرکردن با باقیِ حسابِ پرداخت‌کننده" onclick="apexFillPersonBalance('receipt')"><i class="fas fa-check"></i></span>
                                                 </span>
                                             </div>
-                                            <label class="bill-notrack" title="فقط مانده حساب شخص تعدیل می‌شود و از هیچ حساب/صندوقی کم نمی‌شود">
+                                            <label class="bill-notrack" title="فقط مانده حساب شخص تعدیل می‌شود و از هیچ خزانه‌ای کم نمی‌شود">
                                                 <input type="checkbox" id="receipt-notrack" onchange="_toggleReceiptNoTrack()">
                                                 <span class="bill-notrack-text">دریافت بدون پیگیری</span>
                                             </label>
@@ -2773,7 +2825,7 @@
                                     <div class="bill-receive-field">
                                         <div class="receipt-dest-wrap">
                                             <div class="receipt-dest-tabs">
-                                                <button type="button" class="receipt-dest-tab is-active" data-tab="cashbox" onclick="_receiptSwitchTab('cashbox')">حساب‌ها</button>
+                                                <button type="button" class="receipt-dest-tab is-active" data-tab="cashbox" onclick="_receiptSwitchTab('cashbox')">خزانه‌ها</button>
                                                 <button type="button" class="receipt-dest-tab" data-tab="person" onclick="_receiptSwitchTab('person')">اشخاص</button>
                                                 <button type="button" class="receipt-dest-tab" data-tab="expense" onclick="_receiptSwitchTab('expense')">مصارف</button>
                                             </div>
@@ -2781,7 +2833,7 @@
                                                 <div class="bill-inline-field">
                                                     <i class="fas fa-cash-register bill-field-icon"></i>
                                                     <select id="receipt-cashbox" class="bill-inline-input">
-                                                        <option value="">حساب</option>
+                                                        <option value="">خزانه</option>
                                                     </select>
                                                 </div>
                                             </div>
@@ -2826,11 +2878,19 @@
                                     </div>
                                 </div>
 
-                                <!-- اطلاعات بیشتر -->
-                                <button type="button" class="bill-more-toggle bill-more-toggle-full" onclick="billToggleMore('receipt')">
-                                    <i class="fas fa-sliders-h"></i> اطلاعات بیشتر
-                                </button>
-                                <div class="bill-more-panel" id="receipt-more-panel">
+                                <div class="bill-top-row apex-stack">
+                                    <div class="bill-field bill-field-icononly">
+                                        <i class="fas fa-file-signature bill-field-icon"></i>
+                                        <input type="text" id="receipt-reference" placeholder="رسید نمبر">
+                                    </div>
+                                    <div class="bill-field bill-field-icononly">
+                                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('receipt-date',this)"></i>
+                                        <input type="text" id="receipt-date" class="jalali-date" placeholder="تاریخ">
+                                    </div>
+                                </div>
+
+                                <!-- اطلاعات بیشتر — همیشه باز -->
+                                <div class="bill-more-panel open apex-more-always" id="receipt-more-panel">
                                     <div class="bill-field bill-field-textarea">
                                         <textarea id="receipt-description" rows="3" placeholder="شرح دریافت..."></textarea>
                                     </div>
@@ -2870,7 +2930,7 @@
                             <div class="bill-body">
 
                                 <!-- ردیف بالا: دریافت کننده / انتخاب ارز / تاریخ / پرداختی نمبر -->
-                                <div class="bill-top-row">
+                                <div class="bill-top-row apex-stack">
                                     <div class="bill-field">
                                         <div class="search-wrapper bill-search">
                                             <i class="fas fa-user bill-field-icon"></i>
@@ -2884,33 +2944,20 @@
                                             <div id="pay-to-results" class="search-results-list"></div>
                                         </div>
                                     </div>
-                                    <div class="bill-field bill-field-icononly">
-                                        <i class="fas fa-dollar-sign bill-field-icon"></i>
-                                        <select id="payment-currency">
-                                        </select>
-                                    </div>
-                                    <div class="bill-field bill-field-icononly">
-                                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('payment-date',this)"></i>
-                                        <input type="text" id="payment-date" class="jalali-date" placeholder="تاریخ">
-                                    </div>
-                                    <div class="bill-field bill-field-icononly">
-                                        <i class="fas fa-file-signature bill-field-icon"></i>
-                                        <input type="text" id="payment-reference" placeholder="پرداختی نمبر">
-                                    </div>
                                 </div>
 
-                                <!-- ردیف دوم: پرداختی / حساب / نوع پرداخت -->
-                                <div class="bill-receive-row">
+                                <div class="bill-receive-row apex-stack">
                                     <div class="bill-receive-field">
                                         <div class="bill-amount-notrack">
                                             <div class="bill-inline-field bill-inline-field--amount">
                                                 <i class="fas fa-money-check-alt bill-field-icon"></i>
                                                 <input type="number" id="payment-amount" class="bill-inline-input" step="0.01" placeholder="پرداختی" required>
+                                                <select id="payment-currency" class="bill-inline-input apex-amt-cur" title="ارز"></select>
                                                 <span class="bill-inline-icons">
                                                     <span class="bill-inline-iconbtn is-active apex-fillbal" role="button" tabindex="0" title="پرکردن با طلبِ دریافت‌کننده" onclick="apexFillPersonBalance('payment')"><i class="fas fa-check"></i></span>
                                                 </span>
                                             </div>
-                                            <label class="bill-notrack" title="فقط مانده حساب شخص تعدیل می‌شود و از هیچ حساب/صندوقی کم نمی‌شود">
+                                            <label class="bill-notrack" title="فقط مانده حساب شخص تعدیل می‌شود و از هیچ خزانه‌ای کم نمی‌شود">
                                                 <input type="checkbox" id="payment-notrack" onchange="_togglePaymentNoTrack()">
                                                 <span class="bill-notrack-text">پرداخت بدون پیگیری</span>
                                             </label>
@@ -2920,7 +2967,7 @@
                                         <div class="bill-inline-field">
                                             <i class="fas fa-cash-register bill-field-icon"></i>
                                             <select id="payment-cashbox" class="bill-inline-input" required>
-                                                <option value="">حساب</option>
+                                                <option value="">خزانه</option>
                                             </select>
                                         </div>
                                     </div>
@@ -2945,11 +2992,19 @@
                                     </div>
                                 </div>
 
-                                <!-- اطلاعات بیشتر -->
-                                <button type="button" class="bill-more-toggle bill-more-toggle-full" onclick="billToggleMore('payment')">
-                                    <i class="fas fa-sliders-h"></i> اطلاعات بیشتر
-                                </button>
-                                <div class="bill-more-panel" id="payment-more-panel">
+                                <div class="bill-top-row apex-stack">
+                                    <div class="bill-field bill-field-icononly">
+                                        <i class="fas fa-file-signature bill-field-icon"></i>
+                                        <input type="text" id="payment-reference" placeholder="پرداختی نمبر">
+                                    </div>
+                                    <div class="bill-field bill-field-icononly">
+                                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('payment-date',this)"></i>
+                                        <input type="text" id="payment-date" class="jalali-date" placeholder="تاریخ">
+                                    </div>
+                                </div>
+
+                                <!-- اطلاعات بیشتر — همیشه باز -->
+                                <div class="bill-more-panel open apex-more-always" id="payment-more-panel">
                                     <div class="bill-field bill-field-textarea">
                                         <textarea id="payment-description" rows="3" placeholder="شرح پرداخت..."></textarea>
                                     </div>
@@ -3773,9 +3828,9 @@
 
                                 <div class="form-row">
                                     <div class="form-group">
-                                        <label for="return-cashbox">حساب *</label>
+                                        <label for="return-cashbox">خزانه *</label>
                                         <select id="return-cashbox" required>
-                                            <option value="">انتخاب حساب</option>
+                                            <option value="">انتخاب خزانه</option>
                                         </select>
                                     </div>
                                     <div class="form-group">
@@ -3844,7 +3899,7 @@
                             <button class="filter-icon-btn" onclick="toggleFilterMenu('expenses-page')" title="فیلتر"><i class="fas fa-filter"></i></button>
                         </div>
                         <h3 class="section-title-in-filter"><button class="btn-back-header" onclick="showSection('financial')" title="برگشت به امور مالی"><i class="fas fa-arrow-right"></i></button> مصارفات</h3>
-                        <input type="text" id="global-search-expenses-page" placeholder="جستجوی مصارف (نوع، کتگوری، حساب...)" onkeyup="searchExpensesList(this.value)">
+                        <input type="text" id="global-search-expenses-page" placeholder="جستجوی مصارف (نوع، کتگوری، خزانه...)" onkeyup="searchExpensesList(this.value)">
                     </div>
 
                     <!-- منو مرتب‌سازی -->
@@ -3888,7 +3943,7 @@
                                     <th>کتگوری</th>
                                     <th>زمان</th>
                                     <th>مبلغ</th>
-                                    <th>حساب یا حساب</th>
+                                    <th>خزانه</th>
                                     <th>اطلاعات بیشتر</th>
                                     <th>عملیات</th>
                                 </tr>
@@ -3909,7 +3964,8 @@
                 <h3 class="bill-header-title">ثبت مصرف جدید</h3>
             </div>
             <div class="bill-body">
-                <div class="bill-row-fields">
+                <!-- (APEX) ترتیب: عنوان، کتگوری، مبلغ (ارز داخلِ فیلد)، خزانه، تاریخ، اطلاعات بیشتر -->
+                <div class="bill-row-fields apex-stack">
                     <div class="bill-field bill-field-icononly">
                         <i class="fas fa-file-signature bill-field-icon"></i>
                         <input type="text" id="expense-title" placeholder="عنوان مصرف" required>
@@ -3922,28 +3978,25 @@
                                  سیستم هم کتگوری‌های مصارفِ قبلاً ثبت‌شده را خودکار بازسازی می‌کند. -->
                         </select>
                     </div>
+                    <div class="bill-field bill-field-icononly apex-amt-field">
+                        <i class="fas fa-money-bill-wave bill-field-icon"></i>
+                        <input type="number" id="expense-amount" step="0.01" placeholder="مبلغ مصرف" required>
+                        <select id="expense-currency" class="bill-inline-input apex-amt-cur" title="ارز"></select>
+                    </div>
                     <div class="bill-field bill-field-icononly">
-                        <i class="fas fa-dollar-sign bill-field-icon"></i>
-                        <select id="expense-currency" class="bill-inline-input"></select>
+                        <i class="fas fa-university bill-field-icon"></i>
+                        <select id="expense-cashbox" class="bill-inline-input" required>
+                            <option value="">خزانه</option>
+                        </select>
                     </div>
                     <div class="bill-field bill-field-icononly">
                         <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('expense-date',this)"></i>
                         <input type="text" id="expense-date" class="jalali-date" placeholder="تاریخ">
                     </div>
-                    <div class="bill-field bill-field-icononly">
-                        <i class="fas fa-money-bill-wave bill-field-icon"></i>
-                        <input type="number" id="expense-amount" step="0.01" placeholder="مبلغ مصرف" required>
-                    </div>
-                    <div class="bill-field bill-field-icononly">
-                        <i class="fas fa-university bill-field-icon"></i>
-                        <select id="expense-cashbox" class="bill-inline-input" required>
-                            <option value="">حساب</option>
-                        </select>
-                    </div>
                 </div>
 
-                <button type="button" class="bill-more-toggle bill-more-toggle-full" onclick="billToggleMore('expense')"><i class="fas fa-sliders-h"></i> اطلاعات بیشتر</button>
-                <div class="bill-more-panel" id="expense-more-panel">
+                <!-- اطلاعات بیشتر — همیشه باز -->
+                <div class="bill-more-panel open apex-more-always" id="expense-more-panel">
                     <div class="bill-field bill-field-textarea">
                         <textarea id="expense-notes" rows="3" placeholder="اطلاعات بیشتر..."></textarea>
                     </div>
@@ -3962,16 +4015,16 @@
                 <!-- بخش حساب‌ها -->
                 <section id="cash-boxes" class="section">
                     <div class="section-header">
-                        <h2><button class="btn-back-header" onclick="showSection('dashboard')" title="برگشت"><i class="fas fa-arrow-right"></i></button> <i class="fas fa-cash-register"></i> مدیریت حساب ها</h2>
+                        <h2><button class="btn-back-header" onclick="showSection('dashboard')" title="برگشت"><i class="fas fa-arrow-right"></i></button> <i class="fas fa-cash-register"></i> مدیریت خزانه‌ها</h2>
                         <button class="btn-primary" onclick="showCashBoxForm()">
-                            <i class="fas fa-plus"></i> حساب جدید
+                            <i class="fas fa-plus"></i> خزانه جدید
                         </button>
                     </div>
                     
                     <div class="cash-boxes-dashboard">
                         <div class="total-cash-summary">
                             <div class="total-cash-card">
-                                <h3><i class="fas fa-wallet"></i> مجموع موجودی همه حساب ها</h3>
+                                <h3><i class="fas fa-wallet"></i> مجموع موجودی همه خزانه‌ها</h3>
                                 <div class="total-amounts">
                                     <div class="total-amount">
                                         <span class="currency" id="total-cash-afn-lbl">افغانی</span>
@@ -3983,7 +4036,7 @@
                                     </div>
                                 </div>
                                 <button type="button" class="btn-primary cashbox-transfer-trigger" onclick="openCurrencyConversion(null)" style="margin-top:14px;">
-                                    <i class="fas fa-exchange-alt"></i> تبدیل ارز بین حساب‌ها
+                                    <i class="fas fa-exchange-alt"></i> تبدیل ارز بین خزانه‌ها
                                 </button>
                             </div>
                         </div>
@@ -3992,17 +4045,17 @@
                             <!-- حساب‌ها با JavaScript پر می‌شوند -->
                         </div>
 
-                        <!-- پنل انتقال مبلغ بین حساب‌ها -->
+                        <!-- پنل انتقال پول بین خزانه‌ها -->
                         <div id="cashbox-transfer-panel" class="cashbox-transfer-panel" style="display:none;">
                             <div class="section-header-inline" style="margin-bottom:14px;">
-                                <h3><i class="fas fa-exchange-alt"></i> انتقال مبلغ بین حساب‌ها</h3>
+                                <h3><i class="fas fa-exchange-alt"></i> انتقال پول بین خزانه‌ها</h3>
                                 <button type="button" class="btn-icon btn-secondary" onclick="toggleCashboxTransferPanel()" title="بستن"><i class="fas fa-times"></i></button>
                             </div>
                             <div class="form-row" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
                                 <div class="form-group">
-                                    <label for="cb-tx-from">حساب اول (مبدأ)</label>
+                                    <label for="cb-tx-from">خزانهٔ اول (مبدأ)</label>
                                     <select id="cb-tx-from" onchange="cashboxTransferRecalc()">
-                                        <option value="">انتخاب حساب</option>
+                                        <option value="">انتخاب خزانه</option>
                                     </select>
                                     <select id="cb-tx-from-currency" style="margin-top:6px;width:100%;" title="ارز برداشت از مبدأ"></select>
                                 </div>
@@ -4011,9 +4064,9 @@
                                     <input type="number" id="cb-tx-amount" step="0.01" placeholder="مبلغ" oninput="cashboxTransferRecalc()">
                                 </div>
                                 <div class="form-group">
-                                    <label for="cb-tx-to">حساب مقصد (دوم)</label>
+                                    <label for="cb-tx-to">خزانهٔ مقصد (دوم)</label>
                                     <select id="cb-tx-to" onchange="cashboxTransferRecalc()">
-                                        <option value="">انتخاب حساب</option>
+                                        <option value="">انتخاب خزانه</option>
                                     </select>
                                     <select id="cb-tx-to-currency" style="margin-top:6px;width:100%;" title="ارز واریز به مقصد"></select>
                                 </div>
@@ -4034,7 +4087,7 @@
                                     </div>
                                 </div>
                                 <div class="form-group">
-                                    <label for="cb-tx-result">مبلغ نهایی (در حساب مقصد)</label>
+                                    <label for="cb-tx-result">مبلغ نهایی (در خزانهٔ مقصد)</label>
                                     <input type="text" id="cb-tx-result" readonly placeholder="۰" style="font-weight:700;color:var(--primary,#6366f1);background:var(--bg-secondary,#f1f5f9);">
                                 </div>
                             </div>
@@ -4049,9 +4102,9 @@
                     
                     <div class="cashbox-transactions-section">
                         <div class="section-header-inline">
-                            <h3><i class="fas fa-exchange-alt"></i> تراکنش‌های حساب ها</h3>
+                            <h3><i class="fas fa-exchange-alt"></i> تراکنش‌های خزانه‌ها</h3>
                             <select id="cashbox-transaction-filter" onchange="filterCashboxTransactions()">
-                                <option value="all">همه حساب ها</option>
+                                <option value="all">همه خزانه‌ها</option>
                             </select>
                         </div>
                         <div class="table-container">
@@ -4059,7 +4112,7 @@
                                 <thead>
                                     <tr>
                                         <th>تاریخ</th>
-                                        <th>حساب</th>
+                                        <th>خزانه</th>
                                         <th>نوع</th>
                                         <th>مبلغ</th>
                                         <th>ارز</th>
@@ -4074,43 +4127,41 @@
                     </div>
                 </section>
 
-                <!-- فرم حساب جدید -->
+                <!-- فرم خزانه جدید -->
                 <section id="cashbox-form" class="section">
                     <form id="cashboxForm" class="bill-form" onsubmit="event.preventDefault(); saveCashbox();">
                         <div class="bill-layout">
                             <div class="bill-header-bar">
                                 <button type="button" class="btn-back-header" onclick="showSection('financial'); setTimeout(function(){switchFinancialTab('cashbox')},100)" title="برگشت"><i class="fas fa-arrow-right"></i></button>
-                                <h3 class="bill-header-title jf-title">ایجاد حساب جدید</h3>
+                                <h3 class="bill-header-title jf-title">ایجاد خزانه جدید</h3>
                             </div>
                             <div class="bill-body">
-                                <div class="bill-row-fields">
+                                <!-- (APEX) ترتیب: نام خزانه، نوع خزانه، موجودی اولیه (ارز داخلِ فیلد)، اطلاعات بیشتر -->
+                                <div class="bill-row-fields apex-stack">
                                     <div class="bill-field">
                                         <i class="fas fa-university bill-field-icon"></i>
-                                        <input type="text" id="cashbox-name" placeholder="نام حساب" required>
+                                        <input type="text" id="cashbox-name" placeholder="نام خزانه (دکان، شریفی، نمبر ۲، صرافی)" required>
                                     </div>
                                     <div class="bill-field">
                                         <i class="fas fa-tags bill-field-icon"></i>
                                         <select id="cashbox-type">
-                                            <option value="" disabled selected>نوعیت حساب</option>
-                                            <option value="خزانه">خزانه</option>
+                                            <option value="" disabled selected>نوع خزانه</option>
+                                            <option value="خزانه">دکان</option>
                                             <option value="صرافی">صرافی</option>
                                             <option value="بانک">بانک</option>
                                         </select>
                                     </div>
-                                    <div class="bill-field">
-                                        <i class="fas fa-dollar-sign bill-field-icon"></i>
-                                        <select id="cashbox-currency"></select>
-                                    </div>
-                                    <div class="bill-field">
+                                    <div class="bill-field apex-amt-field">
                                         <i class="fas fa-wallet bill-field-icon"></i>
                                         <input type="number" id="cashbox-initial-balance" step="0.01" placeholder="موجودی اولیه">
+                                        <select id="cashbox-currency" class="apex-amt-cur" title="ارز"></select>
                                     </div>
                                 </div>
                                 <input type="hidden" id="cashbox-location" value="">
-                                <button type="button" class="bill-more-toggle bill-more-toggle-full" onclick="billToggleMore('cashbox')"><i class="fas fa-sliders-h"></i> اطلاعات بیشتر</button>
-                                <div class="bill-more-panel" id="cashbox-more-panel">
+                                <!-- اطلاعات بیشتر — همیشه باز -->
+                                <div class="bill-more-panel open apex-more-always" id="cashbox-more-panel">
                                     <div class="bill-field bill-field-textarea">
-                                        <textarea id="cashbox-description" rows="3" placeholder="اطلاعات بیشتر در مورد حساب..."></textarea>
+                                        <textarea id="cashbox-description" rows="3" placeholder="اطلاعات بیشتر"></textarea>
                                     </div>
                                 </div>
                                 <div class="bill-footer">
@@ -4123,15 +4174,15 @@
                     </form>
                 </section>
 
-<!-- بخش معاملات حساب - پنجره کامل با جستجو و فیلتر -->
+<!-- بخش معاملات خزانه - پنجره کامل با جستجو و فیلتر -->
 <section id="cashbox-transactions-list" class="section">
     <div class="list-header-filter">
         <div class="filter-icons-left">
             <button class="filter-icon-btn" onclick="toggleSortMenu('cashbox-transactions')"><i class="fas fa-bars"></i></button>
             <button class="filter-icon-btn" onclick="toggleFilterMenu('cashbox-transactions')"><i class="fas fa-filter"></i></button>
         </div>
-        <h3 class="section-title-in-filter"><button class="btn-back-header" onclick="showSection('financial'); setTimeout(function(){switchFinancialTab('cashbox')},100)" title="برگشت"><i class="fas fa-arrow-right"></i></button> معاملات حساب: <span id="selected-cashbox-name"></span></h3>
-        <input type="text" id="global-search-cashbox-transactions" placeholder="جستجو در معاملات حساب..." onkeyup="searchCashboxTransactions()">
+        <h3 class="section-title-in-filter"><button class="btn-back-header" onclick="showSection('financial'); setTimeout(function(){switchFinancialTab('cashbox')},100)" title="برگشت"><i class="fas fa-arrow-right"></i></button> معاملات خزانه: <span id="selected-cashbox-name"></span></h3>
+        <input type="text" id="global-search-cashbox-transactions" placeholder="جستجو در معاملات خزانه..." onkeyup="searchCashboxTransactions()">
     </div>
 
     <!-- منو مرتب‌سازی -->
@@ -4185,40 +4236,37 @@
     </div>
 </section>
 
-<!-- بخش انتقال مبلغ بین حساب‌ها - فرم کامل -->
+<!-- بخش انتقال پول بین خزانه‌ها - فرم کامل -->
 <!-- فرم انتقال مبلغ — چیدمان و استایل دقیقاً مانند «برداشت از حساب» -->
 <section id="cashbox-transfer-form-section" class="section">
     <form id="cashboxTransferForm" class="bill-form" onsubmit="event.preventDefault(); executeCashboxTransferLegacy();">
         <div class="bill-layout">
             <div class="bill-header-bar">
                 <button type="button" class="btn-back-header" onclick="showSection('financial'); setTimeout(function(){switchFinancialTab('cashbox')},100)" title="برگشت"><i class="fas fa-arrow-right"></i></button>
-                <h3 class="bill-header-title">انتقال مبلغ</h3>
+                <h3 class="bill-header-title">انتقال پول بین خزانه‌ها</h3>
             </div>
             <div class="bill-body">
-                <div class="bill-row-fields">
+                <!-- (APEX) ترتیب: مبدأ، مقصد، مقدار (ارز داخلِ فیلد)، تاریخ، اطلاعات بیشتر -->
+                <div class="bill-row-fields apex-stack">
                     <div class="bill-field">
                         <i class="fas fa-university bill-field-icon"></i>
-                        <select id="transfer-from-cashbox" required><option value="">از حساب</option></select>
+                        <select id="transfer-from-cashbox" required><option value="">مبدأ</option></select>
                     </div>
                     <div class="bill-field">
+                        <i class="fas fa-university bill-field-icon"></i>
+                        <select id="transfer-to-cashbox" required><option value="">مقصد</option></select>
+                    </div>
+                    <div class="bill-field apex-amt-field">
                         <i class="fas fa-wallet bill-field-icon"></i>
                         <input type="number" id="transfer-amount" step="0.01" min="0.01" placeholder="مقدار" required>
-                    </div>
-                    <div class="bill-field">
-                        <i class="fas fa-university bill-field-icon"></i>
-                        <select id="transfer-to-cashbox" required><option value="">به حساب</option></select>
-                    </div>
-                    <div class="bill-field">
-                        <i class="fas fa-dollar-sign bill-field-icon"></i>
-                        <select id="transfer-currency" required></select>
+                        <select id="transfer-currency" class="apex-amt-cur" title="ارز" required></select>
                     </div>
                     <div class="bill-field">
                         <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('transfer-datetime',this)"></i>
-                        <input type="text" id="transfer-datetime" class="jalali-datetime" placeholder="زمان">
+                        <input type="text" id="transfer-datetime" class="jalali-datetime" placeholder="تاریخ">
                     </div>
                 </div>
-                <button type="button" class="bill-more-toggle bill-more-toggle-full" onclick="billToggleMore('transfer')"><i class="fas fa-sliders-h"></i> اطلاعات بیشتر</button>
-                <div class="bill-more-panel" id="transfer-more-panel">
+                <div class="bill-more-panel open apex-more-always" id="transfer-more-panel">
                     <div class="bill-field bill-field-textarea">
                         <textarea id="transfer-notes" rows="3" placeholder="اطلاعات بیشتر..."></textarea>
                     </div>
@@ -4233,39 +4281,35 @@
     </form>
 </section>
 
-<!-- فرم افزودن به حساب (Deposit) -->
+<!-- فرم افزودن به خزانه (Deposit) -->
 <section id="cashbox-deposit-form-section" class="section">
     <form id="cashboxDepositForm" class="bill-form" onsubmit="event.preventDefault(); executeCashboxDeposit();">
         <div class="bill-layout">
             <div class="bill-header-bar">
                 <button type="button" class="btn-back-header" onclick="showSection('financial'); setTimeout(function(){switchFinancialTab('cashbox')},100)" title="برگشت"><i class="fas fa-arrow-right"></i></button>
-                <h3 class="bill-header-title">افزودن به حساب</h3>
+                <h3 class="bill-header-title">افزودن به خزانه</h3>
             </div>
             <div class="bill-body">
-                <div class="bill-row-fields">
+                <div class="bill-row-fields apex-stack">
                     <div class="bill-field">
                         <i class="fas fa-university bill-field-icon"></i>
-                        <select id="deposit-from-cashbox"><option value="">از حساب (اختیاری)</option></select>
+                        <select id="deposit-to-cashbox" required><option value="">مقصد</option></select>
                     </div>
-                    <div class="bill-field">
+                    <div class="bill-field apex-amt-field">
                         <i class="fas fa-wallet bill-field-icon"></i>
                         <input type="number" id="deposit-amount" step="0.01" min="0.01" placeholder="مقدار" required>
+                        <select id="deposit-currency" class="apex-amt-cur" title="ارز" required></select>
                     </div>
                     <div class="bill-field">
                         <i class="fas fa-university bill-field-icon"></i>
-                        <select id="deposit-to-cashbox" required><option value="">به حساب</option></select>
-                    </div>
-                    <div class="bill-field">
-                        <i class="fas fa-dollar-sign bill-field-icon"></i>
-                        <select id="deposit-currency" required></select>
+                        <select id="deposit-from-cashbox"><option value="">از خزانه (اختیاری)</option></select>
                     </div>
                     <div class="bill-field">
                         <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('deposit-datetime',this)"></i>
-                        <input type="text" id="deposit-datetime" class="jalali-datetime" placeholder="زمان">
+                        <input type="text" id="deposit-datetime" class="jalali-datetime" placeholder="تاریخ">
                     </div>
                 </div>
-                <button type="button" class="bill-more-toggle bill-more-toggle-full" onclick="billToggleMore('deposit')"><i class="fas fa-sliders-h"></i> اطلاعات بیشتر</button>
-                <div class="bill-more-panel" id="deposit-more-panel">
+                <div class="bill-more-panel open apex-more-always" id="deposit-more-panel">
                     <div class="bill-field bill-field-textarea">
                         <textarea id="deposit-notes" rows="3" placeholder="اطلاعات بیشتر..."></textarea>
                     </div>
@@ -4286,33 +4330,31 @@
         <div class="bill-layout">
             <div class="bill-header-bar">
                 <button type="button" class="btn-back-header" onclick="showSection('financial'); setTimeout(function(){switchFinancialTab('cashbox')},100)" title="برگشت"><i class="fas fa-arrow-right"></i></button>
-                <h3 class="bill-header-title">برداشت از حساب</h3>
+                <h3 class="bill-header-title">برداشت از خزانه</h3>
             </div>
             <div class="bill-body">
-                <div class="bill-row-fields">
+                <!-- (APEX) ترتیب: مبدأ، مقدار (ارز داخلِ فیلد)، تاریخ، اطلاعات بیشتر -->
+                <div class="bill-row-fields apex-stack">
                     <div class="bill-field">
                         <i class="fas fa-university bill-field-icon"></i>
-                        <select id="withdraw-from-cashbox" required><option value="">از حساب</option></select>
+                        <select id="withdraw-from-cashbox" required><option value="">مبدأ</option></select>
                     </div>
-                    <div class="bill-field">
+                    <div class="bill-field apex-amt-field">
                         <i class="fas fa-wallet bill-field-icon"></i>
                         <input type="number" id="withdraw-amount" step="0.01" min="0.01" placeholder="مقدار" required>
+                        <select id="withdraw-currency" class="apex-amt-cur" title="ارز" required></select>
                     </div>
-                    <div class="bill-field">
+                    <!-- «به خزانه (اختیاری)» در فهرستِ این فورم نیست؛ فیلد (خالی) نگه داشته می‌شود تا منطقِ ثبت دست نخورد -->
+                    <div class="bill-field" style="display:none;">
                         <i class="fas fa-university bill-field-icon"></i>
-                        <select id="withdraw-to-cashbox"><option value="">به حساب (اختیاری)</option></select>
-                    </div>
-                    <div class="bill-field">
-                        <i class="fas fa-dollar-sign bill-field-icon"></i>
-                        <select id="withdraw-currency" required></select>
+                        <select id="withdraw-to-cashbox"><option value="">به خزانه (اختیاری)</option></select>
                     </div>
                     <div class="bill-field">
                         <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('withdraw-datetime',this)"></i>
-                        <input type="text" id="withdraw-datetime" class="jalali-datetime" placeholder="زمان">
+                        <input type="text" id="withdraw-datetime" class="jalali-datetime" placeholder="تاریخ">
                     </div>
                 </div>
-                <button type="button" class="bill-more-toggle bill-more-toggle-full" onclick="billToggleMore('withdraw')"><i class="fas fa-sliders-h"></i> اطلاعات بیشتر</button>
-                <div class="bill-more-panel" id="withdraw-more-panel">
+                <div class="bill-more-panel open apex-more-always" id="withdraw-more-panel">
                     <div class="bill-field bill-field-textarea">
                         <textarea id="withdraw-notes" rows="3" placeholder="اطلاعات بیشتر..."></textarea>
                     </div>
@@ -4327,105 +4369,145 @@
     </form>
 </section>
 
-<!-- ===== فرم تبدیل ارز بین حساب‌ها (۴ حالت) ===== -->
+<!-- ===== (APEX) فرم «تبادله ارز» — جایگزینِ کاملِ فرمِ قبلیِ «تبدیل ارز بین خزانه‌ها» =====
+     مبدأ و مقصد هر کدام «شخص» یا «خزانه»اند؛ مقصدِ خالی = تبدیل داخلِ همان مبدأ.
+     همهٔ اثرها با همان توابعِ قبلیِ برنامه ثبت می‌شوند (updateCashboxBalance + لاگِ خزانه
+     و تراکنشِ «صرافی» برای اشخاص)؛ id این بخش همان قبلی است تا همهٔ نقاطِ فراخوانی کار کنند. -->
 <section id="currency-convert-form" class="section">
     <form id="currencyConvertForm" class="bill-form" onsubmit="event.preventDefault(); _ccSubmit();">
         <div class="bill-layout">
             <div class="bill-header-bar">
                 <button type="button" class="btn-back-header" onclick="_ccBack()" title="برگشت"><i class="fas fa-arrow-right"></i></button>
-                <h3 class="bill-header-title" id="cc-title">تبدیل ارز بین حساب‌ها</h3>
+                <h3 class="bill-header-title" id="cc-title">تبادله ارز</h3>
             </div>
             <div class="bill-body">
-                <!-- کنترل‌های وسط‌چین: نوع تبدیل ارز + نوع ارز -->
-                <div class="cc-top-controls">
-                    <div class="jf-typewrap">
-                        <span class="jf-toplabel">نوع تبدیل ارز:</span>
-                        <select id="cc-type" class="jf-pill" onchange="_ccSetType(this.value)">
-                            <option value="between_cashbox">انتقال بین حساب</option>
-                            <option value="between_person">انتقال بین حساب</option>
-                            <option value="inside_cashbox">داخل حساب</option>
-                            <option value="inside_person">داخل حساب شخص</option>
-                        </select>
+                <div class="apex-stack">
+                    <!-- مبدأ -->
+                    <div class="apex-fx-side" data-side="src">
+                        <div class="apex-fx-sidehead">
+                            <span class="apex-fx-sidelbl">مبدأ:</span>
+                            <span class="apex-fx-pills">
+                                <button type="button" class="apex-fx-pill" data-kind="person" onclick="_fxSetKind('src','person')">شخص</button>
+                                <button type="button" class="apex-fx-pill" data-kind="cashbox" onclick="_fxSetKind('src','cashbox')">خزانه</button>
+                            </span>
+                        </div>
+                        <div class="bill-field apex-fx-pick" data-kind="person">
+                            <div class="search-wrapper bill-search">
+                                <i class="fas fa-user bill-field-icon"></i>
+                                <input type="text" class="form-control apex-psn-input" id="cc-from-person-search" placeholder="انتخاب شخص" autocomplete="off"
+                                       data-apex-psn="cc-from-person" oninput="apexPersonSearch(this, event); _fxPersonTyped('src')" onkeydown="apexPersonSearchKey(event, this)">
+                                <input type="hidden" id="cc-from-person">
+                            </div>
+                        </div>
+                        <div class="bill-field apex-fx-pick" data-kind="cashbox">
+                            <i class="fas fa-university bill-field-icon"></i>
+                            <select id="cc-from-cashbox" onchange="_fxRecalc()"><option value="">انتخاب خزانه</option></select>
+                        </div>
                     </div>
-                    <div class="jf-currwrap">
-                        <span class="jf-toplabel">نوع ارز:</span>
-                        <select id="cc-from-cur" class="jf-pill jf-pill-sm" onchange="_ccAutoRate()"></select>
-                        <span class="jf-toarrow">به</span>
-                        <select id="cc-to-cur" class="jf-pill jf-pill-sm" onchange="_ccAutoRate()"></select>
-                    </div>
-                </div>
-
-                <div class="bill-row-fields">
-                    <!-- مبدأ: حساب یا شخص -->
-                    <div class="bill-field" id="cc-field-from-cashbox">
-                        <i class="fas fa-university bill-field-icon"></i>
-                        <select id="cc-from-cashbox"><option value="">از حساب</option></select>
-                    </div>
-                    <div class="bill-field" id="cc-field-from-person" style="display:none;">
-                        <div class="search-wrapper bill-search">
-                            <i class="fas fa-user bill-field-icon"></i>
-                            <input type="text" id="cc-from-person-search" placeholder="از شخص" autocomplete="off"
-                                   onfocus="showAllPersonsForField(this,'cc-from-person-results','cc-from-person','')">
-                            <input type="hidden" id="cc-from-person">
-                            <div id="cc-from-person-results" class="search-results-list"></div>
+                    <!-- مقصد (اختیاری) -->
+                    <div class="apex-fx-side" data-side="dst">
+                        <div class="apex-fx-sidehead">
+                            <span class="apex-fx-sidelbl">مقصد:</span>
+                            <span class="apex-fx-pills">
+                                <button type="button" class="apex-fx-pill" data-kind="person" onclick="_fxSetKind('dst','person')">شخص</button>
+                                <button type="button" class="apex-fx-pill" data-kind="cashbox" onclick="_fxSetKind('dst','cashbox')">خزانه</button>
+                            </span>
+                        </div>
+                        <div class="bill-field apex-fx-pick" data-kind="person">
+                            <div class="search-wrapper bill-search">
+                                <i class="fas fa-user bill-field-icon"></i>
+                                <input type="text" class="form-control apex-psn-input" id="cc-to-person-search" placeholder="انتخاب شخص (اختیاری)" autocomplete="off"
+                                       data-apex-psn="cc-to-person" oninput="apexPersonSearch(this, event); _fxPersonTyped('dst')" onkeydown="apexPersonSearchKey(event, this)">
+                                <input type="hidden" id="cc-to-person">
+                            </div>
+                        </div>
+                        <div class="bill-field apex-fx-pick" data-kind="cashbox">
+                            <i class="fas fa-university bill-field-icon"></i>
+                            <select id="cc-to-cashbox" onchange="_fxRecalc()"><option value="">انتخاب خزانه (اختیاری)</option></select>
                         </div>
                     </div>
 
-                    <div class="bill-field">
-                        <i class="fas fa-wallet bill-field-icon"></i>
-                        <input type="number" id="cc-amount" step="0.01" min="0" placeholder="مقدار" oninput="_ccRecalc()">
+                    <!-- مبلغ آمد — ارز داخلِ فیلد -->
+                    <div class="bill-field apex-amt-field apex-fx-field">
+                        <span class="apex-fx-lbl">مبلغ آمد</span>
+                        <input type="number" id="cc-amount" step="any" min="0" placeholder="0" oninput="_fxEdited('a')">
+                        <select id="cc-from-cur" class="apex-amt-cur" title="ارز" onchange="_fxCurChanged()"></select>
                     </div>
-
-                    <div class="bill-field">
-                        <i class="fas fa-sync-alt bill-field-icon"></i>
-                        <input type="number" id="cc-rate" step="0.0001" min="0" placeholder="نرخ تبدیل ارز" oninput="_ccRecalc()">
-                        <span class="cc-op-inline">
-                            <label><input type="radio" name="cc-op" value="multiply" checked onchange="_ccRecalc()"> ضرب</label>
-                            <label><input type="radio" name="cc-op" value="divide" onchange="_ccRecalc()"> تقسیم</label>
+                    <!-- مبلغ رفت — ارز داخلِ فیلد -->
+                    <div class="bill-field apex-amt-field apex-fx-field">
+                        <span class="apex-fx-lbl">مبلغ رفت</span>
+                        <input type="number" id="cc-final" step="any" min="0" placeholder="0" oninput="_fxEdited('b')">
+                        <select id="cc-to-cur" class="apex-amt-cur" title="ارز" onchange="_fxCurChanged()"></select>
+                    </div>
+                    <!-- نرخ — ضرب/تقسیم داخلِ فیلد -->
+                    <div class="bill-field apex-fx-field">
+                        <span class="apex-fx-lbl">نرخ</span>
+                        <input type="number" id="cc-rate" step="any" min="0" placeholder="0" oninput="_fxEdited('r')">
+                        <span class="apex-fx-ops">
+                            <button type="button" class="apex-fx-op" data-op="divide" title="تقسیم" onclick="_fxSetOp('divide')">&divide;</button>
+                            <button type="button" class="apex-fx-op" data-op="multiply" title="ضرب" onclick="_fxSetOp('multiply')">&times;</button>
                         </span>
+                        <input type="hidden" id="cc-op" value="multiply">
                     </div>
-
-                    <!-- مقصد: حساب یا شخص (فقط حالت‌های «بین») -->
-                    <div class="bill-field" id="cc-field-to-cashbox">
-                        <i class="fas fa-university bill-field-icon"></i>
-                        <select id="cc-to-cashbox"><option value="">به حساب</option></select>
+                    <!-- مفاد / ضررِ همین تبادله (محاسبه‌ای، فقط نمایشی) -->
+                    <div class="bill-field apex-fx-field">
+                        <span class="apex-fx-lbl">مفاد</span>
+                        <input type="text" id="cc-profit" readonly tabindex="-1" placeholder="—">
                     </div>
-                    <div class="bill-field" id="cc-field-to-person" style="display:none;">
-                        <div class="search-wrapper bill-search">
-                            <i class="fas fa-user bill-field-icon"></i>
-                            <input type="text" id="cc-to-person-search" placeholder="به شخص" autocomplete="off"
-                                   onfocus="showAllPersonsForField(this,'cc-to-person-results','cc-to-person','')">
-                            <input type="hidden" id="cc-to-person">
-                            <div id="cc-to-person-results" class="search-results-list"></div>
-                        </div>
-                    </div>
-
-                    <div class="bill-field">
+                    <!-- تاریخ -->
+                    <div class="bill-field apex-fx-field">
+                        <span class="apex-fx-lbl">تاریخ</span>
+                        <input type="text" id="cc-datetime" class="jalali-datetime" placeholder="">
                         <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('cc-datetime',this)"></i>
-                        <input type="text" id="cc-datetime" class="jalali-datetime" placeholder="زمان">
                     </div>
-
-                    <div class="bill-field">
-                        <i class="fas fa-check-circle bill-field-icon"></i>
-                        <input type="text" id="cc-final" readonly placeholder="مبلغ نهایی">
-                    </div>
-                </div>
-
-                <button type="button" class="bill-more-toggle bill-more-toggle-full" onclick="billToggleMore('cc')"><i class="fas fa-sliders-h"></i> اطلاعات بیشتر</button>
-                <div class="bill-more-panel" id="cc-more-panel">
+                    <!-- اطلاعات بیشتر — همیشه باز -->
                     <div class="bill-field bill-field-textarea">
-                        <textarea id="cc-notes" rows="3" placeholder="اطلاعات بیشتر..."></textarea>
+                        <textarea id="cc-notes" rows="2" placeholder="اطلاعات بیشتر"></textarea>
                     </div>
                 </div>
 
-                <div class="bill-footer">
+                <div class="bill-footer apex-fx-footer">
                     <span class="bill-footer-actions">
-                        <button type="submit" class="bill-btn-save"><i class="fas fa-folder"></i> ثبت</button>
+                        <button type="submit" class="bill-btn-save">ثبت</button>
+                        <button type="button" class="bill-btn-cancel" onclick="_ccBack()">لغو یا انصراف</button>
                     </span>
                 </div>
             </div>
         </div>
     </form>
+</section>
+
+<!-- ===== (APEX) لیست تبادلات ارز — ردیف‌های کارتی مثلِ «لیست معاملات شخص» ===== -->
+<section id="fx-list" class="section">
+    <div class="list-header-filter">
+        <div class="filter-icons-left">
+            <button class="filter-icon-btn" onclick="_fxToggleSort()" title="مرتب‌سازی"><i class="fas fa-bars"></i></button>
+            <button class="filter-icon-btn" onclick="_fxToggleFilter()" title="فیلتر"><i class="fas fa-filter"></i></button>
+        </div>
+        <h3 class="section-title-in-filter"><button class="btn-back-header" onclick="showSection('dashboard')" title="برگشت"><i class="fas fa-arrow-right"></i></button> لیست تبادلات</h3>
+        <input type="text" id="global-search-fx" placeholder="جستجوی به اساس نام" oninput="loadFxList()">
+    </div>
+    <div id="sort-menu-fx" class="sort-menu">
+        <h4>مرتب‌سازی</h4>
+        <select id="fx-sort" onchange="loadFxList()">
+            <option value="date-desc">جدیدترین</option>
+            <option value="date-asc">قدیمی‌ترین</option>
+        </select>
+    </div>
+    <div id="filter-menu-fx" class="filter-menu">
+        <h4>فیلتر</h4>
+        <div class="filter-row">
+            <div class="filter-group">
+                <label>ارز:</label>
+                <select id="fx-filter-cur" onchange="loadFxList()"><option value="all">همه</option></select>
+            </div>
+        </div>
+    </div>
+    <div class="table-container sales-cards-container ptx-cards-container fx-cards-container">
+        <table id="fx-table" class="sales-cards-table ptx-cards-table">
+            <tbody id="fx-tbody"></tbody>
+        </table>
+    </div>
 </section>
 
 <section id="employee-form" class="section">
@@ -4812,7 +4894,7 @@
                                 
                                 <div class="form-row">
                                     <div class="form-group">
-                                        <label for="default-cashbox">حساب پیشفرض</label>
+                                        <label for="default-cashbox">خزانه پیشفرض</label>
                                         <select id="default-cashbox">
                                             <option value="">انتخاب کنید</option>
                                         </select>

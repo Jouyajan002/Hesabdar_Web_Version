@@ -368,7 +368,7 @@
             toggle.className = 'jouya-info-toggle';
             toggle.setAttribute('aria-expanded', 'false');
             toggle.innerHTML =
-                '<span class="jql-label"><i class="fas fa-chart-pie"></i> نرخ ارز، حساب‌ها و مفاد خالص</span>' +
+                '<span class="jql-label"><i class="fas fa-chart-pie"></i> نرخ ارز، خزانه‌ها و مفاد خالص</span>' +
                 '<i class="fas fa-chevron-down jql-chevron"></i>';
             toggle.addEventListener('click', function () {
                 var collapsed = info.classList.toggle('jouya-info-collapsed');
