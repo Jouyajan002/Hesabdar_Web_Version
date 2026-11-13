@@ -1100,7 +1100,7 @@
             <button class="filter-icon-btn" onclick="toggleSortMenu('person-transactions')"><i class="fas fa-bars"></i></button>
             <button class="filter-icon-btn" onclick="toggleFilterMenu('person-transactions')"><i class="fas fa-filter"></i></button>
         </div>
-        <h3 class="section-title-in-filter"><button class="btn-back-header" onclick="personTxGoBack()" title="برگشت"><i class="fas fa-arrow-right"></i></button> معاملات <span id="selected-person-name"></span></h3>
+        <h3 class="section-title-in-filter"><button class="btn-back-header" onclick="personTxGoBack()" title="برگشت"><i class="fas fa-arrow-right"></i></button> <span id="ptx-title-word">معاملات</span> <span id="selected-person-name"></span></h3>
         <input type="text" id="global-search-person-transactions" placeholder="جستجو در معاملات..." onkeyup="globalSearch('person-transactions')">
     </div>
 
@@ -1290,6 +1290,38 @@
                                         <i class="fas fa-phone bill-field-icon"></i>
                                         <input type="tel" id="person-phone" placeholder="شماره تماس" dir="rtl" style="text-align:right; direction:rtl;">
                                     </div>
+                                    <!-- (APEX) فیلدهای ویژهٔ «کارمند» — فقط وقتی کتگوری کارمند انتخاب شود -->
+                                    <div id="person-emp-idslot" class="apex-emp-only" style="display:none;"></div>
+                                    <div class="bill-field bill-field-icononly apex-emp-only" style="display:none;">
+                                        <i class="fas fa-briefcase bill-field-icon"></i>
+                                        <input type="text" id="person-job" placeholder="وظیفه">
+                                    </div>
+                                    <div class="bill-field bill-field-icononly apex-emp-only" style="display:none;">
+                                        <i class="fas fa-file-contract bill-field-icon"></i>
+                                        <select id="person-contract-type" class="bill-inline-input">
+                                            <option value="">نوع قرار داد (ماهوار، روزوار، ساعتوار)</option>
+                                            <option value="ماهوار">نوع قرار داد: ماهوار</option>
+                                            <option value="روزوار">نوع قرار داد: روزوار</option>
+                                            <option value="ساعتوار">نوع قرار داد: ساعتوار</option>
+                                        </select>
+                                    </div>
+                                    <div class="apex-emp-only apex-emp-daterow" style="display:none;">
+                                        <div class="bill-field bill-field-icononly">
+                                            <i class="fas fa-calendar-plus bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDateOnlyCalendarPicker('person-contract-start',this)"></i>
+                                            <input type="text" id="person-contract-start" class="jalali-date" placeholder="شروع قرار داد">
+                                        </div>
+                                        <div class="bill-field bill-field-icononly">
+                                            <i class="fas fa-calendar-xmark bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDateOnlyCalendarPicker('person-contract-end',this)"></i>
+                                            <input type="text" id="person-contract-end" class="jalali-date" placeholder="ختم قرار داد">
+                                        </div>
+                                    </div>
+                                    <div class="bill-field bill-field-icononly apex-amt-field apex-emp-only" style="display:none;">
+                                        <i class="fas fa-money-bill-wave bill-field-icon"></i>
+                                        <input type="number" id="person-salary" step="any" min="0" placeholder="مقدار معاش">
+                                        <select id="person-salary-cur" class="bill-inline-input apex-amt-cur" title="ارز"></select>
+                                    </div>
+                                    <!-- (APEX) «بیشتر» کوچک زیرِ آخرین فیلد (نسخهٔ دسکتاپ/پنجره‌ای) -->
+                                    <button type="button" class="apex-more-link" id="person-more-link" onclick="apexPersonMoreOpen()"><i class="fas fa-chevron-down"></i> بیشتر</button>
                                 </div>
 
                                 <!-- بیشتر: بقیهٔ فیلدهای فورم -->
@@ -1334,6 +1366,9 @@
                                         </button>
                                         <button type="button" class="bill-btn-cancel" onclick="personFormGoBack()">
                                             <i class="fas fa-times"></i> لغو
+                                        </button>
+                                        <button type="button" class="bill-btn-print apex-emp-only" id="person-contract-print" style="display:none;" onclick="apexEmpPrintContract()">
+                                            <i class="fas fa-print"></i> چاپ
                                         </button>
                                     </span>
                                 </div>
@@ -2806,26 +2841,29 @@
                                 </div>
 
                                 <div class="bill-receive-row apex-stack">
-                                    <div class="bill-receive-field">
+                                    <div class="bill-receive-field apex-rp-bare">
                                         <div class="bill-amount-notrack">
                                             <div class="bill-inline-field bill-inline-field--amount">
                                                 <i class="fas fa-money-bill-wave bill-field-icon"></i>
                                                 <input type="number" id="receipt-amount" class="bill-inline-input" step="0.01" placeholder="دریافتی" required>
                                                 <select id="receipt-currency" class="bill-inline-input apex-amt-cur" title="ارز"></select>
                                                 <span class="bill-inline-icons">
-                                                    <span class="bill-inline-iconbtn is-active apex-fillbal" role="button" tabindex="0" title="پرکردن با باقیِ حسابِ پرداخت‌کننده" onclick="apexFillPersonBalance('receipt')"><i class="fas fa-check"></i></span>
+                                                    <span class="bill-inline-iconbtn apex-fillbal apex-tick" role="button" tabindex="0" title="پرکردن با باقیِ حسابِ پرداخت‌کننده" onclick="apexFillPersonBalance('receipt')"><i class="far fa-circle-check"></i></span>
                                                 </span>
                                             </div>
-                                            <label class="bill-notrack" title="فقط مانده حساب شخص تعدیل می‌شود و از هیچ خزانه‌ای کم نمی‌شود">
-                                                <input type="checkbox" id="receipt-notrack" onchange="_toggleReceiptNoTrack()">
-                                                <span class="bill-notrack-text">دریافت بدون پیگیری</span>
-                                            </label>
+                                            <!-- (APEX) حالت‌ها: «بدون پیگیری» (فقط حسابِ شخص) / «دریافت آزاد» (فقط خزانه) -->
+                                            <input type="checkbox" id="receipt-notrack" hidden onchange="_toggleReceiptNoTrack()">
+                                            <input type="checkbox" id="receipt-free" hidden>
+                                            <div class="apex-rp-pills" data-form="receipt">
+                                                <button type="button" class="apex-rp-pill" data-mode="notrack" onclick="apexRpSetMode('receipt','notrack')" title="فقط مانده حساب شخص تعدیل می‌شود و از هیچ خزانه‌ای کم نمی‌شود">بدون پیگیری</button>
+                                                <button type="button" class="apex-rp-pill" data-mode="free" onclick="apexRpSetMode('receipt','free')" title="فقط روی خزانه اثر دارد؛ بیلانسِ شخص تغییر نمی‌کند">دریافت آزاد</button>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="bill-receive-field">
+                                    <div class="bill-receive-field apex-rp-bare">
                                         <div class="receipt-dest-wrap">
                                             <div class="receipt-dest-tabs">
-                                                <button type="button" class="receipt-dest-tab is-active" data-tab="cashbox" onclick="_receiptSwitchTab('cashbox')">خزانه‌ها</button>
+                                                <button type="button" class="receipt-dest-tab is-active" data-tab="cashbox" onclick="_receiptSwitchTab('cashbox')">خزانه</button>
                                                 <button type="button" class="receipt-dest-tab" data-tab="person" onclick="_receiptSwitchTab('person')">اشخاص</button>
                                                 <button type="button" class="receipt-dest-tab" data-tab="expense" onclick="_receiptSwitchTab('expense')">مصارف</button>
                                             </div>
@@ -2892,7 +2930,7 @@
                                 <!-- اطلاعات بیشتر — همیشه باز -->
                                 <div class="bill-more-panel open apex-more-always" id="receipt-more-panel">
                                     <div class="bill-field bill-field-textarea">
-                                        <textarea id="receipt-description" rows="3" placeholder="شرح دریافت..."></textarea>
+                                        <textarea id="receipt-description" rows="3" placeholder="اطلاعات بیشتر"></textarea>
                                     </div>
                                 </div>
 
@@ -2901,13 +2939,10 @@
                                     <button type="button" class="bill-correct-btn" id="receipt-correct-btn" onclick="billEnableEdit('receipt')" style="display:none;">
                                         <i class="fas fa-edit"></i> تصحیح
                                     </button>
-                                    <span class="bill-footer-actions">
-                                        <button type="submit" class="bill-btn-save" id="receipt-submit-btn">
-                                            <i class="fas fa-folder"></i> ثبت
-                                        </button>
-                                        <button type="button" class="bill-btn-print" id="receipt-print-btn" onclick="saveAndPrintReceipt()">
-                                            <i class="fas fa-print"></i> چاپ
-                                        </button>
+                                    <span class="bill-footer-actions apex-rp-footer">
+                                        <button type="button" class="bill-btn-cancel" onclick="apexFormCancel(this)">لغو یا انصراف</button>
+                                        <button type="submit" class="bill-btn-save" id="receipt-submit-btn">ثبت</button>
+                                        <button type="button" class="bill-btn-print" id="receipt-print-btn" onclick="saveAndPrintReceipt()">چاپ</button>
                                     </span>
                                 </div>
 
@@ -2947,28 +2982,47 @@
                                 </div>
 
                                 <div class="bill-receive-row apex-stack">
-                                    <div class="bill-receive-field">
+                                    <div class="bill-receive-field apex-rp-bare">
                                         <div class="bill-amount-notrack">
                                             <div class="bill-inline-field bill-inline-field--amount">
                                                 <i class="fas fa-money-check-alt bill-field-icon"></i>
                                                 <input type="number" id="payment-amount" class="bill-inline-input" step="0.01" placeholder="پرداختی" required>
                                                 <select id="payment-currency" class="bill-inline-input apex-amt-cur" title="ارز"></select>
                                                 <span class="bill-inline-icons">
-                                                    <span class="bill-inline-iconbtn is-active apex-fillbal" role="button" tabindex="0" title="پرکردن با طلبِ دریافت‌کننده" onclick="apexFillPersonBalance('payment')"><i class="fas fa-check"></i></span>
+                                                    <span class="bill-inline-iconbtn apex-fillbal apex-tick" role="button" tabindex="0" title="پرکردن با طلبِ دریافت‌کننده" onclick="apexFillPersonBalance('payment')"><i class="far fa-circle-check"></i></span>
                                                 </span>
                                             </div>
-                                            <label class="bill-notrack" title="فقط مانده حساب شخص تعدیل می‌شود و از هیچ خزانه‌ای کم نمی‌شود">
-                                                <input type="checkbox" id="payment-notrack" onchange="_togglePaymentNoTrack()">
-                                                <span class="bill-notrack-text">پرداخت بدون پیگیری</span>
-                                            </label>
+                                            <!-- (APEX) حالت‌ها: «بدون پیگیری» (فقط حسابِ شخص) / «پرداخت آزاد» (فقط خزانه) -->
+                                            <input type="checkbox" id="payment-notrack" hidden onchange="_togglePaymentNoTrack()">
+                                            <input type="checkbox" id="payment-free" hidden>
+                                            <div class="apex-rp-pills" data-form="payment">
+                                                <button type="button" class="apex-rp-pill" data-mode="notrack" onclick="apexRpSetMode('payment','notrack')" title="فقط مانده حساب شخص تعدیل می‌شود و از هیچ خزانه‌ای کم نمی‌شود">بدون پیگیری</button>
+                                                <button type="button" class="apex-rp-pill" data-mode="free" onclick="apexRpSetMode('payment','free')" title="فقط روی خزانه اثر دارد؛ بیلانسِ شخص تغییر نمی‌کند">پرداخت آزاد</button>
+                                            </div>
                                         </div>
                                     </div>
-                                    <div class="bill-receive-field">
-                                        <div class="bill-inline-field">
-                                            <i class="fas fa-cash-register bill-field-icon"></i>
-                                            <select id="payment-cashbox" class="bill-inline-input" required>
-                                                <option value="">خزانه</option>
-                                            </select>
+                                    <div class="bill-receive-field apex-rp-bare">
+                                        <div class="receipt-dest-wrap" id="payment-src-wrap">
+                                            <div class="receipt-dest-tabs">
+                                                <button type="button" class="receipt-dest-tab is-active" data-tab="cashbox" onclick="apexPaySwitchTab('cashbox')">خزانه</button>
+                                                <button type="button" class="receipt-dest-tab" data-tab="person" onclick="apexPaySwitchTab('person')">اشخاص</button>
+                                            </div>
+                                            <div class="receipt-dest-pane" data-pane="cashbox">
+                                                <div class="bill-inline-field">
+                                                    <i class="fas fa-cash-register bill-field-icon"></i>
+                                                    <select id="payment-cashbox" class="bill-inline-input" required>
+                                                        <option value="">خزانه</option>
+                                                    </select>
+                                                </div>
+                                            </div>
+                                            <div class="receipt-dest-pane" data-pane="person" style="display:none;">
+                                                <div class="bill-inline-field search-wrapper bill-search">
+                                                    <i class="fas fa-user bill-field-icon"></i>
+                                                    <input type="text" class="bill-inline-input form-control apex-psn-input" id="payment-src-person-search" placeholder="پرداخت‌کننده (از طرفِ ما)" autocomplete="off"
+                                                           data-apex-psn="payment-src-person" oninput="apexPersonSearch(this, event)" onkeydown="apexPersonSearchKey(event, this)">
+                                                    <input type="hidden" id="payment-src-person">
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                     <div class="bill-receive-field">
@@ -2995,7 +3049,7 @@
                                 <div class="bill-top-row apex-stack">
                                     <div class="bill-field bill-field-icononly">
                                         <i class="fas fa-file-signature bill-field-icon"></i>
-                                        <input type="text" id="payment-reference" placeholder="پرداختی نمبر">
+                                        <input type="text" id="payment-reference" placeholder="رسید نمبر">
                                     </div>
                                     <div class="bill-field bill-field-icononly">
                                         <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('payment-date',this)"></i>
@@ -3006,7 +3060,7 @@
                                 <!-- اطلاعات بیشتر — همیشه باز -->
                                 <div class="bill-more-panel open apex-more-always" id="payment-more-panel">
                                     <div class="bill-field bill-field-textarea">
-                                        <textarea id="payment-description" rows="3" placeholder="شرح پرداخت..."></textarea>
+                                        <textarea id="payment-description" rows="3" placeholder="اطلاعات بیشتر"></textarea>
                                     </div>
                                 </div>
 
@@ -3015,16 +3069,73 @@
                                     <button type="button" class="bill-correct-btn" id="payment-correct-btn" onclick="billEnableEdit('payment')" style="display:none;">
                                         <i class="fas fa-edit"></i> تصحیح
                                     </button>
-                                    <span class="bill-footer-actions">
-                                        <button type="submit" class="bill-btn-save" id="payment-submit-btn">
-                                            <i class="fas fa-folder"></i> ثبت
-                                        </button>
-                                        <button type="button" class="bill-btn-print" id="payment-print-btn" onclick="saveAndPrintPayment()">
-                                            <i class="fas fa-print"></i> چاپ
-                                        </button>
+                                    <span class="bill-footer-actions apex-rp-footer">
+                                        <button type="button" class="bill-btn-cancel" onclick="apexFormCancel(this)">لغو یا انصراف</button>
+                                        <button type="submit" class="bill-btn-save" id="payment-submit-btn">ثبت</button>
+                                        <button type="button" class="bill-btn-print" id="payment-print-btn" onclick="saveAndPrintPayment()">چاپ</button>
                                     </span>
                                 </div>
 
+                            </div>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- (APEX) فورمِ «ثبت اضافه کاری» کارمند -->
+                <section id="emp-overtime-form" class="section">
+                    <form id="empOvertimeForm" class="bill-form" onsubmit="return apexEmpOtSave(event)">
+                        <div class="bill-layout">
+                            <div class="bill-header-bar">
+                                <button type="button" class="btn-back-header" onclick="apexEmpOtBack()" title="برگشت"><i class="fas fa-arrow-right"></i></button>
+                                <h3 class="bill-header-title" id="emp-ot-title">ثبت اضافه کاری</h3>
+                            </div>
+                            <div class="bill-body">
+                                <div class="apex-stack">
+                                    <div class="bill-field">
+                                        <div class="search-wrapper bill-search">
+                                            <i class="fas fa-user-tie bill-field-icon"></i>
+                                            <input type="text" class="form-control apex-psn-input" id="emp-ot-person-search" placeholder="کارمند" autocomplete="off"
+                                                   data-apex-psn="emp-ot-person" oninput="apexPersonSearch(this, event)" onkeydown="apexPersonSearchKey(event, this)">
+                                            <input type="hidden" id="emp-ot-person">
+                                            <button type="button" class="apex-field-add" tabindex="-1" title="ثبت کارمند جدید"
+                                                    onmousedown="event.preventDefault()" onclick="apexEmpAddPerson('ot')"><i class="fas fa-user-plus"></i></button>
+                                        </div>
+                                    </div>
+                                    <div class="bill-field bill-field-icononly">
+                                        <i class="fas fa-calendar-days bill-field-icon"></i>
+                                        <select id="emp-ot-period" class="bill-inline-input" title="دوره معاش"></select>
+                                    </div>
+                                    <div class="bill-field bill-field-icononly">
+                                        <i class="fas fa-clock bill-field-icon"></i>
+                                        <select id="emp-ot-type" class="bill-inline-input" onchange="apexEmpOtRecalc()">
+                                            <option value="ساعتوار">نوع اضافه کاری: ساعتوار</option>
+                                            <option value="مبلغ ثابت">نوع اضافه کاری: مبلغ ثابت</option>
+                                        </select>
+                                    </div>
+                                    <div class="bill-field bill-field-icononly" id="emp-ot-hours-field">
+                                        <i class="fas fa-hourglass-half bill-field-icon"></i>
+                                        <input type="number" id="emp-ot-hours" step="any" min="0" placeholder="تعداد ساعت" oninput="apexEmpOtRecalc()">
+                                    </div>
+                                    <div class="bill-field bill-field-icononly apex-amt-field">
+                                        <i class="fas fa-money-bill-wave bill-field-icon"></i>
+                                        <input type="number" id="emp-ot-rate" step="any" min="0" placeholder="فی ساعت" oninput="apexEmpOtRecalc()">
+                                        <select id="emp-ot-cur" class="bill-inline-input apex-amt-cur" title="ارز" onchange="apexEmpOtRecalc()"></select>
+                                    </div>
+                                    <div class="apex-emp-ot-total" id="emp-ot-total"><b>مجموعه مبلغ:</b> <span>0</span></div>
+                                    <div class="bill-field bill-field-icononly">
+                                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('emp-ot-date',this)"></i>
+                                        <input type="text" id="emp-ot-date" class="jalali-datetime" placeholder="تاریخ">
+                                    </div>
+                                    <div class="bill-field bill-field-textarea">
+                                        <textarea id="emp-ot-notes" rows="3" placeholder="اطلاعات بیشتر"></textarea>
+                                    </div>
+                                </div>
+                                <div class="bill-footer">
+                                    <span class="bill-footer-actions apex-rp-footer">
+                                        <button type="button" class="bill-btn-cancel" onclick="apexFormCancel(this)">لغو یا انصراف</button>
+                                        <button type="submit" class="bill-btn-save" id="emp-ot-submit">ثبت</button>
+                                    </span>
+                                </div>
                             </div>
                         </div>
                     </form>
@@ -4005,6 +4116,7 @@
                 <div class="bill-footer">
                     <span class="bill-footer-actions">
                         <button type="submit" class="bill-btn-save"><i class="fas fa-folder"></i> ثبت</button>
+                        <button type="button" class="bill-btn-cancel" onclick="apexFormCancel(this)">لغو یا انصراف</button>
                     </span>
                 </div>
             </div>
@@ -4429,20 +4541,23 @@
 
                     <!-- مبلغ آمد — ارز داخلِ فیلد -->
                     <div class="bill-field apex-amt-field apex-fx-field">
+                        <i class="fas fa-arrow-down-long bill-field-icon"></i>
                         <span class="apex-fx-lbl">مبلغ آمد</span>
-                        <input type="number" id="cc-amount" step="any" min="0" placeholder="0" oninput="_fxEdited('a')">
+                        <input type="number" id="cc-amount" class="apex-fx-clr" onfocus="_fxClrFocus(this)" onblur="_fxClrBlur(this)" step="any" min="0" placeholder="0" oninput="_fxEdited('a')">
                         <select id="cc-from-cur" class="apex-amt-cur" title="ارز" onchange="_fxCurChanged()"></select>
                     </div>
                     <!-- مبلغ رفت — ارز داخلِ فیلد -->
                     <div class="bill-field apex-amt-field apex-fx-field">
+                        <i class="fas fa-arrow-up-long bill-field-icon"></i>
                         <span class="apex-fx-lbl">مبلغ رفت</span>
-                        <input type="number" id="cc-final" step="any" min="0" placeholder="0" oninput="_fxEdited('b')">
+                        <input type="number" id="cc-final" class="apex-fx-clr" onfocus="_fxClrFocus(this)" onblur="_fxClrBlur(this)" step="any" min="0" placeholder="0" oninput="_fxEdited('b')">
                         <select id="cc-to-cur" class="apex-amt-cur" title="ارز" onchange="_fxCurChanged()"></select>
                     </div>
                     <!-- نرخ — ضرب/تقسیم داخلِ فیلد -->
                     <div class="bill-field apex-fx-field">
+                        <i class="fas fa-scale-balanced bill-field-icon"></i>
                         <span class="apex-fx-lbl">نرخ</span>
-                        <input type="number" id="cc-rate" step="any" min="0" placeholder="0" oninput="_fxEdited('r')">
+                        <input type="number" id="cc-rate" class="apex-fx-clr" onfocus="_fxClrFocus(this)" onblur="_fxClrBlur(this)" step="any" min="0" placeholder="0" oninput="_fxEdited('r')">
                         <span class="apex-fx-ops">
                             <button type="button" class="apex-fx-op" data-op="divide" title="تقسیم" onclick="_fxSetOp('divide')">&divide;</button>
                             <button type="button" class="apex-fx-op" data-op="multiply" title="ضرب" onclick="_fxSetOp('multiply')">&times;</button>
@@ -4451,14 +4566,17 @@
                     </div>
                     <!-- مفاد / ضررِ همین تبادله (محاسبه‌ای، فقط نمایشی) -->
                     <div class="bill-field apex-fx-field">
+                        <i class="fas fa-chart-line bill-field-icon"></i>
                         <span class="apex-fx-lbl">مفاد</span>
                         <input type="text" id="cc-profit" readonly tabindex="-1" placeholder="—">
+                        <span class="apex-fx-endpad" aria-hidden="true"></span>
                     </div>
                     <!-- تاریخ -->
                     <div class="bill-field apex-fx-field">
+                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('cc-datetime',this)"></i>
                         <span class="apex-fx-lbl">تاریخ</span>
                         <input type="text" id="cc-datetime" class="jalali-datetime" placeholder="">
-                        <i class="fas fa-calendar-alt bill-field-icon bill-field-icon-btn" role="button" tabindex="0" title="انتخاب تاریخ" onclick="openDualCalendarPicker('cc-datetime',this)"></i>
+                        <span class="apex-fx-endpad" aria-hidden="true"></span>
                     </div>
                     <!-- اطلاعات بیشتر — همیشه باز -->
                     <div class="bill-field bill-field-textarea">

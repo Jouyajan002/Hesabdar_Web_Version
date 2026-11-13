@@ -11109,6 +11109,15 @@ body.dark-mode .apex-fx-op { background: #334155; color: #e2e8f0; }
 body.dark-mode .apex-fx-sidelbl,
 body.dark-mode .apex-fx-field .apex-fx-lbl { color: #e2e8f0 !important; }
 .apex-fx-field #cc-profit { background: transparent !important; }
+/* (APEX) تبادله ارز: برچسب و کنترلِ سمتِ چپ پهنای ثابت دارند تا ارقامِ «آمد / رفت / نرخ»
+   (و مفاد/تاریخ) دقیقاً در وسطِ یک ستون و زیرِ هم قرار بگیرند */
+#currency-convert-form .apex-fx-field .apex-fx-lbl { flex: 0 0 72px; width: 72px; }
+#currency-convert-form .apex-fx-field > select.apex-amt-cur,
+#currency-convert-form .apex-fx-field > .apex-fx-ops,
+#currency-convert-form .apex-fx-field > .apex-fx-endpad { flex: 0 0 72px !important; width: 72px !important; max-width: 72px !important; box-sizing: border-box; }
+#currency-convert-form .apex-fx-field > .apex-fx-ops { justify-content: center; }
+#currency-convert-form .apex-fx-field > .apex-fx-endpad { display: inline-block; }
+#currency-convert-form .apex-fx-field > input { text-align: center !important; }
 /* ارزِ داخلِ فیلد در فرم‌های خزانه (موبایل): قاعدهٔ تمام‌عرضِ انتخابگرها شاملِ این chip نمی‌شود */
 #cashbox-transfer-form-section .bill-row-fields .bill-field > select.apex-amt-cur,
 #cashbox-deposit-form-section  .bill-row-fields .bill-field > select.apex-amt-cur,
@@ -11119,3 +11128,94 @@ body.dark-mode .apex-fx-field .apex-fx-lbl { color: #e2e8f0 !important; }
     width: auto !important; min-width: 72px !important; max-width: 46% !important;
     min-height: 0 !important; flex: 0 0 auto !important;
 }
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * (APEX) «اطلاعات بیشتر» در فورم‌های بازطراحی‌شده (پنجره‌ای در دسکتاپ) — نصفِ ارتفاعِ قبلی
+ * تا همهٔ فیلدهای فورم در اسکرین‌های کوچک‌تر هم بدونِ اسکرول جا شوند. (همهٔ نسخه‌ها)
+ * ════════════════════════════════════════════════════════════════════════════*/
+#person-address, #expense-notes, #receipt-description, #payment-description,
+#cashbox-description, #transfer-notes, #deposit-notes, #withdraw-notes,
+#cc-notes, #padj-notes, #emp-sal-notes, #emp-ot-notes {
+    height: 48px !important;
+    min-height: 48px !important;
+}
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * (APEX) فورمِ «دریافتی» و «پرداختی» — طراحیِ تازه مطابقِ تصویر (همهٔ نسخه‌ها)
+ *  • فیلدِ مبلغ و فیلدِ خزانه/شخص هرکدام کادرِ خودشان را دارند؛ دکمه‌های حالت
+ *    («بدون پیگیری» / «… آزاد») زیرِ فیلدِ مبلغ در سمتِ راست و تب‌ها بالای فیلدِ
+ *    خزانه در سمتِ چپ و بیرون از کادر قرار می‌گیرند.
+ *  • تیکِ «پرکردن با بیلانس» ظریف و توخالی است؛ پس از پر شدن، تیره می‌شود.
+ * ════════════════════════════════════════════════════════════════════════════*/
+#receipt-form .bill-receive-field.apex-rp-bare,
+#payment-form .bill-receive-field.apex-rp-bare {
+    background: transparent !important; border: none !important; padding: 0 !important;
+    min-height: 0 !important; box-shadow: none !important; gap: 8px;
+}
+#receipt-form .apex-rp-bare .bill-inline-field,
+#payment-form .apex-rp-bare .bill-inline-field {
+    background: var(--bill-card, #fff); border: 1px solid var(--bill-line, #d8dee9); border-radius: 12px;
+    padding: 0 14px; min-height: 54px; box-sizing: border-box;
+}
+#receipt-form .bill-amount-notrack,
+#payment-form .bill-amount-notrack { flex-direction: column; align-items: stretch; gap: 8px; }
+.apex-rp-pills { display: flex; gap: 6px; justify-content: flex-start; flex-wrap: wrap; }
+.apex-rp-pill {
+    border: none; background: #dfe3e8; color: var(--bill-navy, #1e3a5f); border-radius: 8px;
+    padding: 7px 16px; font-family: inherit; font-weight: 700; font-size: .9rem; cursor: pointer;
+    transition: background .15s, color .15s; line-height: 1.4;
+}
+.apex-rp-pill:hover:not(.is-on) { background: #d3d9e1; }
+.apex-rp-pill.is-on { background: var(--bill-navy, #1e3a5f); color: #fff; }
+#receipt-form .receipt-dest-tabs,
+#payment-form .receipt-dest-tabs { justify-content: flex-end; gap: 6px; margin-bottom: 8px; }
+#receipt-form .receipt-dest-tab,
+#payment-form .receipt-dest-tab {
+    flex: 0 0 auto; min-width: 84px; padding: 7px 16px; border: none; border-radius: 8px;
+    background: #dfe3e8; color: var(--bill-navy, #1e3a5f); font-size: .9rem; line-height: 1.4;
+}
+#receipt-form .receipt-dest-tab.is-active,
+#payment-form .receipt-dest-tab.is-active { background: var(--bill-navy, #1e3a5f); color: #fff; }
+#receipt-form .receipt-dest-tab:disabled,
+#payment-form .receipt-dest-tab:disabled { opacity: .45; cursor: not-allowed; }
+/* تیکِ ظریف */
+.bill-inline-iconbtn.apex-tick {
+    background: transparent !important; color: #334155; width: 34px; height: 34px; font-size: 1.45rem;
+}
+.bill-inline-iconbtn.apex-tick:hover { background: transparent !important; color: #0f172a; filter: none; }
+.bill-inline-iconbtn.apex-tick.is-on { color: #0f172a; }
+/* دکمه‌های پایین: «لغو یا انصراف» | «ثبت» | «چاپ» با پهنای یکسان */
+.bill-footer-actions.apex-rp-footer {
+    width: 100%; display: flex; gap: 12px; justify-content: center; margin-inline-start: 0 !important;
+}
+.bill-footer-actions.apex-rp-footer > button { flex: 1 1 0; justify-content: center; min-height: 46px; max-width: 220px; }
+.bill-footer-actions.apex-rp-footer > .bill-btn-cancel { background: #dfe3e8; color: #0f172a; border: none; }
+body.dark-mode .apex-rp-pill, body.dark-mode #receipt-form .receipt-dest-tab, body.dark-mode #payment-form .receipt-dest-tab,
+body.dark-mode .bill-footer-actions.apex-rp-footer > .bill-btn-cancel { background: #334155; color: #e2e8f0; }
+body.dark-mode .apex-rp-pill.is-on, body.dark-mode #receipt-form .receipt-dest-tab.is-active,
+body.dark-mode #payment-form .receipt-dest-tab.is-active { background: #3b82f6; color: #fff; }
+body.dark-mode .bill-inline-iconbtn.apex-tick, body.dark-mode .bill-inline-iconbtn.apex-tick.is-on { color: #e2e8f0; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+ * (APEX) فورمِ «ثبت شخص»: «بیشتر» کوچک زیرِ آخرین فیلد (نسخهٔ دسکتاپ/پنجره‌ای) +
+ * فیلدهای ویژهٔ کارمند
+ * ════════════════════════════════════════════════════════════════════════════*/
+.apex-more-link { display: none; }
+#person-form.apex-dlg .bill-more-toggle-full { display: none !important; }
+#person-form.apex-dlg .apex-more-link {
+    display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; width: auto !important;
+    background: transparent; border: none; padding: 0 4px; margin-top: -4px; cursor: pointer;
+    font-family: inherit; font-size: .85rem; font-weight: 700; color: var(--bill-navy-2, #26436b);
+}
+#person-form.apex-dlg .apex-more-link i { font-size: .7rem; }
+#person-form.apex-dlg .apex-more-link:hover { text-decoration: underline; }
+#person-form .apex-more-link.is-hidden { display: none !important; }
+.apex-emp-daterow { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.apex-emp-daterow > .bill-field { min-width: 0; }
+body.dark-mode #person-form.apex-dlg .apex-more-link { color: #cbd5e1; }
+
+/* فورمِ «ثبت اضافه کاری» */
+.apex-emp-ot-total { padding: 0 6px; font-size: 1rem; color: var(--bill-navy-2, #1e293b); }
+.apex-emp-ot-total b { font-weight: 800; }
+.apex-emp-ot-total span { direction: ltr; unicode-bidi: isolate; font-weight: 700; }
+body.dark-mode .apex-emp-ot-total { color: #e2e8f0; }

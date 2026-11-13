@@ -54,10 +54,14 @@
             if (tb) { try { tb.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true })); } catch (_) {} }
 
             // بستن با لمسِ بیرون از منو
+            // (APEX) فقط همان نواری که همین لمس باز کرد؛ اگر آن نوار به هر راهی بسته شده بود
+            // (مثلاً با انتخابِ یک گزینه)، این شنونده خودش را برمی‌دارد و منوی تازهٔ ردیفِ دیگر
+            // را — که پیش‌تر به اشتباه بلافاصله می‌بست — دست نمی‌زند.
+            var _myBar = document.querySelector('.floating-action-toolbar');
             setTimeout(function () {
                 function outside(ev) {
                     var t = document.querySelector('.floating-action-toolbar');
-                    if (!t) { document.removeEventListener('click', outside, true); return; }
+                    if (!t || t !== _myBar) { document.removeEventListener('click', outside, true); return; }
                     if (!t.contains(ev.target) && !kebab.contains(ev.target)) {
                         if (typeof window.closeProductActionBar === 'function') window.closeProductActionBar();
                         else if (t.parentNode) t.parentNode.removeChild(t);
@@ -119,12 +123,67 @@
         try {
             if (!isMobile()) return;
             var t = e.target;
-            if (!t || !t.classList || !t.classList.contains('fin-cb-kebab')) return;
+            // (APEX) همان مشکلِ صندوق در «اشخاص» و «اجناس» هم بود: برای سه ردیفِ پایینِ صفحه،
+            // شیتِ پایینِ منو با mouseenterِ ساختگیِ لمس، زیرِ همان انگشت باز می‌شد و clickِ همان
+            // لمس روی خودِ شیت می‌نشست و آن را می‌بست. حالا این mouseenter نادیده گرفته می‌شود و
+            // منو فقط از مسیرِ click (پل‌های همین فایل) باز می‌شود — برای همهٔ ردیف‌ها یکسان.
+            if (!t || !t.classList || !(t.classList.contains('fin-cb-kebab') ||
+                t.classList.contains('person-card-kebab') || t.classList.contains('product-card-kebab'))) return;
             if (Date.now() - _lastTouchAt > 1500) return;      // ماوسِ واقعی → رفتارِ قبلی
             e.stopPropagation();
             if (e.stopImmediatePropagation) e.stopImmediatePropagation();
         } catch (_) {}
     }, true);
+
+    /* (APEX) روی لمس، مرورگر پس از بازشدنِ منو (با تغییرِ چیدمان/اسکرول) رویدادِ mouseleaveِ ساختگی
+     * به خودِ منو یا دکمهٔ سه‌نقطه می‌فرستد؛ تایمرِ ۳۰۰msِ «بستن با hover» منو را فوراً می‌بست
+     * (به‌ویژه برای ردیف‌های پایینِ صفحه). وقتی آخرین اشاره «لمسی» بوده، این mouseleave نادیده گرفته
+     * می‌شود؛ بستنِ منو روی لمس از مسیرِ «لمسِ بیرون/انتخابِ گزینه» انجام می‌شود (بخشِ ۱-ب). */
+    var _lastPtrType = '';
+    document.addEventListener('pointerdown', function (e) { if (e && e.pointerType) _lastPtrType = e.pointerType; }, true);
+    document.addEventListener('pointermove', function (e) { if (e && e.pointerType === 'mouse') _lastPtrType = 'mouse'; }, true);
+    document.addEventListener('touchstart', function () { _lastPtrType = 'touch'; }, true);
+    document.addEventListener('mouseleave', function (e) {
+        try {
+            if (_lastPtrType !== 'touch' && _lastPtrType !== 'pen') return;   // ماوسِ واقعی → رفتارِ قبلی
+            var t = e.target;
+            if (!t || !t.classList) return;
+            if (!(t.classList.contains('floating-action-toolbar') || t.classList.contains('person-card-kebab') ||
+                  t.classList.contains('product-card-kebab') || t.classList.contains('fin-cb-kebab'))) return;
+            e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        } catch (_) {}
+    }, true);
+    // همین‌طور «شبکهٔ ایمنیِ» برنامه (mouseoverِ سراسری بیرون از منو → بستن پس از ۳۰۰ms): روی لمس،
+    // mouseoverِ ساختگیِ پس از لمس منوی تازه‌بازشده را می‌بست. وقتی آخرین اشاره لمسی است و منو باز است،
+    // این mouseover به آن شبکه نمی‌رسد (این listener پیش از آن نصب شده و در capture اول اجرا می‌شود).
+    document.addEventListener('mouseover', function (e) {
+        try {
+            if (_lastPtrType !== 'touch' && _lastPtrType !== 'pen') return;
+            if (!document.querySelector('.floating-action-toolbar')) return;
+            e.stopPropagation();
+            if (e.stopImmediatePropagation) e.stopImmediatePropagation();
+        } catch (_) {}
+    }, true);
+
+    /* (APEX) پلِ لمسی برای سه‌نقطهٔ «اشخاص» (hover → tap): دکمه فقط onmouseenter دارد؛ روی موبایل
+     * با «لمسِ» خودِ دکمه همان تابعِ موجود (showHorizontalActionBar) صدا زده می‌شود. */
+    function personKebabTapBridge(e) {
+        try {
+            if (!isMobile()) return;
+            var kebab = (e.target && e.target.closest) ? e.target.closest('.person-card-kebab') : null;
+            if (!kebab || kebab.getAttribute('onclick')) return;
+            var attr = kebab.getAttribute('onmouseenter') || '';
+            var m = attr.match(/showHorizontalActionBar\s*\(\s*event\s*,\s*(\d+)/);
+            if (!m || typeof window.showHorizontalActionBar !== 'function') return;
+            e.preventDefault();
+            e.stopPropagation();
+            window.showHorizontalActionBar({ type: 'click', currentTarget: kebab, target: kebab }, m[1]);
+            var tb = document.querySelector('.floating-action-toolbar');
+            if (tb) { try { tb.dispatchEvent(new MouseEvent('mouseenter', { bubbles: true })); } catch (_) {} }
+        } catch (_) {}
+    }
+    document.addEventListener('click', personKebabTapBridge, true);
 
     /* ───────────────────────────────────────────────────────────────────────
      * ۱-ب) بستنِ خودکارِ منوهای عملیات (سه‌نقطه: ویرایش/حذف/…) روی لمس
@@ -214,9 +273,53 @@
             }
         } catch (_) {}
     }
-    document.addEventListener('sectionChanged', function () {
-        // کمی تأخیر تا بخشِ جدید بارگذاری شود، سپس نوارهای جستجو پاک شوند
-        setTimeout(resetAllGlobalSearch, 0);
+    /* (APEX) قاعدهٔ تازه: نوارِ جستجوی هر بخش فقط وقتی پاک می‌شود که کاربر «کاملاً» از آن بخش
+     * بیرون برود (به داشبورد یا به بخشِ اصلیِ دیگری). رفتن به صفحه‌های فرعیِ همان بخش
+     * (لیست معاملات شخص، مشخصات، فورم‌ها، جزئیات معامله و …) و برگشتن، جستجو را نگه می‌دارد
+     * و پس از برگشت همان فیلتر دوباره روی لیستِ تازه‌بارگذاری‌شده اعمال می‌شود. */
+    var TOP_SECTIONS = {
+        'dashboard': 1, 'persons-list': 1, 'products-list': 1, 'services-list': 1, 'transactions-list': 1,
+        'sales-list': 1, 'purchases-list': 1, 'receipts-list': 1, 'payments-list': 1, 'sales-returns-list': 1,
+        'purchase-returns-list': 1, 'proforma-list': 1, 'changelog-list': 1, 'expenses': 1, 'cash-boxes': 1,
+        'financial': 1, 'fx-list': 1, 'employee-management': 1, 'reports': 1, 'settings': 1, 'backup': 1,
+        'print-settings': 1
+    };
+    // لیست‌های فرعی ← بخشِ اصلیِ خودشان
+    var SUB_LISTS = { 'person-transactions-list': 1, 'product-inout-list': 1, 'cashbox-transactions-list': 1 };
+    function _homeOf(inp) {
+        var sec = inp && inp.closest ? inp.closest('.section') : null;
+        return sec ? sec.id : '';
+    }
+    function _reapply(inp) {
+        try { inp.dispatchEvent(new Event('keyup', { bubbles: true })); } catch (_) {
+            try { inp.dispatchEvent(new Event('input', { bubbles: true })); } catch (__) {}
+        }
+    }
+    function resetGlobalSearchOnLeave(target) {
+        try {
+            if (!target) { resetAllGlobalSearch(); return; }
+            var inputs = document.querySelectorAll('input[id^="global-search-"]');
+            for (var i = 0; i < inputs.length; i++) {
+                var inp = inputs[i];
+                if (!inp || inp.value === '') continue;
+                var home = _homeOf(inp);
+                if (home === target) {
+                    // برگشت به همان بخش: فیلترِ همان متن روی لیستِ تازه دوباره اعمال شود
+                    (function (el) { setTimeout(function () { _reapply(el); }, 80); setTimeout(function () { _reapply(el); }, 350); })(inp);
+                    continue;
+                }
+                var leave = !!TOP_SECTIONS[target] || (SUB_LISTS[home] && !!SUB_LISTS[target]);
+                if (!home) leave = true;
+                if (!leave) continue;               // صفحهٔ فرعی → جستجو بماند
+                inp.value = '';
+                _reapply(inp);
+            }
+        } catch (_) {}
+    }
+    document.addEventListener('sectionChanged', function (ev) {
+        var target = ev && ev.detail ? ev.detail.sectionId : '';
+        // کمی تأخیر تا بخشِ جدید بارگذاری شود، سپس نوارهای جستجو بررسی شوند
+        setTimeout(function () { resetGlobalSearchOnLeave(target); }, 0);
     });
 
     /* ───────────────────────────────────────────────────────────────────────

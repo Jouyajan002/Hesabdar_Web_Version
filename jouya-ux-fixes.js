@@ -51,7 +51,7 @@
         'proforma-order-form': 1, 'cashbox-form': 1,
         'cashbox-transfer-form-section': 1, 'cashbox-deposit-form-section': 1,
         'cashbox-withdraw-form-section': 1, 'currency-convert-form': 1,
-        'product-adj-form': 1
+        'product-adj-form': 1, 'emp-overtime-form': 1
     };
 
     function activeFormSectionId() {

@@ -268,6 +268,10 @@ function formatAfghanDateTime(jalaliDate, isoCreatedAt) {
  * — در نبود/برابر بودن date، fallback به createdAt و سپس id —
  */
 function sortNewestFirst(a, b) {
+    // (APEX) ترتیبِ دقیقِ زمانی بر اساسِ «تاریخ و ساعتی که در فورم انتخاب شده» (نه زمانِ ثبت):
+    // رشتهٔ «1405/08/22 9:05:00 AM» به عددِ زمانی تبدیل می‌شود تا ساعت‌های AM/PM و ماه/روزِ
+    // تک‌رقمی درست چیده شوند. در نبودِ تاریخ ← زمانِ ثبت ← id (همان اولویت‌های قبلی).
+    if (typeof __hbRepAsc === 'function') return __hbRepAsc(b, a);
     var dA = (a && a.date) || '';
     var dB = (b && b.date) || '';
     if (dA !== dB) return dB > dA ? 1 : -1;
@@ -1112,6 +1116,7 @@ function _computeFifoProfitMaps() {
     var itemMap = {};       // { 'saleId|idx': مفادِ قلم به «ارزِ سند» }
     var saleMapBase = {};   // { saleId: مفادِ کلِ بل به «ارزِ مرجع» } ← برای گزارشِ تجمیعیِ صحیح
     var _partCredit = [];   // (APEX) بهای قطعاتِ «کسری» که به انبار برگشته‌اند → از بهای همان فروش کم می‌شود
+    var partCreditItem = {}; // (APEX) همان اعتبارِ قطعاتِ کسری، به تفکیکِ قلمِ صاحبِ قطعه (فقط برای گزارشِ فیلترشده)
     var itemMapBase = {};   // { 'saleId|idx': مفادِ قلم به «ارزِ مرجع» }
     // «برگشت از فروش»: مقدارِ برگشت‌شده (واحدِ اصلی) برای هر قلمِ فروشِ اصلی، تا سودِ همان
     // بخش از فروش معکوس شود. کلید: 'origSaleId|origItemIndex'.
@@ -1293,7 +1298,7 @@ function _computeFifoProfitMaps() {
                             }
                             var _cc = {}; _cc[cur] = _uc;
                             ensure(pt.productId).push({ ts: ts, kind: 0, seq: seq, qty: _pq, cost: _cc, buyCur: cur, buyTx: tx });
-                            _partCredit.push({ tx: tx, v: _uc * _pq });
+                            _partCredit.push({ tx: tx, v: _uc * _pq, idx: idx });
                         }
                     });
                 });
@@ -1606,6 +1611,7 @@ function _computeFifoProfitMaps() {
             _partCredit.forEach(function (pc) {
                 if (!pc || !pc.tx || pc.tx.id == null || !(pc.v > 0)) return;
                 saleMap[pc.tx.id] = _round((saleMap[pc.tx.id] || 0) + pc.v);
+                if (pc.idx != null) { var _pck = pc.tx.id + '|' + pc.idx; partCreditItem[_pck] = _round((partCreditItem[_pck] || 0) + pc.v); }
                 var _cb = _toBaseAt(pc.v, pc.tx);
                 saleMapBase[pc.tx.id] = _round((saleMapBase[pc.tx.id] || 0) + _cb.v);
                 if (_cb.est) estimatedSales[pc.tx.id] = true;
@@ -1635,6 +1641,7 @@ function _computeFifoProfitMaps() {
     return {
         saleMap: saleMap, itemMap: itemMap,
         saleMapBase: saleMapBase, itemMapBase: itemMapBase,
+        partCreditItem: partCreditItem,
         estimatedSales: estimatedSales,
         invBaseByProd: invBaseByProd, invBaseTotal: _round(invBaseTotal), invEstimated: invEstimated,
         base: (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : 'AFN'
@@ -1705,6 +1712,29 @@ function _getFifoMaps() {
     return maps;
 }
 if (typeof window !== 'undefined') { window._computeFifoProfitMaps = _computeFifoProfitMaps; window._getFifoMaps = _getFifoMaps; }
+
+// (APEX) مفادِ یک قلمِ فروش «همراهِ قطعاتش» از نقشهٔ FIFO — دقیقاً همان عددی که مفادِ خودِ بل
+//  (saleMap) برای این قلم در بر دارد: مفادِ قلم + بهای قطعاتِ «افزوده» (کلیدهای «#p») + اعتبارِ
+//  قطعاتِ «کسری». پیش‌تر گزارشِ فیلترشده (جنس/شخص) و مشخصاتِ جنس فقط کلیدِ خودِ قلم را
+//  می‌خواندند؛ بهای قطعه (مثلاً شارژرِ ۱۰۰۰ افغانی) از مفاد کم نمی‌شد و گزارش با بل نمی‌خواند.
+//  خروجی undefined یعنی این قلم در نقشه نیست (فراخوان مثلِ قبل به روشِ خودش برمی‌گردد).
+function _fifoItemProfitWithParts(fm, txId, idx, it) {
+    var im = fm && fm.itemMap;
+    if (!im) return undefined;
+    var k = txId + '|' + idx;
+    var v = im[k];
+    if (v === undefined || v === null) return v;
+    v = parseFloat(v) || 0;
+    if (it && Array.isArray(it.parts)) {
+        for (var pj = 0; pj < it.parts.length; pj++) {
+            var pv = im[k + '#p' + pj];
+            if (pv != null && !isNaN(parseFloat(pv))) v += parseFloat(pv);
+        }
+    }
+    var pc = fm.partCreditItem && fm.partCreditItem[k];
+    if (pc != null && !isNaN(parseFloat(pc))) v += parseFloat(pc);
+    return Math.round(v * 1e6) / 1e6;
+}
 
 // ========================================================================
 //  قیمتِ خریدِ تمام‌شده (با هزینه حمل و نقل) از «آخرین سریِ خرید» هر جنس — برای هر ارز جداگانه.
@@ -2623,7 +2653,7 @@ function loadQuickListData(type) {
 
     const transactions = (db.getTransactions() || [])
         .filter(tx => tx.type === txType)
-        .sort((a, b) => (b.date || b.createdAt || '').localeCompare(a.date || a.createdAt || ''));
+        .sort(sortNewestFirst);
 
     tbody.innerHTML = '';
     if (transactions.length === 0) {
@@ -2893,6 +2923,8 @@ function showSection(sectionId) {
     try { if (typeof _apexDlgRedirect === 'function') sectionId = _apexDlgRedirect(sectionId); } catch (_e) {}
     // (APEX) «ثبت جنس» از داخلِ فورمِ ورودی/خروجی: ناوبری به جای دیگر یعنی پایانِ آن حالت
     try { if (window.__padjQuickAdd && sectionId !== 'product-form' && sectionId !== 'product-adj-form') window.__padjQuickAdd = null; } catch (_e) {}
+    // (APEX) حالتِ «پرداخت معاش» فقط تا وقتی کاربر روی همان فورم (یا ثبتِ کارمند از داخلِ آن) است
+    try { if (window.__apexSalary && sectionId !== 'payment-form' && sectionId !== 'person-form') { window.__apexSalary = null; if (typeof _apexSalaryApplyUI === 'function') _apexSalaryApplyUI(); } } catch (_e) {}
     try { _jqScrollSave(); } catch (_e) {}
     // (APEX) فرم‌های «پنجرهٔ جداگانه» در دسکتاپ — محاسبهٔ پشتهٔ پنجره پیش از هر تغییر
     var __apexDlg = null;
@@ -3825,6 +3857,8 @@ function savePerson() {
     };
     // (APEX) تصویرِ شخص — فقط وقتی تصویرِ تازه انتخاب شده باشد (در ویرایش، تصویرِ قبلی حفظ می‌شود)
     if (window._apexPendingPersonImage) personData.image = window._apexPendingPersonImage;
+    // (APEX) فیلدهای قراردادِ کارمند (فقط برای کتگوریِ «کارمند»)
+    if (typeof _apexEmpCollect === 'function') { if (_apexEmpCollect(personData) === false) return; }
     
     if (editId) {
         personData.id = parseInt(editId);
@@ -3862,6 +3896,7 @@ function savePerson() {
         // همان رکوردِ UPDATE‌شده) اعمال می‌گردد. _prevAccountSnapshot صرفاً برای ثبت در تاریخچهٔ
         // تغییرات (changelog) نگه داشته می‌شود و دیگر هیچ تراکنشی تولید نمی‌کند.
         
+        try { if (typeof _empSyncAccruals === 'function') _empSyncAccruals(); } catch (_e) {}
         showMessage('موفقیت', 'اطلاعات فرد با موفقیت ذخیره شد.'); addChangelog(editId ? 'ویرایش' : 'ثبت', 'شخص', personData, (editId ? 'ویرایش' : 'ثبت') + ' شخص');
         // ذخیره و هدایت فوری بدون تأخیر
         delete document.getElementById('personForm').dataset.editId;
@@ -5234,6 +5269,8 @@ function rebuildAllDerivedData() {
     try {
         // پیش‌نیازِ ساختاری: «قیمتِ خریدِ موجودیِ اولیه» برای FIFO (idempotent)
         try { if (typeof _migrateBatchInitialCost === 'function') _migrateBatchInitialCost(); } catch (e) {}
+        // (APEX) طلبِ خودکارِ معاشِ کارمندان بر اساسِ قرارداد (idempotent؛ فقط ماه/روزهای سپری‌شده)
+        try { if (typeof _empSyncAccruals === 'function') _empSyncAccruals(); } catch (e) {}
 
         REBUILD_PIPELINE.forEach(function (name) {
             try { summary[name] = rebuildData(name); }
@@ -5580,7 +5617,10 @@ function saveReceipt() {
     const destPersonName = (document.getElementById('receipt-dest-person-search') || {}).value || '';
     const expenseCategory = (document.getElementById('receipt-expense-category') || {}).value || '';
     const noTrack = !!(document.getElementById('receipt-notrack') && document.getElementById('receipt-notrack').checked);
+    // (APEX) «دریافت آزاد»: فقط خزانه اثر می‌گیرد؛ بیلانسِ شخص تغییر نمی‌کند
+    const free = !noTrack && !!(document.getElementById('receipt-free') && document.getElementById('receipt-free').checked);
     const _baseC = (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : 'AFN';
+    if (free && destTab !== 'cashbox') { showMessage('خطا', '«دریافت آزاد» فقط با خزانه ممکن است.'); return; }
 
     if (amount <= 0) { showMessage('خطا', 'مبلغ معتبر وارد کنید.'); return; }
 
@@ -5608,7 +5648,7 @@ function saveReceipt() {
         if (!personId) { showMessage('خطا', 'لطفاً شخص را انتخاب کنید.'); return; }
         var _txNT = {
             type: 'دریافت', personId: parseInt(personId), personName, date, amount, currency,
-            receiptType: type, cashboxId: null, noTrack: true, reference, description, status: 'انجام شد',
+            receiptType: type, cashboxId: null, noTrack: true, free: false, freePersonId: null, reference, description, status: 'انجام شد',
             rateUsed: _dayRateFor(currency), baseCurrency: _baseC
         };
         var _ntEditId = document.getElementById('receiptForm')?.dataset?.editId;
@@ -5707,6 +5747,9 @@ function saveReceipt() {
             receiptType: type, cashboxId: parseInt(cashboxId), reference, description, status: 'انجام شد',
             rateUsed: _dayRateFor(currency), baseCurrency: _baseC
         };
+        // (APEX) «دریافت آزاد»: شخص فقط به‌عنوانِ نام ثبت می‌شود (freePersonId) تا بیلانسش تغییر نکند
+        if (free) { transaction.freePersonId = parseInt(personId); transaction.personId = null; transaction.free = true; }
+        else { transaction.free = false; transaction.freePersonId = null; }
     }
 
     const editId = document.getElementById('receiptForm')?.dataset?.editId;
@@ -5741,7 +5784,7 @@ function saveReceipt() {
         }
     }
     
-    showMessage('موفقیت', 'دریافت با موفقیت ثبت شد.'); addChangelog('ثبت', 'دریافت', transaction, 'ثبت دریافت جدید');
+    showMessage('موفقیت', free ? 'دریافتِ آزاد ثبت شد (فقط خزانه؛ بیلانسِ شخص تغییر نکرد).' : 'دریافت با موفقیت ثبت شد.'); addChangelog('ثبت', 'دریافت', transaction, free ? 'دریافت آزاد' : 'ثبت دریافت جدید');
     // ذخیره و هدایت فوری بدون تأخیر
     if (typeof resetReceiptForm === 'function') resetReceiptForm();
     if (typeof loadDashboard === 'function') loadDashboard();
@@ -5753,6 +5796,8 @@ function saveReceipt() {
 }
 
 function savePayment() {
+    // (APEX) پرداختِ معاش / تبِ «اشخاص» / ویرایشِ گروهی — مسیرِ کاملِ جداگانه
+    if (typeof _apexSavePaymentExt === 'function' && _apexSavePaymentExt()) return;
     const personId = document.getElementById('pay-to').value;
     const personInput = document.getElementById('pay-to-search');
     const personName = (personInput && personInput.value) ? personInput.value : 'گیرنده نامشخص';
@@ -5765,6 +5810,8 @@ function savePayment() {
     const reference = document.getElementById('payment-reference').value;
     const description = document.getElementById('payment-description').value;
     const noTrack = !!(document.getElementById('payment-notrack') && document.getElementById('payment-notrack').checked);
+    // (APEX) «پرداخت آزاد»: فقط خزانه اثر می‌گیرد؛ بیلانسِ شخص تغییر نمی‌کند
+    const free = !noTrack && !!(document.getElementById('payment-free') && document.getElementById('payment-free').checked);
 
     if (!personId) { showMessage('خطا', 'لطفاً گیرنده را انتخاب کنید.'); return; }
     if (amount <= 0) { showMessage('خطا', 'مبلغ معتبر وارد کنید.'); return; }
@@ -5788,6 +5835,8 @@ function savePayment() {
         rateUsed: _dayRateFor(currency),
         baseCurrency: (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : 'AFN'
     };
+    if (free) { transaction.freePersonId = parseInt(personId); transaction.personId = null; transaction.free = true; }
+    else { transaction.free = false; transaction.freePersonId = null; }
     
     const editId = document.getElementById('paymentForm')?.dataset?.editId;
     if (editId) {
@@ -5823,7 +5872,7 @@ function savePayment() {
         }
     }
     
-    showMessage('موفقیت', noTrack ? 'پرداختِ بدون پیگیری ثبت شد (فقط ماندهٔ حساب شخص تعدیل شد).' : 'پرداخت با موفقیت ثبت شد.'); addChangelog('ثبت', 'پرداخت', transaction, noTrack ? 'پرداخت بدون پیگیری' : 'ثبت پرداخت جدید');
+    showMessage('موفقیت', noTrack ? 'پرداختِ بدون پیگیری ثبت شد (فقط ماندهٔ حساب شخص تعدیل شد).' : (free ? 'پرداختِ آزاد ثبت شد (فقط خزانه؛ بیلانسِ شخص تغییر نکرد).' : 'پرداخت با موفقیت ثبت شد.')); addChangelog('ثبت', 'پرداخت', transaction, noTrack ? 'پرداخت بدون پیگیری' : (free ? 'پرداخت آزاد' : 'ثبت پرداخت جدید'));
     // ذخیره و هدایت فوری بدون تأخیر
     if (typeof resetPaymentForm === 'function') resetPaymentForm();
     if (typeof loadDashboard === 'function') loadDashboard();
@@ -7361,6 +7410,8 @@ function buildPersonLedger(person, opts) {
                 effect = -total; b.received += total; break;
             case 'پرداخت':
                 effect = total; b.paid += total; break;
+            case 'معاش': case 'اضافه کاری':   // (APEX) طلبِ کارمند از معاش/اضافه‌کاری
+                effect = -total; break;
             case 'پرداخت از حساب قبلی':
                 effect = (person.accountType === 'طلبکار') ? total : -total; break;
             case 'برگشت':
@@ -9920,6 +9971,7 @@ function initReceiptForm() {
             }
         };
     }
+    try { if (typeof _apexRpInstall === 'function') _apexRpInstall('receipt'); } catch (_e) {}
 }
 
 function loadPersonsForReceipt() {
@@ -9982,6 +10034,7 @@ function resetReceiptForm() {
     // ریستِ «دریافت بدون پیگیری» و بازکردنِ قفلِ تب‌ها
     var _ntr = document.getElementById('receipt-notrack'); if (_ntr) _ntr.checked = false;
     if (typeof _toggleReceiptNoTrack === 'function') _toggleReceiptNoTrack();
+    try { if (typeof apexRpReset === 'function') apexRpReset('receipt'); } catch (_e) {}
 }
 
 function initPaymentForm() {
@@ -10004,6 +10057,7 @@ function initPaymentForm() {
             }
         };
     }
+    try { if (typeof _apexRpInstall === 'function') _apexRpInstall('payment'); } catch (_e) {}
 }
 
 function loadPersonsForPayment() {
@@ -10053,6 +10107,7 @@ function resetPaymentForm() {
     // ریستِ «پرداخت بدون پیگیری» و بازکردنِ قفلِ حساب
     var _ntp = document.getElementById('payment-notrack'); if (_ntp) _ntp.checked = false;
     if (typeof _togglePaymentNoTrack === 'function') _togglePaymentNoTrack();
+    try { if (typeof apexRpReset === 'function') apexRpReset('payment'); } catch (_e) {}
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -14836,6 +14891,7 @@ function generatePersonReport(personId) {
                 break;
             }
             case 'دریافت': effect = -totalAmount; _addTo(receiptsMap, currency, totalAmount); break;
+            case 'معاش': case 'اضافه کاری': effect = -totalAmount; break;   // (APEX) طلبِ کارمند
             case 'پرداخت': effect = totalAmount; _addTo(paymentsMap, currency, totalAmount); break;
             case 'برگشت':
                 if (tx.returnType === 'فروش') { effect = -(tx.remaining != null ? parseFloat(tx.remaining) : totalAmount); _addTo(returnsMap, currency, totalAmount); }
@@ -16617,6 +16673,8 @@ function editTransaction(id) {
         const transactions = db.getTransactions ? db.getTransactions() : [];
         const tx = transactions.find(t => t.id == id);
         if (!tx) { showMessage('خطا', 'معامله یافت نشد.'); return; }
+        // (APEX) معاش/اضافه‌کاری/پرداخت معاشِ کارمند — فورمِ مخصوصِ خودشان
+        try { if (typeof _apexEditRoute === 'function' && _apexEditRoute(tx)) return; } catch (_e) {}
         // بر اساس نوع معامله فرم مناسب باز کن
         if (tx.type === 'فروش' || tx.type === 'پیش‌فاکتور') {
             showSection('sales-form');
@@ -16943,6 +17001,7 @@ function editTransaction(id) {
                 var _ntrE = document.getElementById('receipt-notrack');
                 if (_ntrE) _ntrE.checked = !!tx.noTrack;
                 if (typeof _toggleReceiptNoTrack === 'function') _toggleReceiptNoTrack();
+                try { if (typeof _apexReceiptEditRestore === 'function') _apexReceiptEditRestore(tx); } catch (_e) {}
             }, 200);
         } else if (tx.type === 'پرداخت') {
             // تعیینِ editId پیش از showSection تا هوکِ نمایشِ بخش فرمِ پرداخت را ریست نکند و مقادیرِ پرشده حفظ شوند
@@ -16968,6 +17027,7 @@ function editTransaction(id) {
                 var _ntpE = document.getElementById('payment-notrack');
                 if (_ntpE) _ntpE.checked = !!tx.noTrack;
                 if (typeof _togglePaymentNoTrack === 'function') _togglePaymentNoTrack();
+                try { if (typeof _apexPaymentEditRestore === 'function') _apexPaymentEditRestore(tx); } catch (_e) {}
             }, 200);
         } else {
             showMessage('اطلاع', `ویرایش معامله نوع "${tx.type}" از این بخش امکان‌پذیر نیست.`);
@@ -17006,6 +17066,8 @@ function deleteExpense(id) {
 }
 
 function deleteTransaction(id) {
+    // (APEX) معاشِ خودکارِ کارمند حذف نمی‌شود (از روی قرارداد ساخته می‌شود)
+    try { if (typeof _apexDeleteGuard === 'function' && _apexDeleteGuard(id)) return; } catch (_e) {}
     showConfirm('تایید حذف', 'آیا از حذف این معامله مطمئن هستید؟', function() {
         var transactions = db.getTransactions();
         var tx = transactions.find(function(t) { return t.id == id; });
@@ -17869,6 +17931,7 @@ function calcPersonBalanceForReport(person, allTransactions, fromDate, toDate) {
             case 'خرید':   effect = -remaining;    break;
             case 'دریافت': effect = -totalAmount;  break;
             case 'پرداخت': effect =  totalAmount;  break;
+            case 'معاش': case 'اضافه کاری': effect = -totalAmount; break;   // (APEX) طلبِ کارمند
             case 'برگشت':
                 if      (tx.returnType === 'فروش') effect = -(tx.remaining != null ? parseFloat(tx.remaining) : totalAmount);
                 else if (tx.returnType === 'خرید') effect =  (tx.remaining != null ? parseFloat(tx.remaining) : totalAmount);
@@ -18008,7 +18071,7 @@ function downloadProfitExcel() {
                 var _fifoKey = (tx.id != null) ? (tx.id + '|' + _idx) : null;
                 var lineProfit;
                 if (_fifoMaps && _fifoMaps.itemMap && _fifoKey != null && _fifoMaps.itemMap[_fifoKey] !== undefined) {
-                    lineProfit = _fifoMaps.itemMap[_fifoKey];
+                    lineProfit = _fifoItemProfitWithParts(_fifoMaps, tx.id, _idx, it);
                 } else {
                     lineProfit = (price - purchasePrice) * qty - (parseFloat(it.discount) || 0);
                 }
@@ -18655,7 +18718,7 @@ function _rpBuildReportAOA(kind) {
                     if (it.isWastage) return;
                     var q = parseFloat(it.quantity) || 0; var pr = parseFloat(it.price) || 0;
                     var _k = t.id + '|' + idx;
-                    var prof = itemMap[_k]; if (prof == null) prof = 0;
+                    var prof = _fifoItemProfitWithParts({ itemMap: itemMap, partCreditItem: (fifo && fifo.partCreditItem) }, t.id, idx, it); if (prof == null) prof = 0;
                     prof += (parseFloat(_waived[_k]) || 0);
                     // خدمات هم سطرِ خودشان را می‌گیرند: حالا مفاد دارند
                     // ((قیمت − مبلغ تمام‌شده) × تعداد)، پس اگر نیایند جمعِ سطرها
@@ -19985,7 +20048,7 @@ function _rpProfitAggregate(fromDate, toDate) {
                 // خدمت هم مثلِ جنس از همان نقشهٔ مرکزی خوانده می‌شود: مفادش
                 // (قیمت − مبلغ تمام‌شده) × تعداد − تخفیف است و پیش از این در
                 // همان نقشه نشسته. پس این شاخه و داشبورد یک عدد می‌دهند.
-                prof = itemMap[t.id + '|' + idx]; if (prof == null) prof = 0;
+                prof = _fifoItemProfitWithParts(fifo, t.id, idx, it); if (prof == null) prof = 0;
                 _add(grossByCur, cur, prof);
                 var b = toBase(prof, cur); grossBase += b;
             });
@@ -21523,6 +21586,10 @@ function showPersonTransactions(personId, fromDetail) {
     // بعد از نمایش بخش، المان‌ها را پر کن
     const nameEl = document.getElementById('selected-person-name');
     if (nameEl) nameEl.textContent = person.name;
+    // (APEX) برای کارمند: «صورت حساب کارمند» به‌جای «معاملات»
+    var _ptw = document.getElementById('ptx-title-word');
+    if (_ptw) _ptw.textContent = (person.category === 'کارمند') ? 'صورت حساب کارمند' : 'معاملات';
+    try { if (typeof _empSyncAccruals === 'function') _empSyncAccruals(); } catch (_e) {}
     
     loadPersonTransactions(personId);
 }
@@ -21562,6 +21629,7 @@ function showPersonInfo(personId) {
             case 'خرید':  effect = -remaining; break;
             case 'دریافت': effect = -totalAmount; break;
             case 'پرداخت': effect = totalAmount; break;
+            case 'معاش': case 'اضافه کاری': effect = -totalAmount; break;   // (APEX) طلبِ کارمند
             case 'برگشت':
                 if (tx.returnType === 'فروش') effect = -(tx.remaining != null ? parseFloat(tx.remaining) : totalAmount);
                 else if (tx.returnType === 'خرید') effect = (tx.remaining != null ? parseFloat(tx.remaining) : totalAmount);
@@ -21669,11 +21737,15 @@ function loadPersonTransactions(personId) {
     const personTransactions = transactions.filter(t =>
         t.personId == personId ||
         (t.customerId == personId) ||
-        (t.supplierId == personId)
+        (t.supplierId == personId) ||
+        // (APEX) دریافت/پرداختِ «آزاد»: در لیستِ همین شخص دیده می‌شود ولی بیلانسش را تغییر نمی‌دهد
+        (t.free && t.freePersonId != null && t.freePersonId == personId)
     );
 
     // مرتب‌سازی از قدیمی‌ترین به جدیدترین برای محاسبه مانده تجمعی
+    // (APEX) بر اساسِ تاریخ و ساعتِ انتخاب‌شده در فورم (نه زمانِ ثبت) و با مقایسهٔ عددیِ زمان
     personTransactions.sort(function(a, b) {
+        if (typeof __hbRepAsc === 'function') return __hbRepAsc(a, b);
         var da = a.createdAt || a.date || '';
         var db_ = b.createdAt || b.date || '';
         return da.localeCompare(db_);
@@ -21718,6 +21790,25 @@ function loadPersonTransactions(personId) {
     });
 
     // مرتب‌سازیِ کلِ ورودی‌ها از قدیمی‌ترین به جدیدترین (برای محاسبهٔ مانده تجمعی)
+    // (APEX) کلیدِ زمانیِ عددی: معامله ← تاریخِ انتخاب‌شده در فورم (پشتیبان: زمانِ ثبت)؛
+    // «حساب قبلی» ← زمانِ ثبتِ شخص. فقط ترتیب و ماندهٔ ردیف‌به‌ردیف؛ ماندهٔ نهایی همان است.
+    if (typeof __hbRepChronoKey === 'function') {
+        _entries.forEach(function (en, i) {
+            en._ord = i;
+            en._k = (en.kind === 'prev')
+                ? __hbRepChronoKey(person && person.createdAt, person && person.date)
+                : __hbRepChronoKey(en.tx && en.tx.date, en.tx && en.tx.createdAt);
+            en._kc = (en.kind === 'prev') ? -1 : __hbRepChronoKey(en.tx && en.tx.createdAt, null);
+        });
+        _entries.sort(function (a, b) {
+            if (a._k !== b._k) return a._k - b._k;
+            if (a.kind !== b.kind) return a.kind === 'prev' ? -1 : 1;
+            if (a._kc !== b._kc) return a._kc - b._kc;
+            var ia = Number(a.tx && a.tx.id) || 0, ib = Number(b.tx && b.tx.id) || 0;
+            if (ia !== ib) return ia - ib;
+            return a._ord - b._ord;
+        });
+    } else
     _entries.sort(function(a, b) {
         return String(a.sortKey).localeCompare(String(b.sortKey));
     });
@@ -21815,6 +21906,9 @@ function loadPersonTransactions(personId) {
             case 'پرداخت':
                 effect = totalAmount;
                 break;
+            case 'معاش': case 'اضافه کاری':   // (APEX) طلبِ کارمند از معاش/اضافه‌کاری
+                effect = -totalAmount;
+                break;
             case 'پرداخت از حساب قبلی':
                 if (person && person.accountType === 'طلبکار') {
                     effect = totalAmount;
@@ -21832,6 +21926,7 @@ function loadPersonTransactions(personId) {
             default:
                 effect = 0;
         }
+        if (tx.free) effect = 0;   // (APEX) «آزاد»: فقط روی خزانه اثر داشت، نه روی حسابِ شخص
 
         _ptBal(currency, effect);
 
@@ -21871,6 +21966,7 @@ function loadPersonTransactions(personId) {
         if (tx.type === 'برگشت') {
             _typeText = (tx.returnType === 'فروش') ? 'برگشت از فروش' : (tx.returnType === 'خرید' ? 'برگشت از خرید' : 'برگشت');
         }
+        try { if (typeof _apexEmpTxTypeText === 'function') _typeText = _apexEmpTxTypeText(tx, _typeText); } catch (_e) {}
 
         // رنگِ نوارِ کناری بر اساسِ نوعِ معامله (مطابقِ تصویر)
         var _borderClass = _ptxBorderClass(tx.type, tx.returnType);
@@ -22559,6 +22655,7 @@ function _computePersonCardBalance(person, allTransactions) {
             case 'خرید': effect = -remaining; break;
             case 'دریافت': effect = -totalAmount; break;
             case 'پرداخت': effect = totalAmount; break;
+            case 'معاش': case 'اضافه کاری': effect = -totalAmount; break;   // (APEX) طلبِ کارمند
             case 'پرداخت از حساب قبلی':
                 if (person.accountType === 'طلبکار') effect = totalAmount; else effect = -totalAmount; break;
             case 'برگشت':
@@ -22650,6 +22747,7 @@ function renderPersonsTable(personsList) {
                 case 'خرید': effect = -remaining; break;
                 case 'دریافت': effect = -totalAmount; break;
                 case 'پرداخت': effect = totalAmount; break;
+                case 'معاش': case 'اضافه کاری': effect = -totalAmount; break;   // (APEX) طلبِ کارمند
                 case 'پرداخت از حساب قبلی':
                     // این نوع تراکنش فقط برای تغییرات بعدی در حساب قبلی (ویرایش) ثبت می‌شود
                     // نه برای ثبت اولیه — پس همیشه در محاسبه لحاظ می‌شود
@@ -22784,6 +22882,11 @@ function showHorizontalActionBar(event, id) {
         { icon: 'fa-edit', color: '#334155', title: 'ویرایش', action: 'edit' },
         { icon: 'fa-trash', color: '#dc2626', title: 'حذف', action: 'delete' }
     ];
+    // (APEX) کارمند: همان طراحی، با گزینه‌های ویژهٔ کارمند (پرداخت معاش، اضافه‌کاری، قرارداد…)
+    if (person.category === 'کارمند' && typeof _apexEmpKebabActions === 'function') {
+        actions.length = 0;
+        _apexEmpKebabActions().forEach(function (a) { actions.push(a); });
+    }
 
     // ساخت دکمه‌ها داخل نوار
     actions.forEach(item => {
@@ -23023,6 +23126,18 @@ function performPersonAction(id, action) {
             }, 150);
             break;
 
+        case 'emp-salary':
+            if (typeof apexEmpSalaryOpen === 'function') apexEmpSalaryOpen(id);
+            break;
+
+        case 'emp-overtime':
+            if (typeof apexEmpOtOpen === 'function') apexEmpOtOpen(id);
+            break;
+
+        case 'emp-contract':
+            if (typeof apexEmpPrintContractFor === 'function') apexEmpPrintContractFor(id);
+            break;
+
         case 'send-message':
             _sendPersonBalanceMessage(id);
             break;
@@ -23090,6 +23205,7 @@ function _renderPersonDetail(personId) {
     var infoRows = '';
     infoRows += _pdRow('شماره تماس', _pdText(person.phone));
     infoRows += _pdRow('شماره تذکره', _pdText(person.idNumber));
+    try { if (typeof _apexEmpDetailHeader === 'function') _apexEmpDetailHeader(person); if (person.category === 'کارمند' && typeof _apexEmpDetailRows === 'function') infoRows += _apexEmpDetailRows(person); } catch (_e) {}
     infoRows += _pdRow('آدرس', _pdText(person.address));
     infoRows += _pdRow('جزئیات بیشتر', '<span class="pdc-row-cta">ویرایش</span>', { click: 'openPersonEditFromDetail(' + personId + ')' });
     var infoEl = document.getElementById('psd-rows-info'); if (infoEl) infoEl.innerHTML = infoRows;
@@ -23171,6 +23287,7 @@ function _renderPersonDetail(personId) {
             case 'خرید': effect = -remaining; break;
             case 'دریافت': effect = -total; break;
             case 'پرداخت': effect = total; break;
+            case 'معاش': case 'اضافه کاری': effect = -total; break;   // (APEX) طلبِ کارمند
             case 'پرداخت از حساب قبلی': effect = (person.accountType === 'طلبکار') ? total : -total; break;
             case 'برگشت':
                 if (tx.returnType === 'فروش') effect = -total;
@@ -23526,6 +23643,7 @@ function displayPersonTransactions(transactions) {
             case 'خرید': effect = -(remaining > 0 ? remaining : totalAmount); break;
             case 'دریافت': effect = -totalAmount; break;
             case 'پرداخت': effect = totalAmount; break;
+            case 'معاش': case 'اضافه کاری': effect = -totalAmount; break;   // (APEX) طلبِ کارمند
             case 'برگشت':
                 if (tx.returnType === 'فروش') effect = -(tx.remaining != null ? parseFloat(tx.remaining) : totalAmount);
                 else if (tx.returnType === 'خرید') effect = (tx.remaining != null ? parseFloat(tx.remaining) : totalAmount);
@@ -23553,6 +23671,7 @@ function displayPersonTransactions(transactions) {
         if (tx.type === 'برگشت') {
             _typeText = (tx.returnType === 'فروش') ? 'برگشت از فروش' : (tx.returnType === 'خرید' ? 'برگشت از خرید' : 'برگشت');
         }
+        try { if (typeof _apexEmpTxTypeText === 'function') _typeText = _apexEmpTxTypeText(tx, _typeText); } catch (_e) {}
         var _borderClass = _ptxBorderClass(tx.type, tx.returnType);
 
         var _pid = personId || (tx.personId || tx.customerId || tx.supplierId || '');
@@ -25832,8 +25951,11 @@ function applySort(section = '', criteria) {
         const bAmount = parseFloat(b.dataset.amount) >= 0 ? parseFloat(b.dataset.amount) : extractNum(b.cells[amountCol]?.textContent);
 
         switch (criteria) {
-            case 'date-desc': return bDate.localeCompare(aDate);
-            case 'date-asc':  return aDate.localeCompare(bDate);
+            // (APEX) تاریخ و ساعت به عددِ زمانی تبدیل می‌شوند (AM/PM و ماه/روزِ تک‌رقمی درست چیده شود)
+            case 'date-desc': { const ka = (typeof __hbRepOneKey === 'function') ? __hbRepOneKey(aDate) : null, kb = (typeof __hbRepOneKey === 'function') ? __hbRepOneKey(bDate) : null;
+                                if (ka !== null && kb !== null && ka !== kb) return kb - ka; return bDate.localeCompare(aDate); }
+            case 'date-asc':  { const ka = (typeof __hbRepOneKey === 'function') ? __hbRepOneKey(aDate) : null, kb = (typeof __hbRepOneKey === 'function') ? __hbRepOneKey(bDate) : null;
+                                if (ka !== null && kb !== null && ka !== kb) return ka - kb; return aDate.localeCompare(bDate); }
             case 'amount-desc': return bAmount - aAmount;
             case 'amount-asc':  return aAmount - bAmount;
             case 'name-asc':  return (a.cells[0]?.textContent || '').localeCompare(b.cells[0]?.textContent || '', 'fa');
@@ -26375,6 +26497,8 @@ document.addEventListener('DOMContentLoaded', () => {
 // این دو تابع را دقیقاً در انتهای فایل script.js (بعد از تابع showCashboxForm یا در انتها) اضافه کنید
 // ===== اصلاح‌ شده: نمایش فرم کارمند جدید =====
 function showEmployeeForm(editId = null) {
+    // (APEX) ثبت/ویرایشِ کارمند از همین‌پس در فورمِ «ثبت شخص» با کتگوریِ کارمند انجام می‌شود
+    if (typeof apexEmpOpenPersonForm === 'function') { apexEmpOpenPersonForm(editId); return; }
     try {
         // نمایش بخش فرم (section با id="employee-form")
         if (typeof showSection === 'function') {
@@ -27986,7 +28110,7 @@ function loadRecent(idSuffix, typeFilter) {
             }
             return tx.type === typeFilter;
         })
-        .sort((a, b) => new Date(b.createdAt || b.date) - new Date(a.createdAt || a.date))
+        .sort(sortNewestFirst)
         .slice(0, 5);
 
     const tbody = document.getElementById(`recent-${idSuffix}-body`);
@@ -30201,7 +30325,7 @@ function loadDashboardListData(type) {
 
     if (type === 'expenses') {
         const expenses = db.getExpenses() || [];
-        const sorted = expenses.slice().sort((a, b) => (b.date || b.createdAt || '').localeCompare(a.date || a.createdAt || ''));
+        const sorted = expenses.slice().sort(sortNewestFirst);
         if (sorted.length === 0) {
             tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;">هیچ موردی یافت نشد</td></tr>';
             return;
@@ -30275,7 +30399,7 @@ function loadDashboardListData(type) {
         filtered = transactions.filter(t => t.type === typeMap[type]);
     }
 
-    filtered = filtered.slice().sort((a, b) => (b.date || b.createdAt || '').localeCompare(a.date || a.createdAt || ''));
+    filtered = filtered.slice().sort(sortNewestFirst);
 
     if (filtered.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;">هیچ موردی یافت نشد</td></tr>';
@@ -32679,6 +32803,16 @@ function showProductInOutList(productId, fromDetail) {
     });
 
     // مرتب‌سازی بر اساس تاریخ (قدیمی‌ترین اول برای محاسبه موجودی تجمعی)
+    // (APEX) ترتیب بر اساسِ تاریخ و ساعتِ انتخاب‌شده در فورم (پشتیبان: زمانِ ثبت) با مقایسهٔ عددی
+    if (typeof __hbRepChronoKey === 'function') {
+        events.forEach(function (ev, i) {
+            var o = ev.tx || ev.rec || {};
+            ev._ord = i;
+            ev._k = __hbRepChronoKey(o.date, o.createdAt);
+            ev._kc = __hbRepChronoKey(o.createdAt, null);
+        });
+        events.sort(function (a, b) { return (a._k - b._k) || (a._kc - b._kc) || (a._ord - b._ord); });
+    } else
     events.sort(function(a, b) { return String(a.sortKey).localeCompare(String(b.sortKey)); });
 
     // محاسبه موجودی تجمعی — شروع از موجودی اولیه جنس
@@ -33152,7 +33286,7 @@ function _renderProductDetail(productId) {
                 else _accXtraPD(saleXtra, cur, qtyBase, lineAmt);
                 var bName = (tx.customerName || tx.personName || '').toString().trim() || 'نامشخص';
                 buyerAgg[bName] = (buyerAgg[bName] || 0) + qtyBase;
-                var lp = itemMap[tx.id + '|' + idx];
+                var lp = _fifoItemProfitWithParts({ itemMap: itemMap, partCreditItem: (fmaps && fmaps.partCreditItem) }, tx.id, idx, it);
                 if (typeof lp === 'number' && !isNaN(lp)) {
                     if (cur === 'USD') profitUSD += lp;
                     else if (cur === 'AFN') profitAFN += lp;
@@ -37004,7 +37138,7 @@ if (typeof window.showCashboxTransactions !== 'function') {
                 + '<th style="padding:8px;border-bottom:2px solid #e2e8f0;">مبلغ</th>'
                 + '<th style="padding:8px;border-bottom:2px solid #e2e8f0;">شرح</th>'
                 + '</tr></thead><tbody>';
-            related.sort(function(a,b){ return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+            related.sort(sortNewestFirst);
             related.forEach(function(t) {
                 var typeLabel = ({
                     'deposit_in': 'ورود',
@@ -37303,7 +37437,7 @@ function openReturnTransactionPicker() {
             return;
         }
         // مرتب‌سازی: جدیدترین اول
-        filtered.sort(function(a, b) { return (b.createdAt || '').localeCompare(a.createdAt || ''); });
+        filtered.sort(sortNewestFirst);
         var html = '';
         filtered.forEach(function(t) {
             var personName = (txType === 'فروش' ? t.customerName : t.supplierName) || t.personName || '---';
@@ -46025,10 +46159,10 @@ function _apexBleReturn(ctx) {
 }
 
 // ─────────────── فرم‌های دریافتی/پرداختی: تیکِ سبز = بیلانسِ شخص ───────────────
-function apexFillPersonBalance(kind) {
+function apexFillPersonBalance(kind, silent) {
     var isR = (kind === 'receipt');
     var pid = (document.getElementById(isR ? 'receive-from' : 'pay-to') || {}).value;
-    if (!pid) { if (typeof showToast === 'function') showToast(isR ? 'ابتدا پرداخت‌کننده را انتخاب کنید' : 'ابتدا دریافت‌کننده را انتخاب کنید', 'warning'); return; }
+    if (!pid) { if (!silent && typeof showToast === 'function') showToast(isR ? 'ابتدا پرداخت‌کننده را انتخاب کنید' : 'ابتدا دریافت‌کننده را انتخاب کنید', 'warning'); return false; }
     var person = null;
     try { person = (db.getPersons() || []).find(function (p) { return String(p.id) === String(pid); }); } catch (e) {}
     if (!person) return;
@@ -46051,14 +46185,17 @@ function apexFillPersonBalance(kind) {
     var amt = isR ? bal : -bal;
     amt = (typeof CurrencySystem !== 'undefined' && CurrencySystem.round) ? CurrencySystem.round(amt) : Math.round(amt * 100) / 100;
     if (!(amt > 0)) {
-        if (typeof showToast === 'function') showToast(isR ? 'این شخص به این ارز باقی‌داری ندارد' : 'به این شخص به این ارز چیزی بدهکار نیستید', 'info');
-        return;
+        if (!silent && typeof showToast === 'function') showToast(isR ? 'این شخص به این ارز باقی‌داری ندارد' : 'به این شخص به این ارز چیزی بدهکار نیستید', 'info');
+        return false;
     }
     var inp = document.getElementById(isR ? 'receipt-amount' : 'payment-amount');
-    if (!inp) return;
+    if (!inp) return false;
     inp.value = String(amt);
     inp.dispatchEvent(new Event('input', { bubbles: true }));
     inp.dispatchEvent(new Event('change', { bubbles: true }));
+    // (APEX) تیکِ ظریف پس از پر شدن تیره می‌شود (پس از رویدادِ input که آن را خاموش می‌کند)
+    try { if (typeof _apexTickSet === 'function') _apexTickSet(kind, true); } catch (e) {}
+    return true;
 }
 
 // ───────────────────────── شکلِ ارقام (سیستمِ اعداد) ─────────────────────────
@@ -48291,6 +48428,8 @@ function _apexPsnForms() {
     };
 }
 function apexBillAddPerson(kind) {
+    // (APEX) در حالتِ «پرداخت معاش»: فورمِ ثبتِ شخص با کتگوریِ کارمند باز شود
+    if (kind === 'payment' && window.__apexSalary && typeof apexEmpAddPerson === 'function') { apexEmpAddPerson('salary'); return; }
     var f = _apexPsnForms()[kind];
     if (!f) return;
     var inputEl = document.getElementById(f.input);
@@ -48565,7 +48704,7 @@ function _apexDlgIds() {
     return {
         'person-form': 1, 'expense-form': 1, 'receipt-form': 1, 'payment-form': 1, 'cashbox-form': 1,
         'cashbox-transfer-form-section': 1, 'cashbox-withdraw-form-section': 1, 'cashbox-deposit-form-section': 1,
-        'currency-convert-form': 1, 'product-adj-form': 1
+        'currency-convert-form': 1, 'product-adj-form': 1, 'emp-overtime-form': 1
     };
 }
 function _apexDlgEnabled() {
@@ -48712,6 +48851,7 @@ function _apexPersonFormLoaded(person) {
                   (person.accountType && person.accountType !== 'بدون حساب');
     var mp = document.getElementById('person-more-panel');
     if (mp) mp.classList.toggle('open', !!hasMore);
+    try { if (typeof _apexEmpFormLoad === 'function') _apexEmpFormLoad(person); } catch (e) {}
 }
 function _apexPersonFormReset() {
     _apexPsnImgInstall();
@@ -48719,6 +48859,9 @@ function _apexPersonFormReset() {
     _apexPsnImgSet('');
     var n = document.getElementById('person-notes'); if (n) n.value = '';
     try { var fi = document.getElementById('person-image'); if (fi) fi.value = ''; } catch (e) {}
+    // (APEX) «بیشتر» بسته + فیلدهای کارمند خالی
+    try { var _mp = document.getElementById('person-more-panel'); if (_mp) _mp.classList.remove('open'); } catch (e) {}
+    try { if (typeof _apexEmpFormLoad === 'function') _apexEmpFormLoad(null); } catch (e) {}
 }
 function _apexPersonAvatar(person) {
     var src = person && person.image ? String(person.image) : '';
@@ -49212,6 +49355,7 @@ function _padjSave(ev) {
     try { window.dispatchEvent(new CustomEvent('jouya-data-change', { detail: { reason: 'product-adj' } })); } catch (e) {}
     try { if (typeof loadProductsList === 'function') loadProductsList(); } catch (e) {}
     try { if (typeof loadDashboard === 'function') loadDashboard(); } catch (e) {}
+    try { if (typeof refreshOpenReport === 'function') refreshOpenReport(); } catch (e) {}
     showMessage('موفقیت', (mode === 'in' ? 'ورودی' : 'خروجی') + (old ? ' ویرایش شد.' : ' ثبت شد.'));
     _padjGoBack();
     return false;
@@ -49233,6 +49377,7 @@ function _padjDelete(recId, productId) {
         try { window.dispatchEvent(new CustomEvent('jouya-data-change', { detail: { reason: 'product-adj-delete' } })); } catch (e) {}
         try { if (typeof loadProductsList === 'function') loadProductsList(); } catch (e) {}
         try { if (typeof loadDashboard === 'function') loadDashboard(); } catch (e) {}
+        try { if (typeof refreshOpenReport === 'function') refreshOpenReport(); } catch (e) {}
         var pid = (productId != null) ? productId : window._currentInoutProductId;
         var sec = document.getElementById('product-inout-list');
         if (sec && sec.classList.contains('active') && pid != null && typeof showProductInOutList === 'function') { try { showProductInOutList(pid); } catch (e) {} }
@@ -49241,4 +49386,859 @@ function _padjDelete(recId, productId) {
     var msg = 'این ردیف حذف شود؟ موجودی و سرمایهٔ جنس دوباره و دقیق محاسبه می‌شود.';
     if (typeof showStyledConfirm === 'function') showStyledConfirm('حذف', msg, run);
     else if (window.confirm(msg)) run();
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) دکمهٔ «لغو یا انصراف» در فورم‌ها: همان مسیرِ دکمهٔ برگشتِ هدرِ همان فورم
+//  (با همان مقصد و همان رفتارِ پنجرهٔ دسکتاپ)، بدونِ پرسشِ تأییدِ خروج — چون خودِ کاربر
+//  صریحاً «لغو» را زده است؛ دقیقاً مثلِ دکمهٔ لغوِ فورمِ شخص.
+// ════════════════════════════════════════════════════════════════════════════════
+function apexFormCancel(el) {
+    var sec = el && el.closest ? el.closest('.section') : null;
+    var btn = sec ? (sec.querySelector('.bill-header-bar .btn-back-header') || sec.querySelector('.btn-back-header')) : null;
+    if (!btn) return;
+    try { btn.setAttribute('data-jq-back-ok', '1'); } catch (e) {}
+    btn.click();
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) تبادله ارز: با کلیک روی «مبلغ آمد / مبلغ رفت / نرخ» مقدارِ همان فیلد پاک می‌شود
+//  تا کاربر بدونِ Backspace عددِ تازه بنویسد. اگر بدونِ نوشتن از فیلد بیرون رفت، همان
+//  عددِ قبلی برمی‌گردد (کلیکِ تصادفی چیزی را از بین نمی‌برد). هیچ محاسبه‌ای عوض نمی‌شود:
+//  تا وقتی کاربر چیزی ننوشته، رویدادِ input اجرا نمی‌شود.
+// ════════════════════════════════════════════════════════════════════════════════
+function _fxClrFocus(el) {
+    if (!el) return;
+    el.dataset.fxPrev = el.value || '';
+    el.dataset.fxTyped = '';
+    if (!el.__fxTypedHook) {
+        el.__fxTypedHook = true;
+        el.addEventListener('input', function () { el.dataset.fxTyped = '1'; });
+    }
+    if (el.value !== '') el.value = '';
+}
+function _fxClrBlur(el) {
+    if (!el) return;
+    if (el.dataset.fxTyped !== '1' && el.value === '' && el.dataset.fxPrev) el.value = el.dataset.fxPrev;
+    el.dataset.fxPrev = '';
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) فورمِ «دریافتی / پرداختی» — حالت‌های «بدون پیگیری» و «… آزاد»، تب‌های پرداخت،
+//  تیکِ ظریفِ «پرکردن با بیلانس» و پرشدنِ لحظه‌ای با تغییرِ ارز
+//  ──────────────────────────────────────────────────────────────────────────────
+//  • بدون پیگیری (منطقِ قبلی): فقط ماندهٔ شخص تغییر می‌کند؛ هیچ خزانه‌ای درگیر نیست.
+//  • آزاد (تازه): فقط خزانه تغییر می‌کند؛ بیلانسِ شخص دست نمی‌خورد. شخص فقط به‌عنوانِ نام
+//    (freePersonId) ثبت می‌شود و ردیف در لیستِ معاملاتِ همان شخص بدونِ اثر دیده می‌شود.
+//    فقط با تبِ «خزانه» ممکن است.
+// ════════════════════════════════════════════════════════════════════════════════
+function _apexRpChecked(id) { var el = document.getElementById(id); return !!(el && el.checked); }
+function apexRpSetMode(kind, mode) {
+    var nt = document.getElementById(kind + '-notrack'), fr = document.getElementById(kind + '-free');
+    var wasNt = !!(nt && nt.checked), wasFr = !!(fr && fr.checked);
+    if (nt) nt.checked = (mode === 'notrack') ? !wasNt : false;
+    if (fr) fr.checked = (mode === 'free') ? !wasFr : false;
+    _apexRpSync(kind);
+}
+function _apexRpSync(kind) {
+    var nt = _apexRpChecked(kind + '-notrack'), fr = _apexRpChecked(kind + '-free');
+    var pills = document.querySelectorAll('.apex-rp-pills[data-form="' + kind + '"] .apex-rp-pill');
+    Array.prototype.forEach.call(pills, function (b) {
+        var m = b.getAttribute('data-mode');
+        b.classList.toggle('is-on', (m === 'notrack' && nt) || (m === 'free' && fr));
+    });
+    if (kind === 'receipt') {
+        if (typeof _toggleReceiptNoTrack === 'function') _toggleReceiptNoTrack();   // قفلِ کاملِ «بدون پیگیری»
+        if (fr) {
+            if (typeof _receiptSwitchTab === 'function') _receiptSwitchTab('cashbox');
+            Array.prototype.forEach.call(document.querySelectorAll('#receipt-form .receipt-dest-tab'), function (t) {
+                t.disabled = (t.getAttribute('data-tab') !== 'cashbox');
+            });
+        }
+    } else {
+        if (typeof _togglePaymentNoTrack === 'function') _togglePaymentNoTrack();
+        if (nt || fr) apexPaySwitchTab('cashbox');
+        Array.prototype.forEach.call(document.querySelectorAll('#payment-form .receipt-dest-tab'), function (t) {
+            t.disabled = (nt || fr) && t.getAttribute('data-tab') !== 'cashbox';
+        });
+        var sel = document.getElementById('payment-cashbox');
+        if (sel) sel.required = ((window._apexPayTab || 'cashbox') === 'cashbox') && !nt;
+    }
+}
+function apexPaySwitchTab(tab) {
+    window._apexPayTab = (tab === 'person') ? 'person' : 'cashbox';
+    var wrap = document.getElementById('payment-src-wrap');
+    if (!wrap) return;
+    Array.prototype.forEach.call(wrap.querySelectorAll('.receipt-dest-tab'), function (b) { b.classList.toggle('is-active', b.getAttribute('data-tab') === window._apexPayTab); });
+    Array.prototype.forEach.call(wrap.querySelectorAll('.receipt-dest-pane'), function (p) { p.style.display = (p.getAttribute('data-pane') === window._apexPayTab) ? '' : 'none'; });
+    var sel = document.getElementById('payment-cashbox');
+    if (sel) sel.required = (window._apexPayTab === 'cashbox') && !_apexRpChecked('payment-notrack');
+}
+function _apexTickSet(kind, on) {
+    var t = document.querySelector('#' + kind + '-form .apex-tick');
+    if (!t) return;
+    t.classList.toggle('is-on', !!on);
+    var i = t.querySelector('i');
+    if (i) i.className = (on ? 'fas' : 'far') + ' fa-circle-check';
+}
+function apexRpReset(kind) {
+    var nt = document.getElementById(kind + '-notrack'), fr = document.getElementById(kind + '-free');
+    if (nt) nt.checked = false; if (fr) fr.checked = false;
+    if (kind === 'payment') {
+        apexPaySwitchTab('cashbox');
+        var sp = document.getElementById('payment-src-person'); if (sp) sp.value = '';
+        var sps = document.getElementById('payment-src-person-search'); if (sps) sps.value = '';
+        var pf = document.getElementById('paymentForm');
+        if (pf) { delete pf.dataset.editGroupKey; delete pf.dataset.editGroupId; }
+    }
+    _apexRpSync(kind);
+    _apexTickSet(kind, false);
+    if (kind === 'payment') _apexSalaryApplyUI();
+}
+function _apexRpInstall(kind) {
+    var amt = document.getElementById(kind === 'receipt' ? 'receipt-amount' : 'payment-amount');
+    var cur = document.getElementById(kind === 'receipt' ? 'receipt-currency' : 'payment-currency');
+    if (amt && !amt.__apexTick) {
+        amt.__apexTick = true;
+        amt.addEventListener('input', function () { _apexTickSet(kind, false); });
+    }
+    if (cur && !cur.__apexTick) {
+        cur.__apexTick = true;
+        cur.addEventListener('change', function () { _apexRpCurChanged(kind); });
+    }
+}
+/** تغییرِ ارزِ داخلِ فیلدِ مبلغ: اگر شخص انتخاب شده و مبلغ از بیلانس پر شده (یا خالی است)،
+ *  همان لحظه با بیلانسِ شخص در ارزِ تازه پر می‌شود؛ اگر در آن ارز بیلانسی نبود، خالی می‌ماند. */
+function _apexRpCurChanged(kind) {
+    var isR = (kind === 'receipt');
+    var pid = (document.getElementById(isR ? 'receive-from' : 'pay-to') || {}).value;
+    var amt = document.getElementById(isR ? 'receipt-amount' : 'payment-amount');
+    var tick = document.querySelector('#' + kind + '-form .apex-tick');
+    var tickOn = !!(tick && tick.classList.contains('is-on'));
+    if (!pid || !amt) return;
+    if (!tickOn && String(amt.value || '').trim() !== '') return;   // مبلغِ دستی دست نمی‌خورد
+    var ok = apexFillPersonBalance(kind, true);
+    if (!ok && tickOn) { amt.value = ''; _apexTickSet(kind, false); }
+}
+function _apexReceiptEditRestore(tx) {
+    if (!tx) return;
+    if (tx.free) {
+        var h = document.getElementById('receive-from'); if (h && tx.freePersonId != null) h.value = tx.freePersonId;
+        var fr = document.getElementById('receipt-free'); if (fr) fr.checked = true;
+    }
+    _apexRpSync('receipt');
+}
+function _apexPaymentEditRestore(tx) {
+    if (!tx) return;
+    var form = document.getElementById('paymentForm');
+    var ptoH = document.getElementById('pay-to'), ptoS = document.getElementById('pay-to-search');
+    if (tx.free) {
+        if (ptoH && tx.freePersonId != null) ptoH.value = tx.freePersonId;
+        var fr = document.getElementById('payment-free'); if (fr) fr.checked = true;
+    }
+    var grpKey = null, grpId = null;
+    if (tx.salaryPay || (tx.expenseGroup && String(tx.expenseGroup).indexOf('sal_') === 0)) {
+        window.__apexSalary = { empId: tx.personId || tx.freePersonId || null };
+        grpKey = 'expenseGroup'; grpId = tx.expenseGroup;
+    } else if (tx.transferGroup) {
+        grpKey = 'transferGroup'; grpId = tx.transferGroup;
+    }
+    // تبِ «اشخاص»: لِنگِ «پرداخت» = دریافت‌کننده، طرفِ مقابل = پرداخت‌کننده از طرفِ ما
+    if (tx.counterpartyId != null && (tx.transferGroup || grpKey === 'expenseGroup')) {
+        var payLeg = tx;
+        if (tx.type !== 'پرداخت') {
+            var key = tx.transferGroup ? 'transferGroup' : 'expenseGroup';
+            payLeg = ((db.getTransactions() || []).find(function (t) { return t[key] === tx[key] && t.type === 'پرداخت'; })) || tx;
+        }
+        if (ptoH) ptoH.value = payLeg.personId || ''; if (ptoS) ptoS.value = payLeg.personName || '';
+        var sp = document.getElementById('payment-src-person'), sps = document.getElementById('payment-src-person-search');
+        if (sp) sp.value = payLeg.counterpartyId || ''; if (sps) sps.value = payLeg.counterpartyName || '';
+        apexPaySwitchTab('person');
+    }
+    if (form && grpKey && grpId) { form.dataset.editGroupKey = grpKey; form.dataset.editGroupId = grpId; }
+    _apexRpSync('payment');
+    _apexSalaryApplyUI();
+}
+/** حذفِ کاملِ رکوردهای یک گروه (برای ویرایش): اثرِ خزانهٔ رکوردهای دارای خزانه برگردانده می‌شود */
+function _apexDeleteGroupRecords(key, id) {
+    if (!key || !id) return;
+    var txs = db.getTransactions() || [];
+    txs.forEach(function (t) {
+        if (!t || t[key] !== id || !t.cashboxId) return;
+        var a = parseFloat(t.amount || t.totalAmount) || 0;
+        if (!(a > 0)) return;
+        var c = t.currency || _baseCur();
+        if (t.type === 'دریافت') db.updateCashboxBalance(t.cashboxId, a, 'out', c);
+        else if (t.type === 'پرداخت') db.updateCashboxBalance(t.cashboxId, a, 'in', c);
+    });
+    localStorage.setItem('transactions', JSON.stringify(txs.filter(function (t) { return !(t && t[key] === id); })));
+    if (key === 'expenseGroup') {
+        try {
+            var ex = db.getExpenses() || [];
+            localStorage.setItem('expenses', JSON.stringify(ex.filter(function (e) { return !(e && e.expenseGroup === id); })));
+        } catch (e) {}
+    }
+}
+function _apexDeleteSingleTx(id) {
+    var txs = db.getTransactions() || [];
+    var t = txs.find(function (x) { return x && x.id == id; });
+    if (!t) return;
+    if (t.cashboxId) {
+        var a = parseFloat(t.amount || t.totalAmount) || 0, c = t.currency || _baseCur();
+        if (a > 0) {
+            if (t.type === 'دریافت') db.updateCashboxBalance(t.cashboxId, a, 'out', c);
+            else if (t.type === 'پرداخت') db.updateCashboxBalance(t.cashboxId, a, 'in', c);
+        }
+    }
+    localStorage.setItem('transactions', JSON.stringify(txs.filter(function (x) { return !(x && x.id == id); })));
+}
+/**
+ * ثبتِ پرداخت در سه حالتِ ویژه (true یعنی همین‌جا انجام شد):
+ *   ۱) «پرداخت معاش» (هر تب/حالت) — پرداخت + ردیفِ مصرف با کتگوریِ «معاش» در یک گروه
+ *   ۲) تبِ «اشخاص» — شخصِ دیگری از طرفِ ما به دریافت‌کننده پرداخت می‌کند (دو لِنگِ مرتبط)
+ *   ۳) ویرایشِ رکوردی که عضوِ یک گروه است
+ */
+function _apexSavePaymentExt() {
+    var form = document.getElementById('paymentForm');
+    var sal = window.__apexSalary || null;
+    var tab = window._apexPayTab || 'cashbox';
+    var grpKey = (form && form.dataset.editGroupKey) || '', grpId = (form && form.dataset.editGroupId) || '';
+    if (!sal && tab !== 'person' && !grpKey) return false;
+
+    var personId = (document.getElementById('pay-to') || {}).value;
+    var personName = ((document.getElementById('pay-to-search') || {}).value || '').trim() || 'گیرنده نامشخص';
+    var date = (document.getElementById('payment-date') || {}).value || '';
+    var amount = parseFloat((document.getElementById('payment-amount') || {}).value) || 0;
+    var currency = (document.getElementById('payment-currency') || {}).value || _baseCur();
+    var type = (document.getElementById('payment-type') || {}).value || 'نقد';
+    var cashboxId = (document.getElementById('payment-cashbox') || {}).value;
+    var reference = (document.getElementById('payment-reference') || {}).value || '';
+    var description = (typeof _stripReceiptAutoNote === 'function') ? _stripReceiptAutoNote((document.getElementById('payment-description') || {}).value || '') : ((document.getElementById('payment-description') || {}).value || '');
+    var noTrack = _apexRpChecked('payment-notrack');
+    var free = !noTrack && _apexRpChecked('payment-free');
+    var srcId = (document.getElementById('payment-src-person') || {}).value;
+    var srcName = ((document.getElementById('payment-src-person-search') || {}).value || '').trim();
+    var editId = form ? form.dataset.editId : '';
+
+    if (!personId) { showMessage('خطا', sal ? 'کارمندِ دریافت‌کننده را انتخاب کنید.' : 'لطفاً گیرنده را انتخاب کنید.'); return true; }
+    if (sal) {
+        var _emp = (db.getPersons() || []).find(function (p) { return p && String(p.id) === String(personId); });
+        if (!_emp || _emp.category !== 'کارمند') { showMessage('خطا', 'دریافت‌کنندهٔ معاش باید یک «کارمند» باشد.'); return true; }
+    }
+    if (!(amount > 0)) { showMessage('خطا', 'مبلغ معتبر وارد کنید.'); return true; }
+    if (free && tab !== 'cashbox') { showMessage('خطا', '«پرداخت آزاد» فقط با خزانه ممکن است.'); return true; }
+    if (tab === 'person') {
+        if (!srcId) { showMessage('خطا', 'شخصی را که از طرفِ ما پرداخت می‌کند انتخاب کنید.'); return true; }
+        if (String(srcId) === String(personId)) { showMessage('خطا', 'پرداخت‌کننده و دریافت‌کننده نباید یکی باشند.'); return true; }
+    } else if (!noTrack && !cashboxId) { showMessage('خطا', 'خزانه را مشخص کنید.'); return true; }
+
+    // ویرایش: رکوردهای قبلی (گروه یا تکی) کامل حذف و سپس دوباره ساخته می‌شوند
+    if (grpKey && grpId) _apexDeleteGroupRecords(grpKey, grpId);
+    else if (editId) _apexDeleteSingleTx(editId);
+    if (form) { delete form.dataset.editGroupKey; delete form.dataset.editGroupId; delete form.dataset.editId; }
+
+    var base = (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : 'AFN';
+    var common = { date: date, amount: amount, currency: currency, paymentType: type, reference: reference, status: 'انجام شد',
+                   rateUsed: _dayRateFor(currency), baseCurrency: base };
+    var g = (sal ? 'sal_' : 'ptx_') + Date.now();
+    var main;
+    if (tab === 'person') {
+        main = Object.assign({ type: 'پرداخت', personId: parseInt(personId), personName: personName,
+            counterpartyId: parseInt(srcId), counterpartyName: srcName,
+            description: (description || '') + ' | از طرفِ: ' + srcName }, common);
+        var leg = Object.assign({ type: 'دریافت', personId: parseInt(srcId), personName: srcName, receiptType: type,
+            counterpartyId: parseInt(personId), counterpartyName: personName,
+            description: (description || '') + ' | پرداخت به: ' + personName }, common);
+        delete leg.paymentType;
+        if (sal) { main.expenseGroup = g; leg.expenseGroup = g; main.salaryPay = true; }
+        else { main.transferGroup = g; leg.transferGroup = g; main.transferSchema = 2; leg.transferSchema = 2; }
+        db.saveTransaction(main);
+        db.saveTransaction(leg);
+    } else {
+        main = Object.assign({ type: 'پرداخت', personId: free ? null : parseInt(personId), personName: personName,
+            freePersonId: free ? parseInt(personId) : null, free: !!free, noTrack: !!noTrack,
+            cashboxId: noTrack ? null : parseInt(cashboxId), description: description }, common);
+        if (sal) { main.expenseGroup = g; main.salaryPay = true; }
+        db.saveTransaction(main);
+        // کمیشنِ حواله (همان منطقِ پرداختِ عادی)
+        if (type === 'حواله' && !noTrack) {
+            var cm = parseFloat((document.getElementById('payment-hawala-commission') || {}).value) || 0;
+            if (cm > 0) {
+                var _cb = (db.getCashboxes() || []).find(function (c) { return c.id == cashboxId; });
+                db.saveExpense({ title: 'کمیشن حواله', category: 'کمیشن حواله', amount: cm, currency: currency, date: date,
+                    cashboxId: parseInt(cashboxId), cashboxName: _cb ? _cb.name : '', personId: parseInt(personId), notes: description || '', type: 'مصرف' });
+            }
+        }
+    }
+    // «پرداخت معاش» در مصارف با کتگوریِ «معاش» ثبت می‌شود تا از مفادِ خالص کم شود
+    // (خزانه دوباره کم نمی‌شود؛ اثرِ خزانه فقط از خودِ پرداخت است)
+    if (sal) {
+        try {
+            db.saveExpense({ title: 'معاش: ' + personName, category: 'معاش', amount: amount, currency: currency, date: date,
+                cashboxId: null, cashboxName: '', personId: parseInt(personId), type: 'مصرف', expenseGroup: g, salaryPay: true,
+                notes: (description || '') + ' | پرداخت معاشِ ' + personName });
+        } catch (e) {}
+    }
+    showMessage('موفقیت', sal ? ('معاشِ ' + personName + ' ثبت شد.') : (editId || grpKey ? 'پرداخت ویرایش شد.' : 'پرداخت ثبت شد.'));
+    try { addChangelog(editId || grpKey ? 'ویرایش' : 'ثبت', 'پرداخت', main, sal ? 'پرداخت معاش' : 'پرداخت از طرفِ شخص'); } catch (e) {}
+    window.__apexSalary = null;
+    if (typeof resetPaymentForm === 'function') resetPaymentForm();
+    if (typeof loadDashboard === 'function') loadDashboard();
+    if (!_consumeFormReturn()) { if (typeof loadPaymentsList === 'function') loadPaymentsList(); showSection('payments-list'); }
+    if (typeof refreshOpenReport === 'function') refreshOpenReport();
+    return true;
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) «پرداخت معاش» — همان فورمِ «پرداختی» در حالتِ معاش (عنوان، دریافت‌کننده = کارمند)
+// ════════════════════════════════════════════════════════════════════════════════
+function _apexSalaryApplyUI() {
+    var on = !!window.__apexSalary;
+    var sec = document.getElementById('payment-form');
+    if (!sec) return;
+    sec.classList.toggle('apex-salary-mode', on);
+    var t = sec.querySelector('.bill-header-title'); if (t) t.textContent = on ? 'پرداخت معاش' : 'پرداختی';
+    var inp = document.getElementById('pay-to-search'); if (inp) inp.placeholder = on ? 'دریافت کننده: (کارمند)' : 'دریافت کننده';
+    var pb = document.getElementById('payment-print-btn'); if (pb) pb.style.display = on ? 'none' : '';
+}
+function apexEmpSalaryOpen(empId) {
+    var cur = document.querySelector('.section.active');
+    var ret = cur ? cur.id : 'persons-list';
+    var pid = (ret === 'person-transactions-list') ? empId : null;
+    window.__apexSalary = { empId: empId || null };
+    showPaymentForm();
+    try { _setFormReturn({ section: ret, personId: pid }); } catch (e) {}
+    window.__apexSalary = { empId: empId || null };
+    _apexSalaryApplyUI();
+    var p = empId != null ? (db.getPersons() || []).find(function (x) { return x && x.id == empId; }) : null;
+    if (p) {
+        var h = document.getElementById('pay-to'), s = document.getElementById('pay-to-search');
+        if (h) h.value = p.id; if (s) s.value = p.name || '';
+        var c = document.getElementById('payment-currency');
+        if (c && p.salaryCurrency) { try { c.value = p.salaryCurrency; c.dispatchEvent(new Event('change')); } catch (e) {} }
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) کارمند در فورمِ «ثبت شخص»
+// ════════════════════════════════════════════════════════════════════════════════
+function _apexEmpIsMode() { var c = document.getElementById('person-category'); return !!(c && c.value === 'کارمند'); }
+function _apexPersonEmpMode() {
+    var on = _apexEmpIsMode();
+    Array.prototype.forEach.call(document.querySelectorAll('#person-form .apex-emp-only'), function (el) {
+        el.style.display = on ? '' : 'none';
+    });
+    // نمبر تذکره برای کارمند در بالا (مثلِ تصویر) و برای بقیه داخلِ «بیشتر»
+    var idInp = document.getElementById('person-id');
+    var fld = idInp ? idInp.closest('.bill-field') : null;
+    var slot = document.getElementById('person-emp-idslot');
+    if (fld && slot) {
+        if (!fld.__apexHome) fld.__apexHome = { parent: fld.parentNode, next: fld.nextElementSibling };
+        if (on) { if (fld.parentNode !== slot) slot.appendChild(fld); }
+        else if (fld.parentNode === slot) {
+            var h = fld.__apexHome;
+            if (h.next && h.next.parentNode === h.parent) h.parent.insertBefore(fld, h.next); else h.parent.appendChild(fld);
+        }
+    }
+    var t = document.getElementById('person-form-title');
+    if (t && !document.getElementById('personForm').dataset.editId) t.textContent = on ? 'ثبت کارمند' : 'ثبت شخص';
+    _apexPersonMoreSync();
+}
+function _apexPersonMoreSync() {
+    var mp = document.getElementById('person-more-panel');
+    var ln = document.getElementById('person-more-link');
+    if (ln) ln.classList.toggle('is-hidden', !!(mp && mp.classList.contains('open')));
+}
+function apexPersonMoreOpen() {
+    var mp = document.getElementById('person-more-panel');
+    if (mp) mp.classList.add('open');
+    _apexPersonMoreSync();
+}
+function _apexEmpFormLoad(person) {
+    var cat = document.getElementById('person-category');
+    if (cat && !cat.__apexEmp) {
+        cat.__apexEmp = true;
+        cat.addEventListener('change', _apexPersonEmpMode);
+    }
+    var mp = document.getElementById('person-more-panel');
+    if (mp && !mp.__apexObs && typeof MutationObserver !== 'undefined') {
+        mp.__apexObs = true;
+        try { new MutationObserver(_apexPersonMoreSync).observe(mp, { attributes: true, attributeFilter: ['class'] }); } catch (e) {}
+    }
+    try { if (typeof _populateCurrencySelect === 'function') _populateCurrencySelect('person-salary-cur', (person && person.salaryCurrency) || _baseCur()); } catch (e) {}
+    var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
+    set('person-job', person ? (person.jobPosition || '') : '');
+    set('person-contract-type', person ? (person.contractType || '') : '');
+    set('person-contract-start', person ? (person.hireDate || '') : '');
+    set('person-contract-end', person ? (person.contractEnd || '') : '');
+    set('person-salary', person && (parseFloat(person.salary) || 0) ? person.salary : '');
+    if (person && person.salaryCurrency) set('person-salary-cur', person.salaryCurrency);
+    // کارمند: «بیشتر» بسته می‌ماند مگر حسابِ قبلی/آدرس داشته باشد
+    if (person && person.category === 'کارمند' && mp) {
+        var more = (parseFloat(person.previousAccount) || 0) !== 0 || String(person.address || '').trim() || String(person.notes || '').trim() ||
+                   (person.accountType && person.accountType !== 'بدون حساب');
+        mp.classList.toggle('open', !!more);
+    }
+    _apexPersonEmpMode();
+}
+/** پیش از ذخیرهٔ شخص: فیلدهای قرارداد روی همان رکورد (false یعنی خطا، ذخیره انجام نشود) */
+function _apexEmpCollect(personData) {
+    if (!personData || personData.category !== 'کارمند') return true;
+    var g = function (id) { var el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
+    var en = function (v) { try { return (typeof toEnglishDigits === 'function') ? toEnglishDigits(v) : v; } catch (e) { return v; } };
+    var ct = g('person-contract-type'), st = en(g('person-contract-start')), ed = en(g('person-contract-end'));
+    var sal = parseFloat(en(g('person-salary'))) || 0, sc = g('person-salary-cur') || _baseCur();
+    if (ct && ct !== 'ساعتوار') {
+        if (!(sal > 0)) { showMessage('خطا', 'مقدار معاشِ کارمند را وارد کنید.'); return false; }
+        if (!_empJParse(st)) { showMessage('خطا', 'تاریخِ «شروع قرار داد» را انتخاب کنید.'); return false; }
+    }
+    if (st && ed && _empJParse(st) && _empJParse(ed) && _empJToDayNum(_empJParse(ed)) < _empJToDayNum(_empJParse(st))) {
+        showMessage('خطا', 'تاریخِ «ختم قرار داد» نباید پیش از «شروع قرار داد» باشد.'); return false;
+    }
+    personData.jobPosition = g('person-job');
+    personData.contractType = ct;
+    personData.hireDate = st;
+    personData.contractEnd = ed;
+    personData.salary = sal;
+    personData.salaryCurrency = sc;
+    if (!personData.status) personData.status = 'active';
+    return true;
+}
+function apexEmpOpenPersonForm(editId) {
+    if (editId) { showPersonForm(editId); return; }
+    showPersonForm();
+    var c = document.getElementById('person-category');
+    if (c) { c.value = 'کارمند'; _apexPersonEmpMode(); }
+}
+/** «ثبت کارمند جدید» از داخلِ فیلدِ فورمِ پرداخت معاش / اضافه‌کاری — مثلِ آیکنِ ثبت شخص در بل */
+function apexEmpAddPerson(kind) {
+    var map = {
+        salary: { input: 'pay-to-search', hidden: 'pay-to', section: 'payment-form' },
+        ot:     { input: 'emp-ot-person-search', hidden: 'emp-ot-person', section: 'emp-overtime-form' }
+    };
+    var f = map[kind]; if (!f) return;
+    var inputEl = document.getElementById(f.input), hiddenEl = document.getElementById(f.hidden);
+    try { if (typeof _apexPsnClose === 'function') _apexPsnClose(); } catch (e) {}
+    _personPickerReturnSection = f.section;
+    _personPickerCallback = function (person) {
+        if (inputEl) inputEl.value = person.name || '';
+        if (hiddenEl) hiddenEl.value = person.id;
+    };
+    _personPickerCategory = null;
+    _activePickerState = { sectionId: 'persons-list', returnSectionId: f.section };
+    _apexQuickAdd = { kind: 'person', section: f.section };
+    showPersonForm();
+    var c = document.getElementById('person-category');
+    if (c) { c.value = 'کارمند'; _apexPersonEmpMode(); }
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) طلبِ خودکارِ معاش بر اساسِ قرارداد — «با گذشتِ زمان»
+//  ──────────────────────────────────────────────────────────────────────────────
+//  • ماهوار: با تمام‌شدنِ هر ماه از تاریخِ شروعِ قرارداد، یک ردیفِ «معاش» (= طلبِ کارمند).
+//    اگر قرارداد وسطِ یک ماه ختم شده باشد، همان ماهِ آخر به نسبتِ روزها.
+//  • روزوار: هر روزِ سپری‌شده (تا دیروز / تا ختمِ قرارداد) — در یک ردیف برای هر ماه.
+//  • ساعتوار: خودکار نیست؛ ساعت‌ها با فورمِ «ثبت اضافه کاری» ثبت می‌شوند.
+//  ردیف‌ها شناسهٔ ثابت (از روی کارمند + دوره) دارند تا دو دستگاه همان ردیف را بسازند و
+//  همگام‌سازی تکرار نسازد. تغییرِ قرارداد ردیف‌ها را دوباره و دقیق می‌سازد. پرداختِ معاش
+//  (مصرف) جداست و از این ردیف‌ها کم می‌کند؛ این ردیف‌ها خودشان مصرف حساب نمی‌شوند.
+// ════════════════════════════════════════════════════════════════════════════════
+// (توجه: کدِ سطحِ بالای این بخش اجرا نمی‌شود؛ فقط تعریفِ تابع‌ها معتبر است)
+function _afMonths() { return ['حمل', 'ثور', 'جوزا', 'سرطان', 'اسد', 'سنبله', 'میزان', 'عقرب', 'قوس', 'جدی', 'دلو', 'حوت']; }
+function _empEn(v) { try { return (typeof toEnglishDigits === 'function') ? toEnglishDigits(String(v == null ? '' : v)) : String(v == null ? '' : v); } catch (e) { return String(v == null ? '' : v); } }
+function _empJParse(s) {
+    var m = /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/.exec(_empEn(s));
+    if (!m) return null;
+    var y = +m[1], mo = +m[2], d = +m[3];
+    if (!(mo >= 1 && mo <= 12 && d >= 1 && d <= 31)) return null;
+    return [y, mo, d];
+}
+function _empJ2G(j) {
+    if (typeof jalaliToGregorian === 'function') return jalaliToGregorian(j[0], j[1], j[2]);
+    // پشتیبان: جستجو با تبدیلِ معکوسِ موجود
+    var guess = Date.UTC(j[0] + 621, 2, 21) / 86400000;
+    for (var k = -400; k <= 400; k++) {
+        var dt = new Date((guess + k) * 86400000);
+        var r = __hbG2J(dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate());
+        if (r[0] === j[0] && r[1] === j[1] && r[2] === j[2]) return [dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate()];
+    }
+    return [j[0] + 621, 1, 1];
+}
+function _empG2J(gy, gm, gd) {
+    return (typeof gregorianToJalali === 'function') ? gregorianToJalali(gy, gm, gd) : __hbG2J(gy, gm, gd);
+}
+function _empJToDayNum(j) { var g = _empJ2G(j); return Math.round(Date.UTC(g[0], g[1] - 1, g[2]) / 86400000); }
+function _empDayNumToJ(n) { var d = new Date(n * 86400000); return _empG2J(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate()); }
+function _empJMonthLen(y, m) {
+    if (m <= 6) return 31;
+    if (m <= 11) return 30;
+    var a = _empJToDayNum([y, 12, 1]), b = _empJToDayNum([y + 1, 1, 1]);
+    return b - a;
+}
+function _empJAddMonths(j, k) {
+    var y = j[0], m = j[1] - 1 + k;
+    y += Math.floor(m / 12); m = ((m % 12) + 12) % 12 + 1;
+    return [y, m, Math.min(j[2], _empJMonthLen(y, m))];
+}
+function _empPad(n) { return (n < 10 ? '0' : '') + n; }
+function _empJFmt(j) { return j[0] + '/' + _empPad(j[1]) + '/' + _empPad(j[2]); }
+function _empPeriodLabel(y, m) { return (_afMonths()[m - 1] || m) + ' ' + y; }
+function _empTodayJ() {
+    try { if (typeof getTodayJalali === 'function') { var t = _empJParse(getTodayJalali()); if (t) return t; } } catch (e) {}
+    try { var n = _nowJalaliDateTime(); var t2 = _empJParse(n); if (t2) return t2; } catch (e) {}
+    var d = new Date(); return _empG2J(d.getFullYear(), d.getMonth() + 1, d.getDate());
+}
+function _empAccId(empId, period) {
+    var s = 'empacc|' + empId + '|' + period, h1 = 0x811c9dc5, h2 = 0x01000193;
+    for (var i = 0; i < s.length; i++) {
+        var c = s.charCodeAt(i);
+        h1 = Math.imul(h1 ^ c, 16777619) >>> 0;
+        h2 = Math.imul(h2 ^ (c + 31 * i), 2246822519) >>> 0;
+    }
+    var v = (h1 * 1048576 + (h2 >>> 12)) % 900000000000000;
+    return 5000000000000000 + v;
+}
+/** دوره‌های سپری‌شدهٔ معاش یک کارمند: [{period, label, amount, dateJ}] */
+function _empAccrualPlan(emp, todayJ) {
+    var type = emp && emp.contractType;
+    var S = parseFloat(emp && emp.salary) || 0;
+    var st = _empJParse(emp && emp.hireDate);
+    if (!(S > 0) || !st || (type !== 'ماهوار' && type !== 'روزوار')) return [];
+    var en = _empJParse(emp.contractEnd);
+    var todayN = _empJToDayNum(todayJ), stN = _empJToDayNum(st), endN = en ? _empJToDayNum(en) : null;
+    var R = function (v) { return Math.round(v * 100) / 100; };
+    var out = [];
+    if (type === 'ماهوار') {
+        for (var k = 0; k < 1200; k++) {
+            var pS = _empJAddMonths(st, k), pE = _empJAddMonths(st, k + 1);
+            var pSN = _empJToDayNum(pS), pEN = _empJToDayNum(pE);
+            if (pSN > todayN) break;
+            if (endN != null && pSN > endN) break;
+            var per = pS[0] + '/' + _empPad(pS[1]);
+            if (endN != null && endN < pEN - 1) {
+                // قرارداد داخلِ همین ماه ختم شده: فقط وقتی آن روز سپری شده باشد، به نسبتِ روزها
+                if (endN < todayN) out.push({ period: per, label: _empPeriodLabel(pS[0], pS[1]), amount: R(S * (endN - pSN + 1) / (pEN - pSN)), dateJ: _empDayNumToJ(endN), days: endN - pSN + 1 });
+                break;
+            }
+            if (pEN <= todayN) out.push({ period: per, label: _empPeriodLabel(pS[0], pS[1]), amount: R(S), dateJ: pE });
+            else break;
+        }
+    } else {
+        var lastN = todayN - 1;
+        if (endN != null && endN < lastN) lastN = endN;
+        if (lastN < stN) return [];
+        var cur = [st[0], st[1]];
+        for (var g = 0; g < 1200; g++) {
+            var mS = _empJToDayNum([cur[0], cur[1], 1]);
+            var mE = mS + _empJMonthLen(cur[0], cur[1]) - 1;
+            var a = Math.max(stN, mS), b = Math.min(lastN, mE);
+            if (a > lastN) break;
+            if (b >= a) {
+                var days = b - a + 1;
+                out.push({ period: cur[0] + '/' + _empPad(cur[1]), label: _empPeriodLabel(cur[0], cur[1]), amount: R(S * days), dateJ: _empDayNumToJ(b), days: days });
+            }
+            cur = (cur[1] === 12) ? [cur[0] + 1, 1] : [cur[0], cur[1] + 1];
+        }
+    }
+    return out;
+}
+function _empSyncAccruals() {
+    if (_empSyncAccruals._busy) return false;
+    if (typeof db === 'undefined' || !db || !db.getPersons || !db.getTransactions) return false;
+    _empSyncAccruals._busy = true;
+    try {
+        var persons = db.getPersons() || [];
+        var txs = db.getTransactions() || [];
+        var todayJ = _empTodayJ();
+        var base = (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : 'AFN';
+        var desired = {};
+        persons.forEach(function (p) {
+            if (!p || p.category !== 'کارمند' || p.id == null) return;
+            _empAccrualPlan(p, todayJ).forEach(function (a) {
+                var id = _empAccId(p.id, a.period);
+                var dstr = _empJFmt(a.dateJ) + ' 12:00:00 AM';
+                desired[id] = {
+                    id: id, type: 'معاش', empAccrual: true, personId: p.id, personName: p.name || '',
+                    amount: a.amount, totalAmount: a.amount, currency: p.salaryCurrency || base,
+                    period: a.period, periodLabel: a.label, contractType: p.contractType, days: a.days || null,
+                    date: dstr, createdAt: dstr, status: 'انجام شد', cashboxId: null,
+                    description: 'معاشِ ' + a.label + ' (' + p.contractType + (a.days ? '، ' + a.days + ' روز' : '') + ')'
+                };
+            });
+        });
+        var changed = false, out = [];
+        txs.forEach(function (t) {
+            if (t && t.empAccrual) {
+                var d = desired[t.id];
+                if (!d) { changed = true; return; }
+                var same = (t.amount === d.amount && t.currency === d.currency && t.date === d.date && t.personName === d.personName &&
+                            t.personId == d.personId && t.description === d.description);
+                if (same) out.push(t); else { out.push(Object.assign({}, t, d)); changed = true; }
+                delete desired[t.id];
+                return;
+            }
+            out.push(t);
+        });
+        Object.keys(desired).forEach(function (k) { out.push(desired[k]); changed = true; });
+        if (changed) {
+            localStorage.setItem('transactions', JSON.stringify(out));
+            try { if (typeof _fifoProfitCache !== 'undefined' && _fifoProfitCache) { _fifoProfitCache.sig = null; _fifoProfitCache.maps = null; _fifoProfitCache.at = 0; } } catch (e) {}
+        }
+        return changed;
+    } catch (e) { return false; }
+    finally { _empSyncAccruals._busy = false; }
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) «ثبت اضافه کاری» — طلبِ کارمند به مبلغِ (ساعت × فی ساعت) یا مبلغِ ثابت
+// ════════════════════════════════════════════════════════════════════════════════
+function _empOtPeriods(selKey) {
+    var sel = document.getElementById('emp-ot-period');
+    if (!sel) return;
+    var t = _empTodayJ(), html = '';
+    for (var k = 11; k >= -1; k--) {
+        var j = _empJAddMonths([t[0], t[1], 1], -k);
+        var key = j[0] + '/' + _empPad(j[1]);
+        html += '<option value="' + key + '">دوره معاش: ' + _empPeriodLabel(j[0], j[1]) + '</option>';
+    }
+    sel.innerHTML = html;
+    var def = selKey || (t[0] + '/' + _empPad(t[1]));
+    if (!Array.prototype.some.call(sel.options, function (o) { return o.value === def; })) {
+        var pj = _empJParse(def + '/01');
+        if (pj) { var op = document.createElement('option'); op.value = def; op.textContent = 'دوره معاش: ' + _empPeriodLabel(pj[0], pj[1]); sel.insertBefore(op, sel.firstChild); }
+    }
+    sel.value = def;
+}
+function apexEmpOtRecalc() {
+    var ty = (document.getElementById('emp-ot-type') || {}).value || 'ساعتوار';
+    var hf = document.getElementById('emp-ot-hours-field');
+    if (hf) hf.style.display = (ty === 'ساعتوار') ? '' : 'none';
+    var rate = document.getElementById('emp-ot-rate');
+    if (rate) rate.placeholder = (ty === 'ساعتوار') ? 'فی ساعت' : 'مبلغ';
+    var h = parseFloat(_empEn((document.getElementById('emp-ot-hours') || {}).value)) || 0;
+    var r = parseFloat(_empEn((rate || {}).value)) || 0;
+    var tot = (ty === 'ساعتوار') ? h * r : r;
+    tot = Math.round(tot * 100) / 100;
+    var cur = (document.getElementById('emp-ot-cur') || {}).value || '';
+    var sp = document.querySelector('#emp-ot-total span');
+    if (sp) sp.textContent = (typeof formatNumber === 'function' ? formatNumber(tot) : tot) + (cur ? ' ' + cur : '');
+    return tot;
+}
+function apexEmpOtOpen(empId, editTx) {
+    var cur = document.querySelector('.section.active');
+    var dlg = (typeof _apexDlgIds === 'function') ? _apexDlgIds() : {};
+    var ret = (cur && !dlg[cur.id]) ? cur.id : 'persons-list';
+    window.__apexOt = { ret: ret, retPid: (ret === 'person-transactions-list') ? (empId || (editTx && editTx.personId)) : null, editId: editTx ? editTx.id : null };
+    var f = document.getElementById('empOvertimeForm'); if (f) f.reset();
+    var p = null, pid = editTx ? editTx.personId : empId;
+    if (pid != null) p = (db.getPersons() || []).find(function (x) { return x && x.id == pid; });
+    var set = function (id, v) { var el = document.getElementById(id); if (el) el.value = (v == null ? '' : v); };
+    set('emp-ot-person', p ? p.id : ''); set('emp-ot-person-search', p ? (p.name || '') : '');
+    _empOtPeriods(editTx ? editTx.periodKey : null);
+    try { if (typeof _populateCurrencySelect === 'function') _populateCurrencySelect('emp-ot-cur', (editTx && editTx.currency) || (p && p.salaryCurrency) || _baseCur()); } catch (e) {}
+    set('emp-ot-type', editTx ? (editTx.otType || 'ساعتوار') : 'ساعتوار');
+    set('emp-ot-hours', editTx && editTx.hours ? editTx.hours : '');
+    set('emp-ot-rate', editTx ? (editTx.otType === 'مبلغ ثابت' ? editTx.amount : (editTx.rate || '')) : '');
+    set('emp-ot-notes', editTx ? (editTx.description || '') : '');
+    var dt = document.getElementById('emp-ot-date');
+    if (dt) {
+        dt.value = editTx ? (editTx.date || '') : ((typeof _nowJalaliDateTime === 'function') ? _nowJalaliDateTime() : '');
+        if (!dt._dpAttached && typeof _attachDateTimePickerToInput === 'function') { try { _attachDateTimePickerToInput(dt); dt._dpAttached = true; } catch (e) {} }
+    }
+    var t = document.getElementById('emp-ot-title'); if (t) t.textContent = editTx ? 'ویرایش اضافه کاری' : 'ثبت اضافه کاری';
+    apexEmpOtRecalc();
+    showSection('emp-overtime-form');
+}
+function apexEmpOtBack() {
+    var st = window.__apexOt || {};
+    window.__apexOt = null;
+    var ret = st.ret || 'persons-list';
+    if (ret === 'person-transactions-list' && st.retPid != null && typeof showPersonTransactions === 'function') { showPersonTransactions(st.retPid); return; }
+    showSection(ret);
+    if (ret === 'persons-list' && typeof loadPersonsList === 'function') { try { loadPersonsList(); } catch (e) {} }
+}
+function apexEmpOtSave(ev) {
+    if (ev && ev.preventDefault) ev.preventDefault();
+    var st = window.__apexOt || {};
+    var pid = (document.getElementById('emp-ot-person') || {}).value;
+    var p = pid ? (db.getPersons() || []).find(function (x) { return x && String(x.id) === String(pid); }) : null;
+    if (!p) { showMessage('خطا', 'کارمند را از فهرست انتخاب کنید.'); return false; }
+    if (p.category !== 'کارمند') { showMessage('خطا', 'اضافه‌کاری فقط برای شخصی با کتگوریِ «کارمند» ثبت می‌شود.'); return false; }
+    var ty = (document.getElementById('emp-ot-type') || {}).value || 'ساعتوار';
+    var h = parseFloat(_empEn((document.getElementById('emp-ot-hours') || {}).value)) || 0;
+    var r = parseFloat(_empEn((document.getElementById('emp-ot-rate') || {}).value)) || 0;
+    if (ty === 'ساعتوار' && !(h > 0)) { showMessage('خطا', 'تعداد ساعت را وارد کنید.'); return false; }
+    var tot = apexEmpOtRecalc();
+    if (!(tot > 0)) { showMessage('خطا', ty === 'ساعتوار' ? 'فی ساعت را وارد کنید.' : 'مبلغ را وارد کنید.'); return false; }
+    var cur = (document.getElementById('emp-ot-cur') || {}).value || _baseCur();
+    var pk = (document.getElementById('emp-ot-period') || {}).value || '';
+    var pj = _empJParse(pk + '/01');
+    var date = _empEn(((document.getElementById('emp-ot-date') || {}).value || '').trim()) || ((typeof _nowJalaliDateTime === 'function') ? _nowJalaliDateTime() : '');
+    var base = (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : 'AFN';
+    var tx = {
+        type: 'اضافه کاری', personId: p.id, personName: p.name || '', amount: tot, totalAmount: tot, currency: cur,
+        otType: ty, hours: ty === 'ساعتوار' ? h : null, rate: ty === 'ساعتوار' ? r : null,
+        periodKey: pk, period: pj ? _empPeriodLabel(pj[0], pj[1]) : pk, date: date,
+        description: ((document.getElementById('emp-ot-notes') || {}).value || '').trim(), status: 'انجام شد',
+        cashboxId: null, rateUsed: _dayRateFor(cur), baseCurrency: base
+    };
+    if (st.editId) tx.id = st.editId;
+    var res = db.saveTransaction(tx);
+    if (res && res.success === false) { showMessage('خطا', res.error || 'ثبت ناموفق بود'); return false; }
+    try { addChangelog(st.editId ? 'ویرایش' : 'ثبت', 'اضافه کاری', tx, 'اضافه کاری ' + (p.name || '')); } catch (e) {}
+    showMessage('موفقیت', 'اضافه‌کاریِ ' + (p.name || '') + ' ' + (st.editId ? 'ویرایش' : 'ثبت') + ' شد.');
+    try { if (typeof loadDashboard === 'function') loadDashboard(); } catch (e) {}
+    try { if (typeof refreshOpenReport === 'function') refreshOpenReport(); } catch (e) {}
+    apexEmpOtBack();
+    return false;
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) کارمند در لیست‌ها، سه‌نقطه، مشخصات، ویرایش/حذف
+// ════════════════════════════════════════════════════════════════════════════════
+function _apexEmpKebabActions() {
+    return [
+        { icon: 'fa-money-check-dollar', color: '#16a34a', title: 'پرداخت معاش', action: 'emp-salary' },
+        { icon: 'fa-business-time', color: '#d97706', title: 'ثبت اضافه کاری', action: 'emp-overtime' },
+        { icon: 'fa-address-card', color: '#0ea5e9', title: 'مشخصات کارمند', action: 'person-detail' },
+        { icon: 'fa-list-alt', color: '#4f46e5', title: 'صورت حساب کارمند', action: 'transactions' },
+        { icon: 'fa-file-contract', color: '#0891b2', title: 'چاپ قرارداد خط', action: 'emp-contract' },
+        { icon: 'fa-file-alt', color: '#0ea5e9', title: 'گزارش حساب کارمند', action: 'report' },
+        { icon: 'fa-envelope', color: '#475569', title: 'ارسال پیام', action: 'send-message' },
+        { icon: 'fa-edit', color: '#334155', title: 'ویرایش', action: 'edit' },
+        { icon: 'fa-trash', color: '#dc2626', title: 'حذف', action: 'delete' }
+    ];
+}
+function _apexEmpTxTypeText(tx, def) {
+    if (!tx) return def;
+    if (tx.free) return tx.type === 'دریافت' ? 'دریافت آزاد' : 'پرداخت آزاد';
+    if (tx.salaryPay && tx.type === 'پرداخت') return 'پرداخت معاش';
+    if (tx.type === 'معاش') return 'معاش ' + (tx.periodLabel || '');
+    if (tx.type === 'اضافه کاری') return 'اضافه کاری' + (tx.period ? ' (' + tx.period + ')' : '');
+    return def;
+}
+function _apexEmpDetailHeader(person) {
+    var h = document.querySelector('#person-detail .pdc-header-titlewrap .bill-header-title');
+    if (h) h.textContent = (person && person.category === 'کارمند') ? 'مشخصات کارمند' : 'مشخصات شخص';
+}
+function _apexEmpDetailRows(person) {
+    if (typeof _pdRow !== 'function') return '';
+    var T = function (v) { return (typeof _pdText === 'function') ? _pdText(v) : (v || '—'); };
+    var sal = parseFloat(person.salary) || 0;
+    var r = '';
+    r += _pdRow('وظیفه', T(person.jobPosition));
+    r += _pdRow('نوع قرار داد', T(person.contractType));
+    r += _pdRow('شروع قرار داد', T(person.hireDate));
+    r += _pdRow('ختم قرار داد', T(person.contractEnd));
+    r += _pdRow('مقدار معاش', sal ? ((typeof formatNumber === 'function' ? formatNumber(sal) : sal) + ' ' + (person.salaryCurrency || _baseCur())) : '—');
+    return r;
+}
+function _apexEditRoute(tx) {
+    if (!tx) return false;
+    if (tx.type === 'معاش' && tx.empAccrual) {
+        showMessage('اطلاع', 'این ردیفِ معاش خودکار از روی قراردادِ کارمند محاسبه می‌شود. برای تغییرِ آن، قراردادِ کارمند (نوع، تاریخ یا مقدار معاش) را ویرایش کنید.');
+        return true;
+    }
+    if (tx.type === 'اضافه کاری') { apexEmpOtOpen(tx.personId, tx); return true; }
+    // لِنگِ «دریافت» یک پرداختِ معاش (پرداخت از طرفِ شخص دیگر) → ویرایشِ همان پرداختِ معاش
+    if (tx.type === 'دریافت' && tx.expenseGroup && String(tx.expenseGroup).indexOf('sal_') === 0) {
+        var pl = (db.getTransactions() || []).find(function (t) { return t && t.expenseGroup === tx.expenseGroup && t.type === 'پرداخت'; });
+        if (pl && typeof editTransaction === 'function') { editTransaction(pl.id); return true; }
+    }
+    return false;
+}
+function _apexDeleteGuard(id) {
+    var t = (db.getTransactions() || []).find(function (x) { return x && x.id == id; });
+    if (t && t.type === 'معاش' && t.empAccrual) {
+        showMessage('اطلاع', 'ردیفِ معاشِ خودکار حذف نمی‌شود؛ از روی قراردادِ کارمند ساخته می‌شود. برای تغییر، قرارداد را ویرایش کنید.');
+        return true;
+    }
+    return false;
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) چاپِ «قرارداد خط» کارمند — با لوگو و رنگِ فروشگاه، متنِ رسمیِ دری، جای امضا و شصت
+// ════════════════════════════════════════════════════════════════════════════════
+function _apexEmpEsc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function _apexEmpContractHtml(emp) {
+    var S = {}; try { S = (db.getSettings && db.getSettings()) || {}; } catch (e) {}
+    var navy = S.billPrimaryColor || '#1b2a4a';
+    var store = S.billStoreName || S.storeName || 'فروشگاه';
+    var logo = S.billLogo || S.storeLogo || '';
+    var phone = S.billPhone || S.storePhone || '', addr = S.billAddress || S.storeAddress || '';
+    var E = _apexEmpEsc, dash = '..................';
+    var today = ''; try { today = (typeof getTodayJalali === 'function') ? getTodayJalali() : _empJFmt(_empTodayJ()); } catch (e) { today = ''; }
+    var sal = parseFloat(emp.salary) || 0;
+    var salTxt = sal ? ((typeof formatNumber === 'function' ? formatNumber(sal) : sal) + ' ' + E(emp.salaryCurrency || _baseCur())) : dash;
+    var ct = emp.contractType || '';
+    var ctTxt = ct === 'ماهوار' ? 'ماهوار (برای هر ماه)' : (ct === 'روزوار' ? 'روزوار (برای هر روز کار)' : (ct === 'ساعتوار' ? 'ساعتوار (برای هر ساعت کار)' : dash));
+    var art = function (n, title, body) { return '<div class="art"><div class="art-h"><span class="art-n">' + n + '</span>' + title + '</div><p>' + body + '</p></div>'; };
+    var body =
+        art('مادهٔ اول', 'طرفینِ قرارداد',
+            'این قرارداد میان «<b>' + E(store) + '</b>» که از این پس «کارفرما» خوانده می‌شود، و محترم <b>' + E(emp.name || dash) + '</b>' +
+            (emp.idNumber ? ' دارندهٔ تذکرهٔ شمارهٔ <b>' + E(emp.idNumber) + '</b>' : '') +
+            (emp.phone ? ' به شمارهٔ تماس <b>' + E(emp.phone) + '</b>' : '') +
+            ' که از این پس «کارمند» خوانده می‌شود، بر بنیادِ رضایتِ کامل، صداقت و حسنِ نیتِ هر دو طرف بسته شد.') +
+        art('مادهٔ دوم', 'موضوعِ قرارداد',
+            'کارمند پذیرفته است که وظیفهٔ «<b>' + E(emp.jobPosition || dash) + '</b>» را با امانت‌داری، دقت و دلسوزی، مطابقِ رهنمودهای کارفرما و آیینِ کاری فروشگاه انجام دهد.') +
+        art('مادهٔ سوم', 'مدتِ قرارداد',
+            'اعتبارِ این قرارداد از تاریخ <b>' + E(emp.hireDate || dash) + '</b> آغاز می‌شود و ' +
+            (emp.contractEnd ? 'تا تاریخ <b>' + E(emp.contractEnd) + '</b> ادامه دارد.' : 'تا هنگامی که یکی از طرفین آن را مطابقِ مادهٔ ششم فسخ نکند، پابرجاست.')) +
+        art('مادهٔ چهارم', 'حق‌الزحمه',
+            'معاشِ کارمند به‌صورتِ <b>' + E(ctTxt) + '</b> به مبلغ <b dir="ltr">' + salTxt + '</b> تعیین گردید که با حساباتِ منظم و در وقتِ معین پرداخت می‌شود. اضافه‌کاری جداگانه سنجیده و پرداخت می‌گردد.') +
+        art('مادهٔ پنجم', 'تعهداتِ طرفین',
+            'کارمند در نگهداریِ اسرارِ تجارتی، پاسداری از اموال و اجناس، پابندی به اوقاتِ کاری و رفتارِ نیک با مشتریان کوشا خواهد بود. ' +
+            'کارفرما نیز پرداختِ به‌موقعِ معاش، فراهم‌ساختنِ محیطِ کاریِ امن و برخوردِ محترمانه را بر عهده می‌گیرد.') +
+        art('مادهٔ ششم', 'فسخِ قرارداد',
+            'هر یک از طرفین می‌تواند با آگاهیِ کتبیِ پانزده روز پیش، این قرارداد را فسخ نماید؛ حساباتِ کارمند تا روزِ فسخ به‌طورِ کامل تصفیه می‌گردد.') +
+        art('مادهٔ هفتم', 'اعتبار',
+            'این قرارداد در دو نسخهٔ هم‌سان ترتیب یافته و پس از امضا و شصتِ طرفین نافذ است؛ هر نسخه نزدِ یکی از طرفین نگه‌داری می‌شود.');
+    var css =
+        '@page{size:A4;margin:14mm}*{box-sizing:border-box}body{margin:0;font-family:Estedad,Vazirmatn,Tahoma,sans-serif;color:#1f2937;direction:rtl;background:#fff}' +
+        '.doc{max-width:182mm;margin:0 auto;border:2px solid ' + navy + ';border-radius:10px;padding:10mm 11mm;position:relative}' +
+        '.hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:3px double ' + navy + ';padding-bottom:10px}' +
+        '.hdr .st{font-size:22px;font-weight:900;color:' + navy + '}.hdr .sub{font-size:11.5px;color:#475569;margin-top:3px}' +
+        '.hdr img{max-height:62px;max-width:120px;object-fit:contain}' +
+        '.ttl{text-align:center;margin:12px 0 4px}.ttl .b{font-size:12px;color:#64748b}.ttl h1{margin:6px 0 2px;font-size:21px;color:#fff;background:' + navy + ';display:inline-block;padding:6px 26px;border-radius:999px}' +
+        '.meta{display:flex;justify-content:space-between;font-size:12px;color:#475569;margin:8px 0 10px}' +
+        '.art{margin:0 0 9px}.art-h{font-weight:800;color:' + navy + ';font-size:14px;margin-bottom:2px}.art-n{display:inline-block;background:' + navy + '14;color:' + navy + ';border-radius:6px;padding:1px 8px;margin-left:7px;font-size:12px}' +
+        'p{margin:0;line-height:2;font-size:13.2px;text-align:justify}' +
+        '.sig{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}.sb{border:1.5px dashed ' + navy + '88;border-radius:10px;padding:10px 12px;min-height:44mm;position:relative}' +
+        '.sb h4{margin:0 0 8px;color:' + navy + ';font-size:14px}.sb .ln{font-size:12.5px;margin:6px 0;color:#334155}' +
+        '.thumb{position:absolute;left:12px;bottom:10px;width:26mm;height:30mm;border:1.5px solid ' + navy + '66;border-radius:50% 50% 46% 46%;display:flex;align-items:flex-end;justify-content:center;font-size:11px;color:#64748b;padding-bottom:4px}' +
+        '.ft{text-align:center;font-size:11px;color:#94a3b8;margin-top:10px}';
+    var html = '<!DOCTYPE html><html dir="rtl" lang="fa"><head><meta charset="UTF-8"><title>قرارداد خط — ' + E(emp.name || '') + '</title><style>' + css + '</style></head><body><div class="doc">' +
+        '<div class="hdr"><div><div class="st">' + E(store) + '</div><div class="sub">' + E([addr, phone].filter(Boolean).join(' — ')) + '</div></div>' +
+        (logo ? '<img src="' + E(logo) + '" alt="">' : '') + '</div>' +
+        '<div class="ttl"><div class="b">بسم الله الرحمن الرحیم</div><h1>قرارداد خط کار</h1></div>' +
+        '<div class="meta"><span>تاریخ ترتیب: <b>' + E(today) + '</b></span><span>کارمند: <b>' + E(emp.name || '') + '</b></span></div>' +
+        body +
+        '<div class="sig">' +
+            '<div class="sb"><h4>کارمند</h4><div class="ln">نام: <b>' + E(emp.name || dash) + '</b></div><div class="ln">امضا: ' + dash + '</div><div class="thumb">شصت</div></div>' +
+            '<div class="sb"><h4>کارفرما</h4><div class="ln">از طرفِ: <b>' + E(store) + '</b></div><div class="ln">امضا و مهر: ' + dash + '</div></div>' +
+        '</div>' +
+        '<div class="ft">و من الله التوفیق</div>' +
+        '</div></body></html>';
+    return html;
+}
+function _apexEmpOpenContract(emp) {
+    var html = _apexEmpContractHtml(emp);
+    var title = 'قرارداد خط ' + (emp.name || '');
+    if (typeof __openPrintPreview === 'function') __openPrintPreview(html, { title: title, text: title, assets: true, topBar: true, pdfName: title });
+}
+/** از فورمِ ثبتِ شخص (همان مقادیرِ فعلیِ فورم، حتی پیش از ذخیره) */
+function apexEmpPrintContract() {
+    var g = function (id) { var el = document.getElementById(id); return el ? String(el.value || '').trim() : ''; };
+    var emp = {
+        name: g('person-name'), phone: g('person-phone'), idNumber: g('person-id'), jobPosition: g('person-job'),
+        contractType: g('person-contract-type'), hireDate: _empEn(g('person-contract-start')), contractEnd: _empEn(g('person-contract-end')),
+        salary: parseFloat(_empEn(g('person-salary'))) || 0, salaryCurrency: g('person-salary-cur')
+    };
+    if (!emp.name) { showMessage('خطا', 'نام کارمند را وارد کنید.'); return; }
+    _apexEmpOpenContract(emp);
+}
+/** از سه‌نقطهٔ کارمند (رکوردِ ذخیره‌شده) */
+function apexEmpPrintContractFor(id) {
+    var p = (db.getPersons() || []).find(function (x) { return x && x.id == id; });
+    if (p) _apexEmpOpenContract(p);
 }
