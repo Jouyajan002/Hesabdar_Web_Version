@@ -2,6 +2,7 @@
 <html lang="fa" dir="rtl">
 <head>
     <meta charset="UTF-8">
+    <script>/* (APEX) زبانِ انگلیسی: جهتِ صفحه پیش از نمایش (فقط وقتی English انتخاب شده) */try{if(localStorage.getItem('apexLang')==='en'){document.documentElement.setAttribute('lang','en');document.documentElement.setAttribute('dir','ltr');document.documentElement.className+=' apex-en';}}catch(e){}</script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>APEX Store Manager</title>
 
@@ -717,6 +718,9 @@
                             </button>
                             <button class="dash-topbar-menu nd-topbar-profile" id="nd-profile-btn" type="button" title="پروفایل کاربر" onclick="ndToggleProfile(event)">
                                 <i class="fas fa-circle-user"></i>
+                            </button>
+                            <button class="dash-topbar-menu nd-topbar-lang" id="nd-lang-btn" type="button" title="زبان / Language" onclick="if (typeof apexLangToggle === 'function') { apexLangToggle(event); }">
+                                <i class="fas fa-language"></i>
                             </button>
                         </div>
                         <span class="dash-topbar-datetime" id="dash-topbar-datetime"></span>
@@ -5482,6 +5486,8 @@
 
     <!-- اسکریپت‌ها -->
     <!-- (jouya-store.js به ابتدای <head> منتقل شد) -->
+    <!-- (APEX) زبان: دری / English — پیش از همهٔ اسکریپت‌ها تا متن‌ها و جهت پیش از نمایش آماده باشند -->
+    <script type="text/apex-boot" src="apex-i18n.js" onerror="console.warn('apex-i18n.js not found')"></script>
     <!-- کتابخانه‌های آفلاین از پوشه assets/js -->
     <script type="text/apex-boot" src="assets/js/jquery-3.6.0.min.js"></script>
     <script type="text/apex-boot" src="assets/js/chart.min.js"></script>

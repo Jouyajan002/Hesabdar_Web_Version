@@ -505,7 +505,130 @@
         } catch (_) {}
     }
 
+    /* ───────────────────────────────────────────────────────────────────────
+     * (APEX) «کشیدن به پایین برای تازه‌سازی» — فقط ویبِ موبایل و اپِ اندروید
+     *   • دکمهٔ تازه‌سازیِ کنارِ جستجوی داشبورد روی همین دو نسخه پنهان می‌شود.
+     *   • در داشبورد، وقتی صفحه در بالاترین نقطه است و کاربر به پایین می‌کشد و رها می‌کند،
+     *     همان کارِ دکمه (apexRefreshAll) با یک لودرِ کوتاه (کمتر از یک ثانیه) انجام می‌شود.
+     *   • نسخهٔ دسکتاپ (ویب/Tauri) هیچ تغییری نمی‌کند.
+     * ─────────────────────────────────────────────────────────────────────── */
+    function _ptrIsTauri() { try { return !!(window.__TAURI__ || window.__TAURI_INTERNALS__); } catch (_) { return false; } }
+    function _ptrEnabled() { return isMobile() && !_ptrIsTauri(); }
+    function _ptrSyncFlag() {
+        try { document.documentElement.classList.toggle('apex-ptr', _ptrEnabled()); } catch (_) {}
+    }
+    function _ptrStyle() {
+        if (document.getElementById('apex-ptr-style')) return;
+        var st = document.createElement('style');
+        st.id = 'apex-ptr-style';
+        st.textContent =
+            'html.apex-ptr .nd-refresh-btn{display:none !important}' +
+            'html.apex-ptr, html.apex-ptr body{overscroll-behavior-y:contain}' +
+            '#apex-ptr-ind{position:fixed;top:0;left:50%;z-index:2147483000;width:40px;height:40px;margin-left:-20px;border-radius:50%;' +
+            'background:#fff;color:var(--bill-navy,#1e3a5f);box-shadow:0 4px 14px rgba(15,23,42,.22);display:flex;align-items:center;justify-content:center;' +
+            'transform:translateY(-60px);opacity:0;pointer-events:none;transition:none}' +
+            '#apex-ptr-ind svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}' +
+            '#apex-ptr-ind.is-anim{transition:transform .22s ease,opacity .22s ease}' +
+            '#apex-ptr-ind.is-ready{color:#16a34a}' +
+            '#apex-ptr-ind.is-loading svg{animation:apexPtrSpin .6s linear infinite}' +
+            '@keyframes apexPtrSpin{to{transform:rotate(360deg)}}' +
+            'body.dark-mode #apex-ptr-ind{background:#1e293b;color:#e2e8f0}';
+        (document.head || document.documentElement).appendChild(st);
+    }
+    function _ptrInd() {
+        var el = document.getElementById('apex-ptr-ind');
+        if (!el) {
+            el = document.createElement('div');
+            el.id = 'apex-ptr-ind';
+            el.setAttribute('aria-hidden', 'true');
+            el.innerHTML = '<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.34 5.66"/><path d="M20 4v7h-7"/></svg>';
+            document.body.appendChild(el);
+        }
+        return el;
+    }
+    var _ptr = { y0: 0, x0: 0, pull: 0, active: false, busy: false };
+    var PTR_MAX = 110, PTR_TRIGGER = 70;
+    function _ptrCanStart(t) {
+        if (!_ptrEnabled() || _ptr.busy) return false;
+        var dash = document.getElementById('dashboard');
+        if (!dash || !dash.classList.contains('active')) return false;
+        if ((window.scrollY || document.documentElement.scrollTop || 0) > 0) return false;
+        if (document.querySelector('.floating-action-toolbar, .modal.show, .modal[style*="display: block"], .apex-dlg-backdrop.is-open')) return false;
+        // داخلِ فیلد، لیستِ کشویی یا ناحیه‌ای که خودش اسکرول دارد شروع نشود
+        var n = t;
+        while (n && n !== document.body) {
+            if (n.nodeType === 1) {
+                var tg = n.tagName;
+                if (tg === 'INPUT' || tg === 'TEXTAREA' || tg === 'SELECT') return false;
+                if (n.scrollTop > 0) return false;
+            }
+            n = n.parentNode;
+        }
+        return true;
+    }
+    function _ptrSet(px, anim) {
+        var el = _ptrInd();
+        el.classList.toggle('is-anim', !!anim);
+        var y = Math.min(PTR_MAX, px) - 50;
+        el.style.transform = 'translateY(' + y + 'px) rotate(' + Math.round(px * 3) + 'deg)';
+        el.style.opacity = String(Math.min(1, px / PTR_TRIGGER));
+        el.classList.toggle('is-ready', px >= PTR_TRIGGER);
+    }
+    function _ptrHide() {
+        var el = _ptrInd();
+        el.classList.add('is-anim');
+        el.classList.remove('is-loading', 'is-ready');
+        el.style.transform = 'translateY(-60px)';
+        el.style.opacity = '0';
+    }
+    function _ptrRun() {
+        _ptr.busy = true;
+        var el = _ptrInd();
+        el.classList.add('is-anim', 'is-loading');
+        el.classList.remove('is-ready');
+        el.style.transform = 'translateY(16px)';
+        el.style.opacity = '1';
+        var t0 = Date.now();
+        setTimeout(function () {
+            try { if (typeof window.apexRefreshAll === 'function') window.apexRefreshAll(null); } catch (_) {}
+            var wait = Math.max(0, 800 - (Date.now() - t0));   // مجموعِ لودر کمتر از یک ثانیه
+            setTimeout(function () { _ptrHide(); _ptr.busy = false; }, wait);
+        }, 60);
+    }
+    function _ptrStart(e) {
+        _ptr.active = false;
+        if (!e.touches || e.touches.length !== 1) return;
+        if (!_ptrCanStart(e.target)) return;
+        _ptr.y0 = e.touches[0].clientY; _ptr.x0 = e.touches[0].clientX; _ptr.pull = 0; _ptr.active = true;
+    }
+    function _ptrMove(e) {
+        if (!_ptr.active || !e.touches || e.touches.length !== 1) return;
+        var dy = e.touches[0].clientY - _ptr.y0, dx = e.touches[0].clientX - _ptr.x0;
+        if (_ptr.pull === 0 && (dy <= 0 || Math.abs(dx) > Math.abs(dy))) { if (dy < -4 || Math.abs(dx) > 8) _ptr.active = false; return; }
+        if ((window.scrollY || 0) > 0) { _ptr.active = false; _ptrHide(); return; }
+        _ptr.pull = Math.max(0, dy * 0.55);
+        if (_ptr.pull > 2) { _ptrSet(_ptr.pull, false); if (e.cancelable) e.preventDefault(); }
+    }
+    function _ptrEnd() {
+        if (!_ptr.active) return;
+        _ptr.active = false;
+        if (_ptr.pull >= PTR_TRIGGER) _ptrRun(); else if (_ptr.pull > 0) _ptrHide();
+        _ptr.pull = 0;
+    }
+    function setupPullToRefresh() {
+        if (setupPullToRefresh._done) return;
+        setupPullToRefresh._done = true;
+        _ptrStyle();
+        _ptrSyncFlag();
+        window.addEventListener('resize', _ptrSyncFlag);
+        document.addEventListener('touchstart', _ptrStart, { passive: true });
+        document.addEventListener('touchmove', _ptrMove, { passive: false });
+        document.addEventListener('touchend', _ptrEnd, { passive: true });
+        document.addEventListener('touchcancel', function () { if (_ptr.active) { _ptr.active = false; _ptrHide(); } }, { passive: true });
+    }
+
     function boot() {
+        try { setupPullToRefresh(); } catch (_) {}
         relocateDemoBadge();
         setupQuickListCollapse();
         setupInfoCardsCollapse();

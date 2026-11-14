@@ -5617,10 +5617,10 @@ function saveReceipt() {
     const destPersonName = (document.getElementById('receipt-dest-person-search') || {}).value || '';
     const expenseCategory = (document.getElementById('receipt-expense-category') || {}).value || '';
     const noTrack = !!(document.getElementById('receipt-notrack') && document.getElementById('receipt-notrack').checked);
-    // (APEX) «دریافت آزاد»: فقط خزانه اثر می‌گیرد؛ بیلانسِ شخص تغییر نمی‌کند
+    // (APEX) «دریافت آزاد»: بیلانسِ پرداخت‌کننده تغییر نمی‌کند؛ فقط مقصد (خزانه یا شخصِ دریافت‌کننده) اثر می‌گیرد
     const free = !noTrack && !!(document.getElementById('receipt-free') && document.getElementById('receipt-free').checked);
     const _baseC = (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : 'AFN';
-    if (free && destTab !== 'cashbox') { showMessage('خطا', '«دریافت آزاد» فقط با خزانه ممکن است.'); return; }
+    if (free && destTab === 'expense') { showMessage('خطا', '«دریافت آزاد» با تبِ «مصارف» ممکن نیست؛ خزانه یا اشخاص را انتخاب کنید.'); return; }
 
     if (amount <= 0) { showMessage('خطا', 'مبلغ معتبر وارد کنید.'); return; }
 
@@ -5710,8 +5710,11 @@ function saveReceipt() {
         //  transferSchema:2 نشانهٔ «ثبت‌شده با جهتِ درست» است تا ریکاردهای قدیمی یک‌بار
         //  به‌صورتِ خودکار اصلاح شوند و ریکاردهای جدید دوباره اصلاح نشوند.
         // لِنگِ پرداخت‌کننده A: پول از او خارج شده → «دریافت» (کسر از ماندهٔ A)
+        // (APEX) «دریافت آزاد»: لِنگِ A فقط به‌عنوانِ نام ثبت می‌شود (freePersonId) تا بیلانسِ A تغییر نکند؛
+        // لِنگِ B (دریافت‌کننده) مثلِ قبل اثر می‌گیرد — همان منطقِ «آزاد» با خزانه.
         db.saveTransaction({
-            type: 'دریافت', personId: parseInt(personId), personName, date, amount, currency,
+            type: 'دریافت', personId: free ? null : parseInt(personId), personName, date, amount, currency,
+            free: !!free, freePersonId: free ? parseInt(personId) : null,
             receiptType: type, reference, transferGroup: _tgrp, transferSchema: 2,
             counterpartyId: parseInt(destPersonId), counterpartyName: destPersonName,
             description: (description || '') + ' | انتقال به: ' + destPersonName, status: 'انجام شد',
@@ -5728,7 +5731,8 @@ function saveReceipt() {
         var _rf2 = document.getElementById('receiptForm'); if (_rf2) delete _rf2.dataset.editId;
         // پیامِ نتیجه دقیقاً جهتِ مالیِ ثبت‌شده را می‌گوید تا با ماندهٔ دو حساب هم‌خوان باشد:
         // پرداخت‌کننده طلبکار می‌شود و حسابِ دریافت‌کننده تسویه می‌گردد.
-        showMessage('موفقیت', 'انتقال ثبت شد: ' + personName + ' به مبلغ ' + amount + ' ' + currency + ' طلبکار شد و حسابِ ' + destPersonName + ' به همین مبلغ تسویه گردید.');
+        if (free) showMessage('موفقیت', 'دریافتِ آزاد ثبت شد: حسابِ ' + destPersonName + ' به مبلغ ' + amount + ' ' + currency + ' تسویه گردید؛ بیلانسِ ' + personName + ' تغییر نکرد.');
+        else showMessage('موفقیت', 'انتقال ثبت شد: ' + personName + ' به مبلغ ' + amount + ' ' + currency + ' طلبکار شد و حسابِ ' + destPersonName + ' به همین مبلغ تسویه گردید.');
         addChangelog('ثبت', 'دریافت', { fromId: personId, toId: destPersonId, amount: amount, currency: currency }, 'انتقال از ' + personName + ' به ' + destPersonName);
         if (typeof resetReceiptForm === 'function') resetReceiptForm();
         if (typeof loadDashboard === 'function') loadDashboard();
@@ -15187,14 +15191,14 @@ function generatePersonReport(personId) {
         e += '</table></body></html>';
         return e;
     }
-    const excelHtml = buildExcelHtml();
-    const excelName = 'گزارش-معاملات-' + (person.name || 'شخص');
+    let excelHtml = buildExcelHtml();
+    let excelName = 'گزارش-معاملات-' + (person.name || 'شخص');
 
     // مسیرِ پایه برای بارگذاریِ فونت و آیکن‌ها در پنجرهٔ گزارش
     var baseHref = '';
     try { baseHref = (location && location.href) ? location.href.replace(/[?#].*$/, '').replace(/[^\/]*$/, '') : ''; } catch (e) { baseHref = ''; }
 
-    const html = `<!DOCTYPE html>
+    let html = `<!DOCTYPE html>
 <html dir="rtl" lang="fa">
 <head>
     <meta charset="UTF-8">
@@ -15485,6 +15489,14 @@ function generatePersonReport(personId) {
 </div>
 </body>
 </html>`;
+
+    // (APEX) کارمند: همان قالب/سربرگ/دکمه‌ها، ولی محتوا از «صورت حسابِ کارمند» (معاش، اضافه‌کاری، پرداختِ معاش، …)
+    if (person.category === 'کارمند' && typeof _apexEmpReportTransform === 'function') {
+        try {
+            var _empRep = _apexEmpReportTransform(person, html, { fn: fn, esc: esc, navy: navy, gold: gold, onPrimary: onPrimary, reportDate: reportDate, reportTime: reportTime });
+            if (_empRep && _empRep.html) { html = _empRep.html; excelHtml = _empRep.excel || excelHtml; excelName = _empRep.name || excelName; }
+        } catch (_eRep) {}
+    }
 
     // اسکریپتِ پنجرهٔ گزارش: منوی اشتراک‌گذاری + دانلود PDF/اکسل (بدون template literal تا از تداخل جلوگیری شود)
     var scriptBlock = '<scr' + 'ipt>'
@@ -48740,6 +48752,7 @@ function _apexDlgBegin(target) {
 function _apexDlgApply(info) {
     Array.prototype.forEach.call(document.querySelectorAll('.section.apex-dlg, .section.apex-dlg-host'), function (el) {
         el.classList.remove('apex-dlg', 'apex-dlg-host', 'apex-dlg-lvl2');
+        try { if (typeof _apexDlgUnfit === 'function') _apexDlgUnfit(el); } catch (e) {}
     });
     try { document.body.classList.toggle('apex-dlg-open', !!(info && info.dialog)); } catch (e) {}
     if (!info || !info.dialog) return;
@@ -48754,6 +48767,7 @@ function _apexDlgApply(info) {
         el.style.display = 'flex';
     }
     try { _apexDlgInstall(); } catch (e) {}
+    try { if (typeof _apexDlgFitSoon === 'function') _apexDlgFitSoon(); } catch (e) {}
 }
 function _apexDlgInstall() {
     if (document.__apexDlgInstalled) return;
@@ -49450,9 +49464,10 @@ function _apexRpSync(kind) {
     if (kind === 'receipt') {
         if (typeof _toggleReceiptNoTrack === 'function') _toggleReceiptNoTrack();   // قفلِ کاملِ «بدون پیگیری»
         if (fr) {
-            if (typeof _receiptSwitchTab === 'function') _receiptSwitchTab('cashbox');
+            // «دریافت آزاد» با خزانه و اشخاص؛ فقط تبِ «مصارف» غیرفعال است
+            if (typeof _receiptSwitchTab === 'function' && (typeof _receiptDestTab !== 'undefined') && _receiptDestTab === 'expense') _receiptSwitchTab('cashbox');
             Array.prototype.forEach.call(document.querySelectorAll('#receipt-form .receipt-dest-tab'), function (t) {
-                t.disabled = (t.getAttribute('data-tab') !== 'cashbox');
+                t.disabled = (t.getAttribute('data-tab') === 'expense');
             });
         }
     } else {
@@ -49527,6 +49542,12 @@ function _apexReceiptEditRestore(tx) {
         var fr = document.getElementById('receipt-free'); if (fr) fr.checked = true;
     }
     _apexRpSync('receipt');
+}
+/** لِنگِ «پرداخت»ِ یک «دریافتِ آزاد» با تبِ اشخاص → ویرایش از همان فورمِ دریافتی (لِنگِ پرداخت‌کننده) */
+function _apexFreeTransferPayerLeg(tx) {
+    if (!tx || tx.type !== 'پرداخت' || !tx.transferGroup) return null;
+    var a = (db.getTransactions() || []).find(function (t) { return t && t.transferGroup === tx.transferGroup && t.type === 'دریافت' && t.free; });
+    return a || null;
 }
 function _apexPaymentEditRestore(tx) {
     if (!tx) return;
@@ -50140,6 +50161,8 @@ function _apexEditRoute(tx) {
         return true;
     }
     if (tx.type === 'اضافه کاری') { apexEmpOtOpen(tx.personId, tx); return true; }
+    var _fa = _apexFreeTransferPayerLeg(tx);
+    if (_fa && typeof editTransaction === 'function') { editTransaction(_fa.id); return true; }
     // لِنگِ «دریافت» یک پرداختِ معاش (پرداخت از طرفِ شخص دیگر) → ویرایشِ همان پرداختِ معاش
     if (tx.type === 'دریافت' && tx.expenseGroup && String(tx.expenseGroup).indexOf('sal_') === 0) {
         var pl = (db.getTransactions() || []).find(function (t) { return t && t.expenseGroup === tx.expenseGroup && t.type === 'پرداخت'; });
@@ -50241,4 +50264,269 @@ function apexEmpPrintContract() {
 function apexEmpPrintContractFor(id) {
     var p = (db.getPersons() || []).find(function (x) { return x && x.id == id; });
     if (p) _apexEmpOpenContract(p);
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) «گزارش حساب کارمند» — از تراکنش‌های صورت حسابِ کارمند (نه خرید/فروش)
+//  همان قالب، سربرگ، رنگ و دکمه‌های گزارشِ شخص؛ فقط بخش‌های محتوا مخصوصِ کارمند ساخته می‌شوند.
+//  قاعدهٔ علامت همان قاعدهٔ برنامه است: مثبت = کارمند باقیدار (پیش‌پرداخت)، منفی = طلبِ کارمند.
+// ════════════════════════════════════════════════════════════════════════════════
+function _apexEmpReportData(person) {
+    var all = db.getTransactions() || [];
+    var txs = all.filter(function (t) {
+        return t && (t.personId == person.id || t.customerId == person.id || t.supplierId == person.id ||
+            (t.free && t.freePersonId != null && t.freePersonId == person.id));
+    });
+    txs.sort(__hbRepAsc);
+    var base = _baseCur();
+    var rows = [], bal = {}, sum = {}, periods = {}, otHours = 0, accCount = 0;
+    var add = function (m, c, v) { m[c] = (m[c] || 0) + v; };
+    var S = function (c) { if (!sum[c]) sum[c] = { acc: 0, ot: 0, salPaid: 0, otherPaid: 0, recv: 0, sale: 0, purchase: 0, other: 0 }; return sum[c]; };
+    var P = function (k, c) { var key = k + '|' + c; if (!periods[key]) periods[key] = { period: k, cur: c, acc: 0, ot: 0, paid: 0 }; return periods[key]; };
+    var jm = function (d) { var m = /(\d{4})\/(\d{1,2})/.exec(_empEn(d || '')); return m ? (m[1] + '/' + _empPad(+m[2])) : ''; };
+    if (person.previousAccount) {
+        var pv = parseFloat(person.previousAccount) || 0, pc = person.currency || base;
+        if (pv) {
+            var pe = person.accountType === 'بدهکار' ? pv : (person.accountType === 'طلبکار' ? -pv : 0);
+            if (pe) { add(bal, pc, pe); rows.push({ date: person.createdAt || '', type: 'حساب قبلی', desc: person.accountType || '', cur: pc, credit: pe < 0 ? -pe : 0, debit: pe > 0 ? pe : 0, bal: bal[pc], notes: '' }); }
+        }
+    }
+    txs.forEach(function (tx) {
+        var c = tx.currency || base, amt = parseFloat(tx.totalAmount || tx.amount || 0) || 0, eff = 0, desc = '', det = '';
+        var typeText = (typeof _apexEmpTxTypeText === 'function') ? _apexEmpTxTypeText(tx, tx.type) : tx.type;
+        if (tx.type === 'صرافی') {
+            var fc = tx.fromCurrency || c, tc = tx.toCurrency || c, fa = parseFloat(tx.fromAmount || 0) || 0, ta = parseFloat(tx.toAmount || 0) || 0, cs = (tx.convSign != null ? tx.convSign : 1);
+            if (fa) { add(bal, fc, -cs * fa); rows.push({ date: tx.date, type: 'تبادله ارز', desc: fc + ' → ' + tc, cur: fc, credit: cs > 0 ? fa : 0, debit: cs < 0 ? fa : 0, bal: bal[fc], notes: tx.description || '' }); }
+            if (ta) { add(bal, tc, cs * ta); rows.push({ date: tx.date, type: 'تبادله ارز', desc: fc + ' → ' + tc, cur: tc, credit: cs < 0 ? ta : 0, debit: cs > 0 ? ta : 0, bal: bal[tc], notes: '' }); }
+            return;
+        }
+        var rem = (typeof calculateTxRemaining === 'function') ? calculateTxRemaining(tx) : (parseFloat(tx.remaining) || 0);
+        switch (tx.type) {
+            case 'معاش':
+                eff = -amt; S(c).acc += amt; accCount++; P(tx.period || jm(tx.date), c).acc += amt;
+                desc = 'معاش ' + (tx.periodLabel || '') + (tx.days ? ' — ' + tx.days + ' روز' : '');
+                det = tx.contractType || '';
+                break;
+            case 'اضافه کاری':
+                eff = -amt; S(c).ot += amt; P(tx.periodKey || jm(tx.date), c).ot += amt;
+                if (tx.hours) otHours += parseFloat(tx.hours) || 0;
+                desc = 'اضافه کاری' + (tx.period ? ' — دوره ' + tx.period : '');
+                det = tx.otType === 'ساعتوار' && tx.hours ? (tx.hours + ' ساعت × ' + ((typeof formatNumber === 'function') ? formatNumber(tx.rate || 0) : tx.rate)) : (tx.otType || '');
+                break;
+            case 'پرداخت':
+                eff = amt;
+                if (tx.salaryPay) { S(c).salPaid += amt; desc = 'پرداخت معاش'; }
+                else { S(c).otherPaid += amt; desc = 'پرداخت'; }
+                det = tx.counterpartyName ? ('از طرفِ: ' + tx.counterpartyName) : (tx.noTrack ? 'بدون پیگیری' : (tx.paymentType || ''));
+                break;
+            case 'دریافت':
+                eff = -amt; S(c).recv += amt; desc = 'دریافت از کارمند';
+                det = tx.receiptType || '';
+                break;
+            case 'فروش': eff = rem; S(c).sale += amt; desc = 'فروش' + (tx.invoiceNumber ? ' #' + tx.invoiceNumber : ''); break;
+            case 'خرید': eff = -rem; S(c).purchase += amt; desc = 'خرید' + (tx.invoiceNumber ? ' #' + tx.invoiceNumber : ''); break;
+            case 'برگشت':
+                if (tx.returnType === 'فروش') eff = -(tx.remaining != null ? parseFloat(tx.remaining) : amt);
+                else if (tx.returnType === 'خرید') eff = (tx.remaining != null ? parseFloat(tx.remaining) : amt);
+                S(c).other += amt; desc = 'برگشت'; break;
+            default: desc = tx.type || '';
+        }
+        if (tx.free) { eff = 0; det = (det ? det + ' — ' : '') + 'آزاد (بدونِ اثر بر حساب)'; }
+        add(bal, c, eff);
+        rows.push({ date: tx.date || tx.createdAt || '', type: typeText, desc: desc, det: det, cur: c, credit: eff < 0 ? -eff : 0, debit: eff > 0 ? eff : 0, amt: amt, bal: bal[c] || 0, notes: _stripReceiptAutoNote ? _stripReceiptAutoNote(tx.description || '') : (tx.description || ''), free: !!tx.free });
+    });
+    // پرداخت‌های معاش به ترتیبِ قدیمی‌ترین دوره تقسیم می‌شوند (FIFO) تا باقیِ هر ماه روشن باشد
+    Object.keys(sum).forEach(function (c) {
+        var pool = sum[c].salPaid || 0;
+        Object.keys(periods).filter(function (k) { return periods[k].cur === c; }).sort().forEach(function (k) {
+            var pr = periods[k], due = pr.acc + pr.ot, take = Math.min(due, pool);
+            pr.paid = Math.round(take * 100) / 100; pool -= take;
+        });
+        sum[c].advance = pool > 1e-7 ? pool : 0;
+    });
+    return { rows: rows, bal: bal, sum: sum, periods: periods, otHours: otHours, accCount: accCount, txCount: txs.length };
+}
+function _apexEmpBalLabel(b) { return b < -1e-7 ? 'طلب کارمند' : (b > 1e-7 ? 'باقیدار (پیش‌پرداخت)' : 'تسویه'); }
+function _apexEmpReportTransform(person, html, ctx) {
+    var fn = ctx.fn, esc = ctx.esc, navy = ctx.navy;
+    var D = _apexEmpReportData(person);
+    var sym = function (c) { return (typeof _curSymGlobal === 'function') ? _curSymGlobal(c) : c; };
+    var curLbl = function (c) { return (typeof _curLabelGlobal === 'function') ? _curLabelGlobal(c) : c; };
+    var sal = parseFloat(person.salary) || 0, scur = person.salaryCurrency || _baseCur();
+    var todayN = _empJToDayNum(_empTodayJ()), endJ = _empJParse(person.contractEnd);
+    var status = endJ && _empJToDayNum(endJ) < todayN ? 'قرارداد ختم شده' : 'فعال';
+    var fl = function (ic, l, v) { return '<div class="field-line"><span class="fi-ico"><i class="fas ' + ic + '"></i></span><span class="field-label">' + l + ' :</span> <span class="field-val">' + v + '</span></div>'; };
+    var info = '<div class="person-info-section"><div class="person-info-grid">' +
+        fl('fa-user', 'نام کارمند', esc(person.name || '---')) +
+        fl('fa-briefcase', 'وظیفه', esc(person.jobPosition || '---')) +
+        fl('fa-phone', 'شماره تماس', esc(person.phone || '---')) +
+        fl('fa-id-card', 'نمبر تذکره', esc(person.idNumber || '---')) +
+        fl('fa-file-contract', 'نوع قرار داد', esc(person.contractType || '---')) +
+        fl('fa-money-bill-wave', 'مقدار معاش', sal ? (fn(sal) + ' ' + esc(sym(scur)) + (person.contractType ? ' / ' + esc(person.contractType === 'ماهوار' ? 'ماه' : (person.contractType === 'روزوار' ? 'روز' : 'ساعت')) : '')) : '---') +
+        fl('fa-calendar-check', 'شروع قرار داد', esc(person.hireDate || '---')) +
+        fl('fa-calendar-xmark', 'ختم قرار داد', esc(person.contractEnd || '—')) +
+        fl('fa-circle-info', 'وضعیت', esc(status)) +
+        fl('fa-wallet', 'حساب قبلی', person.previousAccount ? (fn(person.previousAccount) + ' ' + esc(sym(person.currency || _baseCur())) + ' (' + esc(person.accountType || '') + ')') : '---') +
+        '</div></div>';
+    var codes = {}; Object.keys(D.sum).forEach(function (c) { codes[c] = 1; }); Object.keys(D.bal).forEach(function (c) { codes[c] = 1; });
+    if (!Object.keys(codes).length) codes[scur] = 1;
+    var card = function (ic, l, v, col, strong) {
+        return '<div class="summary-card"' + (strong ? ' style="border:1.5px solid ' + navy + ';background:#eef3fb;"' : '') + '><div class="s-label"' + (strong ? ' style="color:' + navy + ';font-weight:700;"' : '') + '><i class="fas ' + ic + '"></i> ' + l + '</div><div class="s-value" style="color:' + col + ';">' + v + '</div></div>';
+    };
+    var cards = card('fa-list-ol', 'تعداد ردیف‌های صورت حساب', fn(D.rows.length), '#334155') +
+        card('fa-calendar-days', 'دوره‌های معاشِ محاسبه‌شده', fn(D.accCount), '#334155') +
+        card('fa-business-time', 'مجموع ساعاتِ اضافه کاری', fn(D.otHours), '#334155');
+    Object.keys(codes).forEach(function (c) {
+        var s = D.sum[c] || { acc: 0, ot: 0, salPaid: 0, otherPaid: 0, recv: 0 }, b = D.bal[c] || 0, y = sym(c);
+        var bc = b < -1e-7 ? '#10b981' : (b > 1e-7 ? '#ef4444' : '#64748b');
+        cards += card('fa-money-bill-wave', 'مجموع معاشِ طلب‌شده (' + y + ')', fn(s.acc), '#0f766e') +
+            card('fa-business-time', 'مجموع اضافه کاری (' + y + ')', fn(s.ot), '#d97706') +
+            card('fa-money-check-dollar', 'مجموع پرداختِ معاش (' + y + ')', fn(s.salPaid), '#2563eb') +
+            card('fa-hand-holding-dollar', 'سایر پرداخت‌ها به کارمند (' + y + ')', fn(s.otherPaid), '#7c3aed') +
+            card('fa-hand-holding-usd', 'دریافت از کارمند (' + y + ')', fn(s.recv), '#8b5cf6') +
+            card('fa-balance-scale', 'بیلانس نهایی ' + curLbl(c), fn(Math.abs(b)) + ' ' + y + ' <small style="font-size:9px;">(' + _apexEmpBalLabel(b) + ')</small>', bc, true);
+    });
+    var summary = '<div class="summary-section"><div class="summary-grid">' + cards + '</div></div>';
+    // جدولِ صورت حساب (جدیدترین در بالا، مانده‌ها به ترتیبِ زمان ساخته شده‌اند)
+    var trs = '';
+    var shown = D.rows.slice().reverse();
+    shown.forEach(function (r, i) {
+        var bc = r.bal < -1e-7 ? '#10b981' : (r.bal > 1e-7 ? '#ef4444' : '#64748b');
+        var tb = /معاش/.test(r.type) && !/پرداخت/.test(r.type) ? '#0f766e' : (/اضافه/.test(r.type) ? '#d97706' : (/پرداخت/.test(r.type) ? '#2563eb' : (/دریافت/.test(r.type) ? '#8b5cf6' : '#64748b')));
+        trs += '<tr' + (i % 2 ? ' class="rep-alt"' : '') + '>' +
+            '<td>' + (i + 1) + '</td>' +
+            '<td>' + esc(String(r.date || '').replace(/\s+/, ' ')) + '</td>' +
+            '<td><span class="type-badge" style="background:' + tb + ';">' + esc(r.type) + '</span></td>' +
+            '<td class="c-desc">' + esc(r.desc || '') + (r.det ? '<small class="emp-det">' + esc(r.det) + '</small>' : '') + '</td>' +
+            '<td class="emp-cr">' + (r.credit ? fn(r.credit) + ' ' + esc(sym(r.cur)) : '—') + '</td>' +
+            '<td class="emp-db">' + (r.debit ? fn(r.debit) + ' ' + esc(sym(r.cur)) : (r.free ? fn(r.amt) + ' ' + esc(sym(r.cur)) + '<small class="emp-det">بدونِ اثر</small>' : '—')) + '</td>' +
+            '<td style="color:' + bc + ';font-weight:700;">' + fn(Math.abs(r.bal)) + ' ' + esc(sym(r.cur)) + '<small class="emp-det">' + _apexEmpBalLabel(r.bal) + '</small></td>' +
+            '<td class="c-more">' + esc(r.notes || '') + '</td>' +
+            '</tr>';
+    });
+    if (!trs) trs = '<tr><td colspan="8" style="padding:14px;color:#64748b;">هنوز هیچ ردیفی در صورت حسابِ این کارمند ثبت نشده است.</td></tr>';
+    var fin = '';
+    Object.keys(codes).forEach(function (c) {
+        var b = D.bal[c] || 0, bc = b < -1e-7 ? '#10b981' : (b > 1e-7 ? '#ef4444' : '#64748b');
+        fin += '<tr class="final-row" style="background:' + (b > 0 ? '#fef2f2' : '#f0fdf4') + ';border-top:2px solid ' + bc + ';"><td colspan="6" style="text-align:right;font-weight:800;">بیلانس نهاییِ کارمند (' + esc(curLbl(c)) + ')</td>' +
+            '<td colspan="2" style="color:' + bc + ';font-weight:900;">' + fn(Math.abs(b)) + ' ' + esc(sym(c)) + ' — ' + _apexEmpBalLabel(b) + '</td></tr>';
+    });
+    var table = '<div class="emp-sec-title"><i class="fas fa-list-alt"></i> صورت حسابِ کارمند</div>' +
+        '<table class="items-table"><thead><tr>' +
+        '<th style="width:4%">ردیف</th><th style="width:13%"><i class="fas fa-calendar-alt"></i>تاریخ</th><th style="width:11%"><i class="fas fa-exchange-alt"></i>نوع</th>' +
+        '<th style="width:20%"><i class="fas fa-align-right"></i>شرح / دوره</th><th style="width:11%"><i class="fas fa-arrow-down"></i>طلبِ کارمند</th>' +
+        '<th style="width:11%"><i class="fas fa-arrow-up"></i>پرداخت به کارمند</th><th style="width:12%"><i class="fas fa-balance-scale"></i>مانده</th><th style="width:18%"><i class="fas fa-info-circle"></i>ملاحظات</th>' +
+        '</tr></thead><tbody>' + trs + '</tbody><tbody class="final-group">' + fin + '</tbody></table>';
+    // خلاصهٔ ماه‌به‌ماه
+    var pk = Object.keys(D.periods).sort().reverse(), ptr = '';
+    pk.forEach(function (k, i) {
+        var p = D.periods[k], due = p.acc + p.ot, diff = due - p.paid;
+        ptr += '<tr' + (i % 2 ? ' class="rep-alt"' : '') + '><td>' + esc(_empPeriodLabelFromKey(p.period)) + '</td><td>' + fn(p.acc) + '</td><td>' + fn(p.ot) + '</td><td style="font-weight:700;">' + fn(due) + '</td><td>' + fn(p.paid) + '</td>' +
+            '<td style="color:' + (diff > 1e-7 ? '#10b981' : '#64748b') + ';font-weight:700;">' + (diff > 1e-7 ? fn(diff) + ' (باقی)' : 'تسویه') + '</td><td>' + esc(curLbl(p.cur)) + '</td></tr>';
+    });
+    var ptable = pk.length ? ('<div class="emp-sec-title"><i class="fas fa-calendar-days"></i> خلاصهٔ ماه‌به‌ماه (معاش، اضافه کاری و پرداخت)</div>' +
+        '<table class="items-table emp-ptable"><thead><tr><th>دوره</th><th>معاش</th><th>اضافه کاری</th><th>مجموع طلب</th><th>پرداخت‌شده (از قدیمی‌ترین ماه)</th><th>باقی</th><th>ارز</th></tr></thead><tbody>' + ptr +
+        (function () { var ad = ''; Object.keys(D.sum).forEach(function (c) { if (D.sum[c].advance) ad += '<tr style="background:#fef2f2;font-weight:700;"><td colspan="5" style="text-align:right;">پیش‌پرداخت (بیشتر از طلبِ ماه‌ها)</td><td style="color:#ef4444;">' + fn(D.sum[c].advance) + '</td><td>' + esc(curLbl(c)) + '</td></tr>'; }); return ad; })() +
+        '</tbody></table>') : '';
+    var css = '<style>.items-table td small.emp-det{display:block;font-size:8.5px;color:#64748b;font-weight:normal;margin-top:1px}' +
+        '.items-table .emp-cr{color:#0f766e;font-weight:700}.items-table .emp-db{color:#2563eb;font-weight:700}' +
+        '.emp-sec-title{background:#f0f3f7;color:' + navy + ';font-weight:800;font-size:12px;padding:7px 18px;border-top:1px solid #c8d0da;border-bottom:1px solid #c8d0da;display:flex;align-items:center;gap:7px}' +
+        '.emp-ptable{margin-bottom:0}</style>';
+    var a = html.indexOf('<div class="person-info-section">'), b = html.indexOf('<div class="bill-ft">');
+    if (a < 0 || b < 0) return null;
+    var out = html.slice(0, a) + info + summary + table + ptable + '\n    ' + html.slice(b);
+    out = out.replace('<div class="val">معاملات شخص</div>', '<div class="val">حساب کارمند</div>')
+             .replace('<title>گزارش معاملات - ', '<title>گزارش حساب کارمند - ')
+             .replace('</head>', css + '</head>');
+    // اکسل
+    var E = function (v) { return esc(v == null ? '' : v); };
+    var x = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="UTF-8"></head><body dir="rtl"><table border="1" style="border-collapse:collapse;font-family:Tahoma;">';
+    x += '<tr><td colspan="8" style="text-align:center;font-weight:bold;font-size:14pt;">گزارش حساب کارمند — ' + E(person.name) + '</td></tr>';
+    x += '<tr><td colspan="8" style="text-align:center;">تاریخ: ' + E(ctx.reportDate) + ' | ساعت: ' + E(ctx.reportTime) + '</td></tr>';
+    x += '<tr><td>وظیفه</td><td>' + E(person.jobPosition) + '</td><td>نوع قرار داد</td><td>' + E(person.contractType) + '</td><td>شروع</td><td>' + E(person.hireDate) + '</td><td>ختم</td><td>' + E(person.contractEnd) + '</td></tr>';
+    x += '<tr><td>مقدار معاش</td><td>' + E(sal) + ' ' + E(scur) + '</td><td>تذکره</td><td>' + E(person.idNumber) + '</td><td>تماس</td><td>' + E(person.phone) + '</td><td>وضعیت</td><td>' + E(status) + '</td></tr>';
+    x += '<tr style="background:#1b2a4a;color:#fff;font-weight:bold;"><td>ردیف</td><td>تاریخ</td><td>نوع</td><td>شرح / دوره</td><td>طلبِ کارمند</td><td>پرداخت به کارمند</td><td>مانده</td><td>ملاحظات</td></tr>';
+    shown.forEach(function (r, i) {
+        x += '<tr><td>' + (i + 1) + '</td><td>' + E(r.date) + '</td><td>' + E(r.type) + '</td><td>' + E(r.desc) + (r.det ? ' (' + E(r.det) + ')' : '') + '</td><td>' + (r.credit || '') + '</td><td>' + (r.debit || '') + '</td><td>' + Math.abs(r.bal) + ' ' + E(r.cur) + ' — ' + _apexEmpBalLabel(r.bal) + '</td><td>' + E(r.notes) + '</td></tr>';
+    });
+    Object.keys(codes).forEach(function (c) { var bb = D.bal[c] || 0; x += '<tr style="font-weight:bold;"><td colspan="6">بیلانس نهایی (' + E(c) + ')</td><td colspan="2">' + Math.abs(bb) + ' ' + E(c) + ' — ' + _apexEmpBalLabel(bb) + '</td></tr>'; });
+    x += '</table></body></html>';
+    return { html: out, excel: x, name: 'گزارش-حساب-کارمند-' + (person.name || 'کارمند') };
+}
+function _empPeriodLabelFromKey(k) { var j = _empJParse(String(k || '') + '/01'); return j ? _empPeriodLabel(j[0], j[1]) : String(k || ''); }
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) جاشدنِ فورم‌های پنجره‌ای در ارتفاعِ صفحه (وبِ دسکتاپ و Tauri) — بدونِ اسکرول
+//  ۱) اگر فورم بلندتر از صفحه بود: حالتِ فشرده (apex-dlg-tight)  ۲) اگر باز هم جا نشد: zoom
+//  هر تغییرِ محتوا (باز شدنِ «بیشتر»، حالتِ کارمند، تب‌ها) و تغییرِ اندازهٔ پنجره دوباره سنجیده می‌شود.
+// ════════════════════════════════════════════════════════════════════════════════
+function _apexDlgFormOf(sec) { return sec ? (sec.querySelector(':scope > form, :scope > .bill-form') || sec.firstElementChild) : null; }
+function _apexDlgUnfit(sec) {
+    if (!sec) return;
+    sec.classList.remove('apex-dlg-tight');
+    var f = _apexDlgFormOf(sec);
+    if (f && f.__apexZoom) { f.style.zoom = ''; f.__apexZoom = 0; }
+}
+function _apexDlgFitOne(sec) {
+    var f = _apexDlgFormOf(sec);
+    if (!f || !sec.classList.contains('apex-dlg')) return;
+    if (_apexDlgFitOne._busy) return;
+    _apexDlgFitOne._busy = true;
+    try {
+        f.style.zoom = ''; f.__apexZoom = 0;
+        sec.classList.remove('apex-dlg-tight');
+        var cs = getComputedStyle(sec);
+        var padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+        var avail = sec.clientHeight - padV - 2;
+        var h = f.getBoundingClientRect().height;
+        if (!(avail > 100) || h <= avail) return;
+        sec.classList.add('apex-dlg-tight');
+        cs = getComputedStyle(sec);
+        padV = (parseFloat(cs.paddingTop) || 0) + (parseFloat(cs.paddingBottom) || 0);
+        avail = sec.clientHeight - padV - 2;
+        h = f.getBoundingClientRect().height;
+        var z = 1;
+        for (var k = 0; k < 4 && h > avail && z > 0.6; k++) {
+            z = Math.max(0.6, Math.floor((z * avail / h) * 1000) / 1000 - 0.004);
+            f.style.zoom = String(z); f.__apexZoom = z;
+            h = f.getBoundingClientRect().height;
+        }
+    } catch (e) {}
+    finally { _apexDlgFitOne._busy = false; }
+}
+function _apexDlgFitAll() {
+    Array.prototype.forEach.call(document.querySelectorAll('.section.apex-dlg'), function (sec) {
+        _apexDlgFitOne(sec);
+        _apexDlgObserve(sec);
+    });
+}
+function _apexDlgFitSoon() {
+    clearTimeout(_apexDlgFitSoon._t1); clearTimeout(_apexDlgFitSoon._t2);
+    var run = function () { try { _apexDlgFitAll(); } catch (e) {} };
+    try { requestAnimationFrame(run); } catch (e) { setTimeout(run, 0); }
+    _apexDlgFitSoon._t1 = setTimeout(run, 260);
+    _apexDlgFitSoon._t2 = setTimeout(run, 700);
+    if (!_apexDlgFitSoon._resize) {
+        _apexDlgFitSoon._resize = true;
+        window.addEventListener('resize', function () { clearTimeout(_apexDlgFitSoon._tr); _apexDlgFitSoon._tr = setTimeout(run, 80); });
+    }
+}
+function _apexDlgObserve(sec) {
+    if (!sec || sec.__apexFitObs || typeof MutationObserver === 'undefined') return;
+    sec.__apexFitObs = true;
+    var t = null;
+    try {
+        new MutationObserver(function (muts) {
+            if (_apexDlgFitOne._busy || !sec.classList.contains('apex-dlg')) return;
+            // تغییراتِ خودِ fit (zoom/کلاسِ tight) نادیده گرفته شود
+            var real = false;
+            for (var i = 0; i < muts.length; i++) {
+                var m = muts[i];
+                if (m.type === 'attributes' && (m.target === sec || (m.target === _apexDlgFormOf(sec) && m.attributeName === 'style'))) continue;
+                real = true; break;
+            }
+            if (!real) return;
+            clearTimeout(t); t = setTimeout(function () { _apexDlgFitOne(sec); }, 60);
+        }).observe(sec, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
+    } catch (e) {}
 }

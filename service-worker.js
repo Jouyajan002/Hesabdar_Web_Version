@@ -19,7 +19,7 @@
 // (v1.0.10) هر ۹ وزنِ Estedad درونِ خودِ estedad.css جاسازی شد (دیگر فایلِ فونتِ جدا لازم نیست).
 // (v1.0.11) تنظیمات بل/مرکز اعلانات (اورلی)، چاپِ بل، سایدبار، نسخهٔ آزمایشی و قفلِ لایسنس.
 // (v1.0.12) قفلِ لیسنس با زمانِ یکنواخت (ضدِ عقب‌بردنِ تاریخ) و نسخهٔ آزمایشیِ یک‌هفته‌ای.
-var SW_VERSION = 'jouya-v1.0.26';
+var SW_VERSION = 'jouya-v1.0.27';
 var CACHE = SW_VERSION;
 
 // فهرستِ هستهٔ اپ — پیش‌ذخیره (best-effort؛ نبودِ یک فایل نصب را خراب نمی‌کند)
@@ -65,6 +65,7 @@ var CORE = [
   './mobile-fit.js',
   './jouya-selftest.js',
   './jouya-ux-fixes.js',
+  './apex-i18n.js',
   './pwa-register.js',
   // آیکن‌ها
   './assets/icons/icon-192.png',

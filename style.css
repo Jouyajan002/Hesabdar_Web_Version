@@ -11219,3 +11219,32 @@ body.dark-mode #person-form.apex-dlg .apex-more-link { color: #cbd5e1; }
 .apex-emp-ot-total b { font-weight: 800; }
 .apex-emp-ot-total span { direction: ltr; unicode-bidi: isolate; font-weight: 700; }
 body.dark-mode .apex-emp-ot-total { color: #e2e8f0; }
+
+/* ════════════════════════════════════════════════════════════════════════════
+   (APEX) جاشدنِ فورم‌های پنجره‌ای در ارتفاعِ صفحه (وبِ دسکتاپ و Tauri)
+   وقتی فورم از ارتفاعِ صفحه بلندتر باشد، JS کلاسِ apex-dlg-tight را می‌گذارد (فاصله‌ها و
+   ارتفاعِ فیلدها فشرده‌تر)؛ اگر باز هم جا نشد، کلِ فورم با zoom کوچک می‌شود تا بدونِ اسکرول
+   کامل دیده شود. موبایل و اندروید (بدونِ پنجره) تغییری نمی‌کنند.
+   ════════════════════════════════════════════════════════════════════════════ */
+.section.apex-dlg.apex-dlg-tight { padding: 10px 14px !important; }
+.section.apex-dlg.apex-dlg-tight .bill-header-bar { padding: 9px 18px !important; }
+.section.apex-dlg.apex-dlg-tight .bill-body { padding: 10px 16px 2px; gap: 8px; }
+.section.apex-dlg.apex-dlg-tight .apex-stack,
+.section.apex-dlg.apex-dlg-tight .bill-receive-row,
+.section.apex-dlg.apex-dlg-tight .bill-top-row { gap: 8px !important; }
+.section.apex-dlg.apex-dlg-tight .bill-field,
+.section.apex-dlg.apex-dlg-tight .bill-receive-field,
+.section.apex-dlg.apex-dlg-tight .bill-inline-field { min-height: 44px !important; }
+.section.apex-dlg.apex-dlg-tight .bill-field > input,
+.section.apex-dlg.apex-dlg-tight .bill-field .search-wrapper > input,
+.section.apex-dlg.apex-dlg-tight .bill-inline-field > input { padding-top: 9px !important; padding-bottom: 9px !important; }
+.section.apex-dlg.apex-dlg-tight .bill-inline-field { padding-top: 2px !important; padding-bottom: 2px !important; }
+.section.apex-dlg.apex-dlg-tight .bill-field select,
+.section.apex-dlg.apex-dlg-tight .bill-inline-field select:not(.apex-amt-cur) { padding-top: 6px !important; padding-bottom: 6px !important; }
+.section.apex-dlg.apex-dlg-tight .bill-field-textarea { padding-top: 8px !important; padding-bottom: 8px !important; }
+.section.apex-dlg.apex-dlg-tight .bill-footer { padding: 2px 0 10px 0; }
+.section.apex-dlg.apex-dlg-tight .bill-footer button { min-height: 40px !important; padding-top: 8px !important; padding-bottom: 8px !important; }
+.section.apex-dlg.apex-dlg-tight .apex-rp-pills .apex-rp-pill,
+.section.apex-dlg.apex-dlg-tight .receipt-dest-tab { padding-top: 4px !important; padding-bottom: 4px !important; }
+.section.apex-dlg.apex-dlg-tight .bill-camera-wrap,
+.section.apex-dlg.apex-dlg-tight .apex-psn-camera { transform-origin: center top; }
