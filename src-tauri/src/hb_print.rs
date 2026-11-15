@@ -10,11 +10,18 @@
 //!
 //! نکتهٔ سازگاری: اینترفیسِ کنترلر از طریقِ «اشاره‌گرِ خامِ COM» به نسخهٔ webview2-com همین فایل
 //! منتقل می‌شود؛ پس نسخهٔ webview2-com این فایل لازم نیست با نسخه‌ای که Tauri استفاده می‌کند یکی باشد.
+//!
+//! ویندوز ۱۱: پنجرهٔ چاپِ «قدیمی» (همان پنجرهٔ ویندوز ۱۰ با دکمهٔ Preferences) با تنظیمِ کاربریِ
+//! HKCU\Software\Microsoft\Print\UnifiedPrintDialog → PreferLegacyPrintDialog=1 برمی‌گردد.
+//! این تنظیم «فقط هنگامِ چاپِ APEX» روشن و چند ثانیه بعد به مقدارِ قبلیِ خودش برگردانده می‌شود تا
+//! برنامه‌های دیگرِ ویندوز تغییری نبینند. در ویندوز ۱۰ این کلید اثری ندارد و بی‌خطر است.
 
 #[tauri::command]
 pub async fn hb_print_system(window: tauri::WebviewWindow) -> Result<bool, String> {
     #[cfg(target_os = "windows")]
     {
+        // ویندوز ۱۱: پنجرهٔ قدیمیِ چاپ فقط برای همین چاپ (مقدارِ قبلی چند ثانیه بعد برمی‌گردد)
+        legacy::prefer_legacy_for_a_moment();
         let (tx, rx) = std::sync::mpsc::channel::<bool>();
         window
             .with_webview(move |wv| {
@@ -67,4 +74,70 @@ mod imp {
             Err(_) => false,
         }
     }
+}
+
+/// پنجرهٔ چاپِ قدیمیِ ویندوز ۱۱ — فقط هنگامِ چاپِ APEX (بدونِ وابستگیِ تازه؛ با reg.exe و بدونِ پنجرهٔ کنسول)
+#[cfg(target_os = "windows")]
+mod legacy {
+    use std::os::windows::process::CommandExt;
+    use std::process::Command;
+
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    const KEY: &str = r"HKCU\Software\Microsoft\Print\UnifiedPrintDialog";
+    const VAL: &str = "PreferLegacyPrintDialog";
+    /// مدتِ روشن‌ماندنِ تنظیم: پنجرهٔ چاپ در همین فاصله ساخته می‌شود و تنظیم را می‌خواند
+    const RESTORE_AFTER_SECS: u64 = 8;
+
+    fn reg(args: &[&str]) -> Option<std::process::Output> {
+        Command::new("reg").args(args).creation_flags(CREATE_NO_WINDOW).output().ok()
+    }
+
+    /// مقدارِ فعلیِ PreferLegacyPrintDialog (None یعنی این مقدار وجود ندارد)
+    fn read() -> Option<u32> {
+        let out = reg(&["query", KEY, "/v", VAL])?;
+        if !out.status.success() {
+            return None;
+        }
+        super::parse_reg_dword(&String::from_utf8_lossy(&out.stdout), VAL)
+    }
+
+    fn write(v: u32) {
+        let d = v.to_string();
+        let _ = reg(&["add", KEY, "/v", VAL, "/t", "REG_DWORD", "/d", &d, "/f"]);
+    }
+
+    pub fn prefer_legacy_for_a_moment() {
+        let prev = read();
+        if prev == Some(1) {
+            return; // از قبل روشن است (توسطِ کاربر یا چاپِ قبلیِ APEX) → دست نمی‌زنیم
+        }
+        write(1);
+        std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_secs(RESTORE_AFTER_SECS));
+            match prev {
+                None => {
+                    let _ = reg(&["delete", KEY, "/v", VAL, "/f"]);
+                }
+                Some(v) => write(v),
+            }
+        });
+    }
+}
+
+/// خواندنِ مقدارِ REG_DWORD از خروجیِ «reg query» (مثلاً «    PreferLegacyPrintDialog    REG_DWORD    0x1»)
+#[allow(dead_code)]
+fn parse_reg_dword(text: &str, name: &str) -> Option<u32> {
+    for line in text.lines() {
+        let mut parts = line.split_whitespace();
+        if parts.next() != Some(name) {
+            continue;
+        }
+        if parts.next() != Some("REG_DWORD") {
+            continue;
+        }
+        let raw = parts.next()?;
+        let hex = raw.trim_start_matches("0x").trim_start_matches("0X");
+        return u32::from_str_radix(hex, 16).ok();
+    }
+    None
 }
