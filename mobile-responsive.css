@@ -1413,9 +1413,41 @@ body:has(#dashboard.section.active) #financial.section.active { display: none !i
     #service-form .bill-field:has(#service-date-to)   { order: 8; }
     #service-form .bill-field:has(#service-notes)     { order: 9; }
     #service-form .bill-field                          { order: 10; }   /* هر فیلدِ دیگر، آخر */
+    /* (APEX) چیدمانِ «خدمت جدید» مثلِ «ثبت شخص»: همهٔ فیلدها تمام‌عرض و یک‌اندازه،
+       «اطلاعات بیشتر» پیش از دکمهٔ «ثبت» (دکمه همیشه آخر). فقط موبایل؛ دسکتاپ دست‌نخورده. */
+    #service-form .product-grid { align-items: stretch !important; gap: 11px !important; }
+    #service-form .product-grid .bill-field,
+    #service-form .service-notes-field { width: 100% !important; max-width: none !important; align-self: stretch !important; box-sizing: border-box !important; margin: 0 !important; }
+    #service-form .product-grid .bill-field > select,
+    #service-form .product-grid .bill-field > input { width: 100% !important; flex: 1 1 auto !important; }
+    #service-form .bill-body { display: flex !important; flex-direction: column !important; gap: 11px !important; }
+    #service-form .bill-body > .product-grid   { order: 1 !important; }
+    #service-form .bill-body > .service-notes-field { order: 2 !important; }
+    #service-form .bill-body > .bill-footer    { order: 3 !important; }
 }
 
 /* آیکنِ تاریخ که حالا خودش تقویم را باز می‌کند — در همهٔ اندازه‌ها */
 .bill-field-icon-btn { cursor: pointer; transition: opacity .15s; }
 .bill-field-icon-btn:hover { opacity: .7; }
 .bill-field-icon-btn:focus-visible { outline: 2px solid var(--bill-navy, #1e3a5f); outline-offset: 2px; border-radius: 4px; }
+
+/* (APEX) لیست‌های برگشت از فروش/خرید و سفارشات — موبایل عیناً مثلِ «لیست خدمات» */
+@media (max-width: 600px) {
+    #sales-returns-list .list-header-filter,
+    #purchase-returns-list .list-header-filter,
+    #proforma-list .list-header-filter {
+        padding-left: 16px !important; padding-right: 16px !important;
+        margin-left: -16px !important; margin-right: -16px !important;
+        column-gap: 10px !important;
+    }
+    #sales-returns-list .person-fab-add,
+    #purchase-returns-list .person-fab-add,
+    #proforma-list .person-fab-add {
+        font-size: 0 !important; gap: 0 !important; padding: 0 !important;
+        width: 56px !important; height: 56px !important; border-radius: 50% !important;
+        justify-content: center !important;
+    }
+    #sales-returns-list .person-fab-add > i,
+    #purchase-returns-list .person-fab-add > i,
+    #proforma-list .person-fab-add > i { font-size: 1.25rem !important; margin: 0 !important; }
+}

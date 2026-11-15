@@ -11248,3 +11248,117 @@ body.dark-mode .apex-emp-ot-total { color: #e2e8f0; }
 .section.apex-dlg.apex-dlg-tight .receipt-dest-tab { padding-top: 4px !important; padding-bottom: 4px !important; }
 .section.apex-dlg.apex-dlg-tight .bill-camera-wrap,
 .section.apex-dlg.apex-dlg-tight .apex-psn-camera { transform-origin: center top; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   (APEX) سایدبارِ تنظیمات: آیکن‌های «زبان» و «حالت تاریک» — کمی بالاتر از عنوانِ
+   «تنظیمات» و کنارِ لبهٔ سایدبار (در همهٔ نسخه‌ها)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.settings-sidebar .ssb-header { position: relative; }
+.ssb-top-tools {
+    position: absolute; top: 6px; left: 10px; z-index: 3;
+    display: flex; align-items: center; gap: 6px;
+}
+.ssb-tool-btn {
+    width: 32px; height: 32px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255,255,255,0.06); color: #cbd5e1; cursor: pointer; padding: 0;
+    display: inline-flex; align-items: center; justify-content: center; font-size: 15px;
+    transition: background .2s, color .2s, border-color .2s;
+}
+.ssb-tool-btn:hover, .ssb-tool-btn:focus-visible { background: rgba(255,255,255,0.14); color: #fff; outline: none; }
+.ssb-tool-btn.is-on { background: rgba(250,204,21,0.16); border-color: rgba(250,204,21,0.45); color: #facc15; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   (APEX) «لیست برگشت از فروش»، «لیست برگشت از خرید» و «لیست سفارشات» — هدر، جستجو،
+   آیکن‌های برگشت/فلتر/مرتب‌سازی، ردیف‌های کارتی و دکمهٔ شناور عیناً مثلِ «لیست خدمات»
+   ═══════════════════════════════════════════════════════════════════════════ */
+#sales-returns-list .list-header-filter,
+#purchase-returns-list .list-header-filter,
+#proforma-list .list-header-filter {
+    background: #1e3a5f !important;
+    border-bottom: none !important;
+    padding: 14px 30px;
+    margin-left: -30px !important;
+    margin-right: -30px !important;
+    gap: 14px;
+    box-shadow: 0 2px 8px rgba(0,0,0,.12);
+}
+#sales-returns-list .section-title-in-filter,
+#purchase-returns-list .section-title-in-filter,
+#proforma-list .section-title-in-filter { color: #fff; font-size: 1.15rem; font-weight: 800; }
+#sales-returns-list .section-title-in-filter .btn-back-header,
+#purchase-returns-list .section-title-in-filter .btn-back-header,
+#proforma-list .section-title-in-filter .btn-back-header {
+    background: rgba(255,255,255,.14) !important; border: none !important; box-shadow: none !important;
+}
+#sales-returns-list .section-title-in-filter .btn-back-header:hover,
+#purchase-returns-list .section-title-in-filter .btn-back-header:hover,
+#proforma-list .section-title-in-filter .btn-back-header:hover {
+    background: rgba(255,255,255,.26) !important; transform: none !important;
+}
+#sales-returns-list .section-title-in-filter .btn-back-header i,
+#purchase-returns-list .section-title-in-filter .btn-back-header i,
+#proforma-list .section-title-in-filter .btn-back-header i { color: #fff !important; }
+#sales-returns-list .filter-icon-btn,
+#purchase-returns-list .filter-icon-btn,
+#proforma-list .filter-icon-btn {
+    background: rgba(255,255,255,.14); border: none; color: #fff;
+    width: 38px; height: 38px; border-radius: 9px; cursor: pointer; font-size: 17px;
+    display: inline-flex; align-items: center; justify-content: center; transition: background .15s;
+}
+#sales-returns-list .filter-icon-btn:hover,
+#purchase-returns-list .filter-icon-btn:hover,
+#proforma-list .filter-icon-btn:hover { background: rgba(255,255,255,.26); }
+#global-search-sales-returns-list,
+#global-search-purchase-returns-list,
+#global-search-proforma-list { background: #fff !important; border: 1px solid #fff !important; color: #1e293b !important; }
+#global-search-sales-returns-list::placeholder,
+#global-search-purchase-returns-list::placeholder,
+#global-search-proforma-list::placeholder { color: #94a3b8; }
+#sales-returns-list.section,
+#purchase-returns-list.section,
+#proforma-list.section { animation: listFadeOpacityOnly 0.3s ease-out !important; }
+#sales-returns-list .persons-cards-container,
+#purchase-returns-list .persons-cards-container,
+#proforma-list .persons-cards-container {
+    overflow: visible !important; overflow-x: visible !important; overflow-y: visible !important;
+    border: none !important; background: transparent !important; box-shadow: none !important;
+    border-radius: 0 !important; margin-top: 10px !important; padding: 2px 2px 160px 2px !important;
+}
+#sales-returns-list .person-fab-add,
+#purchase-returns-list .person-fab-add,
+#proforma-list .person-fab-add {
+    position: fixed !important; bottom: 90px !important; left: 20px !important;
+    z-index: 1100 !important; animation: none !important;
+}
+#sales-returns-list .person-card-row,
+#purchase-returns-list .person-card-row,
+#proforma-list .person-card-row { display: block !important; }
+#sales-returns-list .person-card-row[style*="display: none"],
+#sales-returns-list .person-card-row[style*="display:none"],
+#purchase-returns-list .person-card-row[style*="display: none"],
+#purchase-returns-list .person-card-row[style*="display:none"],
+#proforma-list .person-card-row[style*="display: none"],
+#proforma-list .person-card-row[style*="display:none"] { display: none !important; }
+/* کارتِ همین لیست‌ها = کارتِ خدمت با ستون‌های بیشتر (دسکتاپ)؛ موبایل همان قاعدهٔ کارتِ خدمت */
+@media (min-width: 761px) {
+    .person-card.svc-card.apex-rl-card { grid-template-columns: 1.35fr 1fr 1fr 1.1fr 1.25fr .75fr auto; }
+}
+.apex-rl-card .person-card-main { min-width: 0; }
+.apex-rl-badge {
+    display: inline-flex; align-items: center; margin-inline-start: 8px; padding: 2px 9px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; white-space: nowrap; background: #e2e8f0; color: #334155;
+}
+.apex-rl-badge.is-ok { background: #dcfce7; color: #166534; }
+.apex-rl-badge.is-wait { background: #fef3c7; color: #92400e; }
+.apex-rl-badge.is-bad { background: #fee2e2; color: #991b1b; }
+body.dark-mode .apex-rl-badge { background: #334155; color: #e2e8f0; }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   (APEX) «ثبت سفارش» = همان بل فروش در حالتِ سفارش (پیش‌پرداخت به‌جای دریافتی)
+   ═══════════════════════════════════════════════════════════════════════════ */
+.apex-order-only { display: none !important; }
+#sales-form.apex-order-mode .apex-order-only { display: flex !important; margin-bottom: 10px; }
+#sales-form.apex-order-mode #sales-delivery-btn,
+#sales-form.apex-order-mode #sales-print-btn,
+#sales-form.apex-order-mode .bill-inline-iconbtn[onclick*="billToggleReceiveEdit"],
+#sales-form.apex-order-mode #sales-receive-edit { display: none !important; }

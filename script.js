@@ -2921,6 +2921,10 @@ function showSection(sectionId) {
     //   وگرنه از بالا). این قاعده برای همهٔ بخش‌های اسکرول‌شونده یکسان است.
     // (APEX) خروج از پنجرهٔ فرم (دسکتاپ) → برگشت به همان صفحه‌ای که پنجره روی آن باز شده بود
     try { if (typeof _apexDlgRedirect === 'function') sectionId = _apexDlgRedirect(sectionId); } catch (_e) {}
+    // (APEX) خروج از بل فروش → پایانِ «حالتِ سفارش/تکمیل سفارش»
+    try { if (window.__apexOrder && sectionId !== 'sales-form' && typeof _apexOrderExit === 'function') _apexOrderExit(); } catch (_e) {}
+    // (APEX) نسخهٔ نصبی: با رفتن به بخشِ دیگر، پنجرهٔ چاپِ ویندوز پشتِ برنامه باز نماند
+    try { if (window.__hbPrintOpen && typeof __hbCloseTauriPrintWindow === 'function') { window.__hbPrintOpen = false; __hbCloseTauriPrintWindow(); } } catch (_e) {}
     // (APEX) «ثبت جنس» از داخلِ فورمِ ورودی/خروجی: ناوبری به جای دیگر یعنی پایانِ آن حالت
     try { if (window.__padjQuickAdd && sectionId !== 'product-form' && sectionId !== 'product-adj-form') window.__padjQuickAdd = null; } catch (_e) {}
     // (APEX) حالتِ «پرداخت معاش» فقط تا وقتی کاربر روی همان فورم (یا ثبتِ کارمند از داخلِ آن) است
@@ -3108,7 +3112,7 @@ if (headerFilter) {
             titleText = 'لیست برگشت از خرید';
             break;
         case 'proforma-list':
-            titleText = 'لیست پیش سفارش‌ها';
+            titleText = 'لیست سفارشات';
             break;
         case 'changelog-list':
             titleText = 'لیست آخرین تغییرات';
@@ -3488,7 +3492,7 @@ if (pageHeader) pageHeader.style.display = (sectionId === 'dashboard') ? 'block'
                     loadPurchaseReturnsList();
                     break;
                 case 'proforma-list':
-                    pageTitle.textContent = 'لیست پیش سفارش‌ها';
+                    pageTitle.textContent = 'لیست سفارشات';
                     loadProformaList();
                     break;
                 case 'changelog-list':
@@ -4082,6 +4086,8 @@ function saveProduct() {
 // ==========================================================================
 
 function saveSale() {
+    // (APEX) «ثبت سفارش» از همین فورم: سفارش ذخیره می‌شود، نه فروش
+    if (window.__apexOrder && window.__apexOrder.mode === 'order' && typeof _apexOrderSave === 'function') { _apexOrderSave(); return; }
     const customerId = document.getElementById('qs-customer').value;
     const customerInput = document.getElementById('qs-customer-search');
     const customerName = (customerInput && customerInput.value) ? customerInput.value : 'مشتری عمومی';
@@ -4336,9 +4342,18 @@ function saveSale() {
             status: remaining > 0 ? 'باقی‌مانده' : 'تسویه‌شده',
             createdAt: new Date().toISOString()
         };
+        // (APEX) «تکمیل سفارش»: پیوندِ فروش با سفارش و پیش‌پرداختِ آن (فقط نمایش در بل؛ پیش‌پرداخت قبلاً در حساب ثبت است)
+        try {
+            if (window.__apexOrder && window.__apexOrder.mode === 'complete') {
+                transaction.orderId = window.__apexOrder.orderId;
+                transaction.orderBillNumber = window.__apexOrder.orderBill || '';
+                if (window.__apexOrder.advance > 0 && window.__apexOrder.advanceCurrency === currency) transaction.orderAdvance = window.__apexOrder.advance;
+            }
+        } catch (_e) {}
 
         const result = db.saveTransaction(transaction);
         if (result.success !== false) {
+            try { if (window.__apexOrder && typeof _apexOrderCompleted === 'function') _apexOrderCompleted(result.data || transaction); } catch (_e) {}
             // ثبت در لاگ معاملات حساب (بدون updateCashboxBalance مجدد — database.js این کار را کرده)
             if (typeof _logCashboxTransaction === 'function' && cashboxId && (cashAfn > 0 || cashUsd > 0 || cashForeign > 0)) {
                 var paidAmount = _isForeignSale ? cashForeign : cashAfn;
@@ -6053,6 +6068,7 @@ function showProductForm(productId = null, opts = null) {
 }
 
 function showSalesForm() {
+    try { if (typeof _apexOrderExit === 'function') _apexOrderExit(); } catch (_e) {}   // (APEX) فروشِ عادی
     // بازکردن از دکمهٔ سریع → پس از ثبت/برگشت به داشبورد برگردد
     _setFormReturn({ section: 'dashboard' });
     resetSalesForm();
@@ -9407,9 +9423,18 @@ function calculateRemaining() {
         }
 
         const remaining = grandTotal - totalPaid;
+        // (APEX) «تکمیل سفارش»: نمایشِ باقی پس از پیش‌پرداختِ قبلی (فقط نمایش؛ مقدارِ ذخیره‌شده همان قبلی)
+        var _ordAdv = 0; try { if (typeof _apexOrderAdvNow === 'function') _ordAdv = _apexOrderAdvNow(); } catch (_e) {}
+        var _shownRem = remaining - _ordAdv;
 
         if (remainingStatus) {
             var _curFa = (typeof getCurrencyLabel === 'function') ? getCurrencyLabel(currency) : currency;
+            var _advTxt = _ordAdv > 0 ? ('پیش‌پرداختِ سفارش: ' + formatNumber(_ordAdv) + ' — ') : '';
+            if (_ordAdv > 0) {
+                if (_shownRem > 0.000001) { remainingStatus.textContent = _advTxt + 'باقی‌مانده: ' + formatNumber(_shownRem) + ' ' + _curFa; remainingStatus.style.color = 'var(--danger, #ef4444)'; }
+                else if (_shownRem < -0.000001) { remainingStatus.textContent = _advTxt + 'اضافه پرداخت: ' + formatNumber(Math.abs(_shownRem)) + ' ' + _curFa; remainingStatus.style.color = 'var(--warning, #f59e0b)'; }
+                else { remainingStatus.textContent = _advTxt + 'تسویه کامل'; remainingStatus.style.color = 'var(--success, #10b981)'; }
+            } else
             if (remaining > 0) {
                 remainingStatus.textContent = 'باقی‌مانده: ' + formatNumber(remaining) + ' ' + _curFa;
                 remainingStatus.style.color = 'var(--danger, #ef4444)';
@@ -9441,7 +9466,9 @@ function toggleFullPayment(checkbox) {
     if (checkbox.checked) {
         // دریافت مبلغ نهایی و پر کردن خودکار
         const _gtEl = document.getElementById('sales-grand-total');
-        const grandTotal = _gtEl ? (parseFloat(_gtEl.dataset.raw) || parseFormattedNumber(_gtEl.textContent)) : 0;
+        let grandTotal = _gtEl ? (parseFloat(_gtEl.dataset.raw) || parseFormattedNumber(_gtEl.textContent)) : 0;
+        // (APEX) «تکمیل سفارش»: تسویهٔ کامل = مجموع − پیش‌پرداختِ قبلی
+        try { if (typeof _apexOrderAdvNow === 'function') grandTotal = Math.max(0, grandTotal - _apexOrderAdvNow()); } catch (_e) {}
         const currencySelect = document.getElementById('sales-currency');
         const currency = currencySelect ? currencySelect.value : _baseCur();
         const cashForeignInput = document.getElementById('sales-cash-foreign');
@@ -12455,8 +12482,12 @@ function generateProfessionalInvoiceHTML(transaction, settings, printSettings) {
         _totRowsHtml += _totRow('بیلانس قبلی', _prevBal);
         if (Math.abs(_prevBal) > 0.000001) _totRowsHtml += _totRow('مجموع کل', _prevBal + _dir * _grandTotal);
     }
+    // (APEX) فروشِ حاصل از «تکمیل سفارش»: پیش‌پرداختِ سفارش (قبلاً دریافت‌شده) پیش از پرداختی می‌آید.
+    //  با «بیلانس قبلی» نیازی نیست، چون پیش‌پرداخت در همان بیلانسِ قبلی حساب شده است.
+    var _ordAdvP = (!isReturn && !isPurchase && _prevBal === null) ? (parseFloat(transaction.orderAdvance) || 0) : 0;
+    if (_ordAdvP > 0) _totRowsHtml += _totRow('پیش‌پرداخت سفارش', _ordAdvP);
     _totRowsHtml += _totRow('پرداختی', _paid);
-    _totRowsHtml += _totRow('باقیمانده', (_prevBal !== null) ? (_prevBal + _dir * (_grandTotal - _paid)) : _remaining);
+    _totRowsHtml += _totRow('باقیمانده', (_prevBal !== null) ? (_prevBal + _dir * (_grandTotal - _paid)) : (_remaining - _ordAdvP));
 
     // (APEX) حاشیه‌های چهارطرفِ ورق (تنظیمات بل › اندازه و رنگ بل) — خالی = حاشیهٔ استندردِ قبلی
     try { css += _apexBillMarginCss(S, pageWidth, '.bill'); } catch (e) {}
@@ -14291,12 +14322,37 @@ function __hbOpenTauriPrintWindow(docHtml, title, opts) {
             }
         } catch (e) { reopened = false; }
         if (!reopened) open();
+        try { window.__hbPrintOpen = true; } catch (e) {}
 
         return true;
     } catch (e) {
         try { console.warn('[hb-print] بازگشت به چاپِ مستقیم:', e && e.message); } catch (_) {}
         return false;
     }
+}
+
+// =============================================================================
+//  __hbCloseTauriPrintWindow — بستنِ پنجرهٔ واسطِ چاپ (و پنجرهٔ چاپِ ویندوزِ وابسته به آن)
+//  فقط نسخهٔ نصبی؛ در وب/اندروید هیچ کاری نمی‌کند. وقتی کاربر از پیش‌نمایش برمی‌گردد یا
+//  بخشِ دیگری را باز می‌کند، تنظیماتِ چاپ پشتِ برنامه باز نمی‌ماند.
+// =============================================================================
+function __hbCloseTauriPrintWindow() {
+    try {
+        if (!(typeof __jouyaIsTauri === 'function' && __jouyaIsTauri())) return false;
+        var T = window.__TAURI__;
+        var WVW = T && T.webviewWindow && T.webviewWindow.WebviewWindow;
+        if (!WVW || typeof WVW.getByLabel !== 'function') return false;
+        var p = WVW.getByLabel('hb-print');
+        var shut = function (w) {
+            if (!w) return;
+            try { if (typeof w.destroy === 'function') { var d = w.destroy(); if (d && typeof d.catch === 'function') d.catch(function () { try { w.close(); } catch (e) {} }); return; } } catch (e) {}
+            try { if (typeof w.close === 'function') w.close(); } catch (e) {}
+        };
+        try { window.__hbPrintOpen = false; } catch (e) {}
+        if (p && typeof p.then === 'function') p.then(shut).catch(function () {});
+        else shut(p);
+        return true;
+    } catch (e) { return false; }
 }
 
 // =============================================================================
@@ -14535,7 +14591,9 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
                 try { var d2 = frame.contentWindow.document; if (pdfName) d2.title = pdfName; } catch (e) {}
                 try { frame.contentWindow.focus(); frame.contentWindow.print(); } catch (e) { try { window.print(); } catch (_) {} }
             };
-            if (typeof __hbOpenTauriPrintWindow === 'function' && __hbOpenTauriPrintWindow(doc, pdfName, { system: !!meta.systemPrint, onFallback: _fb })) {
+            // (APEX) نسخهٔ نصبی: همهٔ چاپ‌ها (بل، رسید، گزارش، بارکد) مثلِ چاپِ بارکد فقط «پنجرهٔ چاپِ ویندوز»
+            //  را نشان می‌دهند؛ پنجرهٔ اضافیِ پیش‌نمایش باز نمی‌شود (پیش‌نمایش همین اورلی است).
+            if (typeof __hbOpenTauriPrintWindow === 'function' && __hbOpenTauriPrintWindow(doc, pdfName, { system: true, onFallback: _fb })) {
                 if (b) { b.style.transform = pt; b.style.width = pw; }
                 try { console.log('[jouya-preview] print window opened'); } catch (_) {}
                 return;
@@ -14672,6 +14730,8 @@ function __ppOpenMobileOverlay(rawHtml, assetsHead, extraCss, meta) {
 
     function close() {
         closeShareMenu();
+        // (APEX) با برگشت از پیش‌نمایش، پنجرهٔ چاپِ ویندوز (اگر باز مانده) هم‌زمان بسته شود
+        try { if (typeof __hbCloseTauriPrintWindow === 'function') __hbCloseTauriPrintWindow(); } catch (e) {}
         try { window.removeEventListener('resize', _onResize); } catch (e) {}
         try { document.removeEventListener('click', outside, true); } catch (e) {}
         try { if (ov && ov.parentNode) ov.parentNode.removeChild(ov); } catch (e) {}
@@ -28165,6 +28225,7 @@ function openSidebar() {
     }
     if (main)    main.classList.add('sidebar-blurred');
     ssbResetList();
+    try { ssbUpdateDarkLabel(); } catch (e) {}   // (APEX) وضعیتِ آیکنِ حالت تاریک
 }
 
 /** بستن سایدبار تنظیمات */
@@ -30269,6 +30330,13 @@ function ssbUpdateDarkLabel() {
     const pill   = document.getElementById('ssb-dark-pill');
     if (label) label.textContent = isDark ? 'غیرفعال‌سازی حالت تاریک' : 'فعال‌سازی حالت تاریک';
     if (pill)  isDark ? pill.classList.add('active') : pill.classList.remove('active');
+    // (APEX) آیکنِ «حالت تاریک» کنارِ آیکنِ زبان در بالای سایدبار
+    const dbtn = document.getElementById('ssb-dark-btn');
+    if (dbtn) {
+        dbtn.classList.toggle('is-on', isDark);
+        dbtn.title = isDark ? 'غیرفعال‌سازی حالت تاریک' : 'فعال‌سازی حالت تاریک';
+        const di = dbtn.querySelector('i'); if (di) di.className = isDark ? 'fas fa-sun' : 'fas fa-moon';
+    }
 }
 
 // اتصال دکمه هدر به openSidebar و رویداد overlay
@@ -31772,53 +31840,89 @@ function loadPaymentsList() {
 }
 
 // ۵. لیست برگشت از فروش
+// (APEX) سه لیستِ «برگشت از فروش»، «برگشت از خرید» و «سفارشات» با همان ردیفِ کارتیِ «لیست خدمات»
+//  (هر لیست با محتوای خودش). dataset های تاریخ/مبلغ/وضعیت/شخص مثلِ قبل روی هر ردیف می‌ماند تا
+//  جستجو، فلتر و مرتب‌سازیِ موجود بدونِ تغییر کار کنند.
+function _apexRlEsc(t) { return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+function _apexRlEnsureTable(tbody) {
+    try {
+        var tbl = tbody ? tbody.closest('table') : null;
+        if (!tbl) return;
+        tbl.classList.add('persons-cards-table');
+        var th = tbl.querySelector('thead'); if (th) th.classList.add('persons-cards-thead');
+        var c = tbl.closest('.table-container'); if (c) c.classList.add('persons-cards-container');
+    } catch (e) {}
+}
+function _apexRlEmpty(tbody, text) {
+    tbody.innerHTML = '<tr class="person-card-row"><td class="person-card-cell">'
+        + '<div class="person-card" style="justify-content:center;color:#94a3b8;">' + _apexRlEsc(text) + '</div></td></tr>';
+}
+/** یک ردیفِ کارتی: o = { icon, name, badge:{text,cls}, fields:[[label, valueHtml]...], kebab:'js(event)' } */
+function _apexRlRow(o) {
+    var row = document.createElement('tr');
+    row.className = 'person-card-row svc-card-row';
+    var f = (o.fields || []).map(function (x) {
+        return '<div class="person-card-balance">' + _apexRlEsc(x[0]) + ': <span>' + x[1] + '</span></div>';
+    }).join('');
+    var badge = o.badge ? '<span class="apex-rl-badge ' + (o.badge.cls || '') + '">' + _apexRlEsc(o.badge.text) + '</span>' : '';
+    row.innerHTML =
+        '<td class="person-card-cell">'
+      +   '<div class="person-card svc-card apex-rl-card">'
+      +     '<div class="person-card-main">'
+      +       '<span class="person-card-avatar"><i class="fas ' + o.icon + '"></i></span>'
+      +       '<span class="person-card-name">' + _apexRlEsc(o.name || '---') + '</span>' + badge
+      +     '</div>'
+      +     f
+      +     '<div class="person-card-actions"><button class="person-card-kebab action-trigger-btn" type="button" onmouseenter="' + o.kebab + '" onmouseleave="handleActionButtonMouseLeave(event)" onclick="event.stopPropagation();' + o.kebab + '" title="عملیات"><i class="fas fa-ellipsis-v"></i></button></div>'
+      +   '</div>'
+      + '</td>';
+    return row;
+}
+/** عملیاتِ ردیفِ برگشت — همان سه عملیاتِ قبلی (مشاهده، ویرایش، حذف) در منوی سه‌نقطه */
+function apexReturnRowActions(event, id) {
+    if (typeof _buildInoutFloatingBar !== 'function') return;
+    _buildInoutFloatingBar(event, [
+        { icon: 'fa-eye',   color: '#2563eb', title: 'مشاهده', run: function () { viewTransaction(id); } },
+        { icon: 'fa-edit',  color: '#d97706', title: 'ویرایش', run: function () { editTransaction(id); } },
+        { icon: 'fa-trash', color: '#dc2626', title: 'حذف',    run: function () { deleteTransaction(id); } }
+    ]);
+}
 function loadSalesReturnsList() {
     try {
         const transactions = (db.getTransactions() || []).filter(tx => tx.type === 'برگشت' && (tx.returnType === 'فروش' || tx.originalType === 'فروش' || !tx.returnType));
         const tbody = document.getElementById('sales-returns-list-tbody');
         if (!tbody) return;
+        _apexRlEnsureTable(tbody);
         tbody.innerHTML = '';
-        if (transactions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center">هیچ برگشت از فروشی ثبت نشده است</td></tr>';
-            const tableContainer = document.querySelector('#sales-returns-list .table-container');
-            if (tableContainer) { const old = document.getElementById('sales-returns-list-total-bar'); if (old) old.remove(); }
-            return;
-        }
+        const _oldTb = document.getElementById('sales-returns-list-total-bar'); if (_oldTb) _oldTb.remove();
+        if (transactions.length === 0) { _apexRlEmpty(tbody, 'هیچ برگشت از فروشی ثبت نشده است'); return; }
         let counter = 1;
-        let totalAmountAFN = 0;
-        let totalAmountUSD = 0;
         transactions.slice().sort(sortNewestFirst).forEach(tx => {
             const returnNum = tx.billNumber || ('RET-' + String(counter).padStart(3, '0'));
             const status = tx.status || 'تایید شده';
-            const statusClass = status === 'تایید شده' ? 'status-approved' : 'status-pending';
             const txAmount = parseFloat(tx.totalAmount || tx.amount || 0);
             const txCurrency = tx.currency || _baseCur();
-            if (txCurrency === 'USD') totalAmountUSD += txAmount; else if (txCurrency === 'AFN') totalAmountAFN += txAmount;
             const rowDate = formatAfghanDateTime(tx.date, tx.createdAt);
             const _curFa = (txCurrency === 'USD') ? 'دالر' : (txCurrency === 'AFN' ? 'افغانی' : _curLabelGlobal(txCurrency));
-            const row = document.createElement('tr');
+            const row = _apexRlRow({
+                icon: 'fa-arrow-left-long', name: tx.customerName || tx.personName || '-',
+                badge: { text: status, cls: status === 'تایید شده' ? 'is-ok' : 'is-wait' },
+                fields: [
+                    ['شماره برگشت', _apexRlEsc(returnNum)],
+                    ['بل اصلی', _apexRlEsc(tx.originalBillNumber || tx.relatedBill || '-')],
+                    ['مبلغ برگشتی', _apexRlEsc(formatNumber(txAmount) + ' ' + _curFa)],
+                    ['تاریخ', _apexRlEsc(rowDate || '-')],
+                    ['اقلام', _apexRlEsc(tx.items ? tx.items.length : (tx.itemCount || '-'))]
+                ],
+                kebab: 'apexReturnRowActions(event,' + tx.id + ')'
+            });
             row.dataset.date   = rowDate;
             row.dataset.amount = txAmount;
             row.dataset.status = status;
             row.dataset.person = (tx.customerName || tx.personName || '').toLowerCase();
-            row.innerHTML = `
-                <td>${rowDate || '-'}</td>
-                <td>${tx.originalBillNumber || tx.relatedBill || '-'}</td>
-                <td>${returnNum}</td>
-                <td>${tx.customerName || tx.personName || '-'}</td>
-                <td>${tx.items ? tx.items.length : (tx.itemCount || '-')}</td>
-                <td>${formatNumber(txAmount)} ${_curFa}</td>
-                <td><span class="badge ${statusClass}">${status}</span></td>
-                <td>${getActionButtons(tx.id, 'برگشت')}</td>
-            `;
             tbody.appendChild(row);
             counter++;
         });
-        const tableContainer = document.querySelector('#sales-returns-list .table-container');
-        if (tableContainer) {
-            // سطر مجموع برگشت از فروش حذف شد (طبق درخواست)
-            const _tb = document.getElementById('sales-returns-list-total-bar'); if (_tb) _tb.remove();
-        }
     } catch (e) { console.error('خطا در loadSalesReturnsList:', e); }
 }
 
@@ -31828,81 +31932,76 @@ function loadPurchaseReturnsList() {
         const transactions = (db.getTransactions() || []).filter(tx => tx.type === 'برگشت' && tx.returnType === 'خرید');
         const tbody = document.getElementById('purchase-returns-list-tbody');
         if (!tbody) return;
+        _apexRlEnsureTable(tbody);
         tbody.innerHTML = '';
-        if (transactions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="8" style="text-align:center">هیچ برگشت از خریدی ثبت نشده است</td></tr>';
-            const tableContainer = document.querySelector('#purchase-returns-list .table-container');
-            if (tableContainer) { const old = document.getElementById('purchase-returns-list-total-bar'); if (old) old.remove(); }
-            return;
-        }
+        const _oldTb = document.getElementById('purchase-returns-list-total-bar'); if (_oldTb) _oldTb.remove();
+        if (transactions.length === 0) { _apexRlEmpty(tbody, 'هیچ برگشت از خریدی ثبت نشده است'); return; }
         let counter = 1;
-        let totalAmount = 0;
         transactions.slice().sort(sortNewestFirst).forEach(tx => {
             const returnNum = tx.billNumber || ('RETP-' + String(counter).padStart(3, '0'));
             const status = tx.status || 'تایید شده';
-            const statusClass = status === 'تایید شده' ? 'status-approved' : 'status-pending';
             const txAmount = parseFloat(tx.totalAmount || tx.amount || 0);
-            totalAmount += txAmount;
             const rowDate = formatAfghanDateTime(tx.date, tx.createdAt);
             const _curFa = getCurrencyLabel(tx.currency || _baseCur());
-            const row = document.createElement('tr');
+            const row = _apexRlRow({
+                icon: 'fa-arrow-right-long', name: tx.supplierName || tx.personName || '-',
+                badge: { text: status, cls: status === 'تایید شده' ? 'is-ok' : 'is-wait' },
+                fields: [
+                    ['شماره برگشت', _apexRlEsc(returnNum)],
+                    ['خرید اصلی', _apexRlEsc(tx.originalBillNumber || tx.relatedBill || '-')],
+                    ['مبلغ برگشتی', _apexRlEsc(formatNumber(txAmount) + ' ' + _curFa)],
+                    ['تاریخ', _apexRlEsc(rowDate || '-')],
+                    ['اقلام', _apexRlEsc(tx.items ? tx.items.length : (tx.itemCount || '-'))]
+                ],
+                kebab: 'apexReturnRowActions(event,' + tx.id + ')'
+            });
             row.dataset.date   = rowDate;
             row.dataset.amount = txAmount;
             row.dataset.status = status;
             row.dataset.person = (tx.supplierName || tx.personName || '').toLowerCase();
-            row.innerHTML = `
-                <td>${rowDate || '-'}</td>
-                <td>${tx.originalBillNumber || tx.relatedBill || '-'}</td>
-                <td>${returnNum}</td>
-                <td>${tx.supplierName || tx.personName || '-'}</td>
-                <td>${tx.items ? tx.items.length : (tx.itemCount || '-')}</td>
-                <td>${formatNumber(txAmount)} ${_curFa}</td>
-                <td><span class="badge ${statusClass}">${status}</span></td>
-                <td>${getActionButtons(tx.id, 'برگشت خرید')}</td>
-            `;
             tbody.appendChild(row);
             counter++;
         });
-        const tableContainer = document.querySelector('#purchase-returns-list .table-container');
-        if (tableContainer) {
-            // سطر مجموع برگشت از خرید حذف شد (طبق درخواست)
-            const _tb = document.getElementById('purchase-returns-list-total-bar'); if (_tb) _tb.remove();
-        }
     } catch (e) { console.error('خطا در loadPurchaseReturnsList:', e); }
 }
 
-// ۷. لیست پیش سفارش‌ها
+// ۷. لیست سفارشات (پیش‌سفارش‌ها)
 function loadProformaList() {
     try {
         const transactions = (db.getTransactions() || []).filter(tx => tx.type === 'پیش‌فاکتور' || tx.isProforma === true);
         const tbody = document.getElementById('proforma-list-tbody');
         if (!tbody) return;
+        _apexRlEnsureTable(tbody);
         tbody.innerHTML = '';
-        if (transactions.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center">هیچ پیش سفارشی ثبت نشده است</td></tr>';
-            return;
-        }
+        if (transactions.length === 0) { _apexRlEmpty(tbody, 'هیچ سفارشی ثبت نشده است'); return; }
         transactions.slice().sort(sortNewestFirst).forEach(tx => {
             const status = tx.status || 'در حال بررسی';
-            let statusClass = 'status-pending';
-            if (status === 'تایید شده' || status === 'تبدیل به فاکتور') statusClass = 'status-approved';
-            else if (status === 'رد شده') statusClass = 'status-rejected';
+            const done = (typeof _apexOrderIsDone === 'function') ? _apexOrderIsDone(tx) : (status === 'تبدیل به فاکتور');
+            let cls = 'is-wait';
+            if (done || status === 'تایید شده') cls = 'is-ok';
+            else if (status === 'رد شده') cls = 'is-bad';
             const txAmount = parseFloat(tx.totalAmount || tx.amount || 0);
+            const cur = tx.currency || _baseCur();
+            const curFa = (typeof getCurrencyLabel === 'function') ? getCurrencyLabel(cur) : cur;
             const rowDate = formatAfghanDateTime(tx.date, tx.createdAt);
-            const row = document.createElement('tr');
+            const adv = (typeof _apexOrderAdvanceSum === 'function') ? _apexOrderAdvanceSum(tx.id) : 0;
+            const fields = [
+                ['شماره سفارش', _apexRlEsc(tx.billNumber || '-')],
+                ['مبلغ کل', _apexRlEsc(formatNumber(txAmount) + ' ' + curFa)],
+                ['پیش‌پرداخت', _apexRlEsc(adv > 0 ? (formatNumber(adv) + ' ' + curFa) : '—')],
+                ['تاریخ', _apexRlEsc(rowDate || '-')],
+                [done ? 'بل فروش' : 'اعتبار تا', _apexRlEsc(done ? (tx.saleBillNumber || '✓') : (tx.validUntil || tx.expiryDate || '—'))]
+            ];
+            const row = _apexRlRow({
+                icon: 'fa-file-import', name: tx.customerName || tx.personName || '-',
+                badge: { text: done ? 'تکمیل شده' : (status === 'در حال بررسی' ? 'در انتظار' : status), cls: cls },
+                fields: fields,
+                kebab: 'apexOrderRowActions(event,' + tx.id + ')'
+            });
             row.dataset.date   = rowDate;
             row.dataset.amount = txAmount;
             row.dataset.status = status;
             row.dataset.person = (tx.customerName || tx.personName || '').toLowerCase();
-            row.innerHTML = `
-                <td>${rowDate || '-'}</td>
-                <td>${tx.billNumber || '-'}</td>
-                <td>${tx.customerName || tx.personName || '-'}</td>
-                <td>${formatCurrency(txAmount)}</td>
-                <td>${tx.validUntil || tx.expiryDate || '-'}</td>
-                <td><span class="badge ${statusClass}">${status}</span></td>
-                <td>${getProformaActionButtons(tx.id)}</td>
-            `;
             tbody.appendChild(row);
         });
     } catch (e) { console.error('خطا در loadProformaList:', e); }
@@ -32058,6 +32157,8 @@ document.addEventListener('DOMContentLoaded', function () {
 var proformaItemCount = 1;
 
 function showProformaOrderForm(proformaId) {
+    // (APEX) «ثبت سفارش» حالا همان بل فروش در حالتِ سفارش است
+    if (typeof apexOrderOpen === 'function') { apexOrderOpen(proformaId); return; }
     proformaResetForm();
     const form = document.getElementById('proforma-order-form');
     const formTitle = form ? form.querySelector('h2') : null;
@@ -32363,6 +32464,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 // تکمیل سفارش
 function completeProformaOrder(id) {
+    if (typeof apexOrderComplete === 'function') { apexOrderComplete(id); return; }   // (APEX) تکمیل در بل فروش
     showConfirm('تکمیل سفارش', 'آیا این پیش سفارش تکمیل شود و به لیست فروش منتقل گردد؟', function() {
         var tx = (db.getTransactions() || []).find(function(t) { return t.id == id; });
         if (!tx) { showMessage('خطا', 'پیش سفارش یافت نشد'); return; }
@@ -41925,6 +42027,7 @@ function _jqfConfirmSave(kind, saveFn) {
         payment:  { t: 'ثبت پرداختی', q: 'آیا از ثبتِ این پرداختی اطمینان دارید؟' }
     };
     var m = map[kind] || { t: 'ثبت', q: 'آیا از ثبت اطمینان دارید؟' };
+    if (kind === 'sale' && window.__apexOrder && window.__apexOrder.mode === 'order') m = { t: 'ثبت سفارش', q: 'آیا از ثبتِ این سفارش اطمینان دارید؟' };
     var run = function () { try { if (typeof saveFn === 'function') saveFn(); } catch (e) { console.error('_jqfConfirmSave:', e); } };
     if (typeof showStyledConfirm === 'function') { showStyledConfirm(m.t, m.q, run); return; }
     if (window.confirm(m.q)) run();
@@ -49472,9 +49575,10 @@ function _apexRpSync(kind) {
         }
     } else {
         if (typeof _togglePaymentNoTrack === 'function') _togglePaymentNoTrack();
-        if (nt || fr) apexPaySwitchTab('cashbox');
+        // «پرداخت آزاد» با خزانه و اشخاص (همان منطقِ دریافت آزاد)؛ «بدون پیگیری» فقط با خزانه
+        if (nt) apexPaySwitchTab('cashbox');
         Array.prototype.forEach.call(document.querySelectorAll('#payment-form .receipt-dest-tab'), function (t) {
-            t.disabled = (nt || fr) && t.getAttribute('data-tab') !== 'cashbox';
+            t.disabled = nt && t.getAttribute('data-tab') !== 'cashbox';
         });
         var sel = document.getElementById('payment-cashbox');
         if (sel) sel.required = ((window._apexPayTab || 'cashbox') === 'cashbox') && !nt;
@@ -49571,7 +49675,8 @@ function _apexPaymentEditRestore(tx) {
             var key = tx.transferGroup ? 'transferGroup' : 'expenseGroup';
             payLeg = ((db.getTransactions() || []).find(function (t) { return t[key] === tx[key] && t.type === 'پرداخت'; })) || tx;
         }
-        if (ptoH) ptoH.value = payLeg.personId || ''; if (ptoS) ptoS.value = payLeg.personName || '';
+        if (ptoH) ptoH.value = payLeg.personId || payLeg.freePersonId || ''; if (ptoS) ptoS.value = payLeg.personName || '';
+        if (payLeg.free) { var _frP = document.getElementById('payment-free'); if (_frP) _frP.checked = true; }
         var sp = document.getElementById('payment-src-person'), sps = document.getElementById('payment-src-person-search');
         if (sp) sp.value = payLeg.counterpartyId || ''; if (sps) sps.value = payLeg.counterpartyName || '';
         apexPaySwitchTab('person');
@@ -49647,7 +49752,6 @@ function _apexSavePaymentExt() {
         if (!_emp || _emp.category !== 'کارمند') { showMessage('خطا', 'دریافت‌کنندهٔ معاش باید یک «کارمند» باشد.'); return true; }
     }
     if (!(amount > 0)) { showMessage('خطا', 'مبلغ معتبر وارد کنید.'); return true; }
-    if (free && tab !== 'cashbox') { showMessage('خطا', '«پرداخت آزاد» فقط با خزانه ممکن است.'); return true; }
     if (tab === 'person') {
         if (!srcId) { showMessage('خطا', 'شخصی را که از طرفِ ما پرداخت می‌کند انتخاب کنید.'); return true; }
         if (String(srcId) === String(personId)) { showMessage('خطا', 'پرداخت‌کننده و دریافت‌کننده نباید یکی باشند.'); return true; }
@@ -49664,7 +49768,10 @@ function _apexSavePaymentExt() {
     var g = (sal ? 'sal_' : 'ptx_') + Date.now();
     var main;
     if (tab === 'person') {
-        main = Object.assign({ type: 'پرداخت', personId: parseInt(personId), personName: personName,
+        // (APEX) «پرداخت آزاد» با تبِ اشخاص: لِنگِ دریافت‌کننده فقط به‌عنوانِ نام ثبت می‌شود (freePersonId)
+        // تا بیلانسش تغییر نکند؛ لِنگِ شخصِ پرداخت‌کننده (از طرفِ ما) مثلِ قبل اثر می‌گیرد — همان منطقِ «آزاد» با خزانه.
+        main = Object.assign({ type: 'پرداخت', personId: free ? null : parseInt(personId), personName: personName,
+            freePersonId: free ? parseInt(personId) : null, free: !!free,
             counterpartyId: parseInt(srcId), counterpartyName: srcName,
             description: (description || '') + ' | از طرفِ: ' + srcName }, common);
         var leg = Object.assign({ type: 'دریافت', personId: parseInt(srcId), personName: srcName, receiptType: type,
@@ -49700,7 +49807,8 @@ function _apexSavePaymentExt() {
                 notes: (description || '') + ' | پرداخت معاشِ ' + personName });
         } catch (e) {}
     }
-    showMessage('موفقیت', sal ? ('معاشِ ' + personName + ' ثبت شد.') : (editId || grpKey ? 'پرداخت ویرایش شد.' : 'پرداخت ثبت شد.'));
+    if (free && tab === 'person' && !sal) showMessage('موفقیت', 'پرداختِ آزاد ثبت شد: حسابِ ' + srcName + ' به مبلغ ' + amount + ' ' + currency + ' اثر گرفت؛ بیلانسِ ' + personName + ' تغییر نکرد.');
+    else showMessage('موفقیت', sal ? ('معاشِ ' + personName + ' ثبت شد.') : (editId || grpKey ? 'پرداخت ویرایش شد.' : 'پرداخت ثبت شد.'));
     try { addChangelog(editId || grpKey ? 'ویرایش' : 'ثبت', 'پرداخت', main, sal ? 'پرداخت معاش' : 'پرداخت از طرفِ شخص'); } catch (e) {}
     window.__apexSalary = null;
     if (typeof resetPaymentForm === 'function') resetPaymentForm();
@@ -50161,8 +50269,15 @@ function _apexEditRoute(tx) {
         return true;
     }
     if (tx.type === 'اضافه کاری') { apexEmpOtOpen(tx.personId, tx); return true; }
+    // (APEX) سفارش → فورمِ «ثبت سفارش» (نه ویرایشِ فروش)
+    if ((tx.type === 'پیش‌فاکتور' || tx.isProforma) && !window.__apexOrderHydrating && typeof apexOrderOpen === 'function') { apexOrderOpen(tx.id); return true; }
     var _fa = _apexFreeTransferPayerLeg(tx);
     if (_fa && typeof editTransaction === 'function') { editTransaction(_fa.id); return true; }
+    // لِنگِ «دریافت»ِ یک «پرداختِ آزاد» با تبِ اشخاص → ویرایش از همان فورمِ پرداختی
+    if (tx.type === 'دریافت' && tx.transferGroup && !tx.free) {
+        var _fp = (db.getTransactions() || []).find(function (t) { return t && t.transferGroup === tx.transferGroup && t.type === 'پرداخت' && t.free; });
+        if (_fp && typeof editTransaction === 'function') { editTransaction(_fp.id); return true; }
+    }
     // لِنگِ «دریافت» یک پرداختِ معاش (پرداخت از طرفِ شخص دیگر) → ویرایشِ همان پرداختِ معاش
     if (tx.type === 'دریافت' && tx.expenseGroup && String(tx.expenseGroup).indexOf('sal_') === 0) {
         var pl = (db.getTransactions() || []).find(function (t) { return t && t.expenseGroup === tx.expenseGroup && t.type === 'پرداخت'; });
@@ -50529,4 +50644,303 @@ function _apexDlgObserve(sec) {
             clearTimeout(t); t = setTimeout(function () { _apexDlgFitOne(sec); }, 60);
         }).observe(sec, { subtree: true, childList: true, attributes: true, attributeFilter: ['class', 'style', 'hidden'] });
     } catch (e) {}
+}
+
+// ════════════════════════════════════════════════════════════════════════════════
+//  (APEX) «ثبت سفارش» — همان بل فروش در «حالتِ سفارش»
+//  ──────────────────────────────────────────────────────────────────────────────
+//  • ظاهر و ویژگی‌های بل فروش (جستجوی جنس/خدمت، واحد، تخفیف، ضایعات، قطعات، جزئیات …)
+//    بی‌کم‌وکاست؛ رکوردِ سفارش همان نوعِ قبلیِ «پیش‌فاکتور» است (هیچ اثری بر موجودی، مفاد و
+//    بیلانس ندارد — مثلِ قبل).
+//  • «پیش‌پرداخت» (فیلدِ دریافتیِ همین بل) یک «دریافت» واقعی با orderId است: خزانه و حسابِ
+//    مشتری را همان لحظه تغییر می‌دهد و در لیستِ دریافتی‌ها دیده می‌شود.
+//  • «تکمیل سفارش»: همان اقلام در بل فروش باز می‌شوند؛ با «ثبت» یک فروشِ واقعی (موجودی، FIFO،
+//    مفاد، خزانه، بیلانس) ساخته می‌شود. پیش‌پرداخت قبلاً در حسابِ مشتری کم شده است؛ در بلِ چاپی
+//    سطرِ «پیش‌پرداخت سفارش» آمده و باقیمانده پس از آن نشان داده می‌شود.
+// ════════════════════════════════════════════════════════════════════════════════
+function _apexOrderFind(id) { return (db.getTransactions() || []).find(function (t) { return t && t.id == id && (t.type === 'پیش‌فاکتور' || t.isProforma); }) || null; }
+function _apexOrderIsDone(o) { return !!(o && (o.saleId || o.status === 'تبدیل به فاکتور')); }
+function _apexOrderAdvanceTxs(orderId) {
+    return (db.getTransactions() || []).filter(function (t) { return t && t.type === 'دریافت' && t.orderId != null && t.orderId == orderId; });
+}
+function _apexOrderAdvanceSum(orderId) {
+    return _apexOrderAdvanceTxs(orderId).reduce(function (s, t) { return s + (parseFloat(t.amount) || 0); }, 0);
+}
+function _apexOrderNextNumber() {
+    var mx = 0;
+    (db.getTransactions() || []).forEach(function (t) {
+        if (!t || !(t.type === 'پیش‌فاکتور' || t.isProforma)) return;
+        var m = /^ORD-(\d+)$/.exec(String(t.billNumber || ''));
+        if (m) mx = Math.max(mx, parseInt(m[1], 10) || 0);
+    });
+    return 'ORD-' + String(mx + 1).padStart(4, '0');
+}
+function _apexOrderCashInput() {
+    var cur = (document.getElementById('sales-currency') || {}).value || _baseCur();
+    return document.getElementById(cur === _baseCur() ? 'sales-cash-afn' : 'sales-cash-foreign');
+}
+/** پیش‌پرداختی که در «تکمیل سفارش» از باقیِ بل کم دیده می‌شود (فقط اگر ارزِ بل همان ارزِ سفارش باشد) */
+function _apexOrderAdvNow() {
+    var st = window.__apexOrder;
+    if (!st || st.mode !== 'complete' || !(st.advance > 0)) return 0;
+    var cur = (document.getElementById('sales-currency') || {}).value || _baseCur();
+    return (cur === st.advanceCurrency) ? st.advance : 0;
+}
+function _apexOrderPlaceholders() {
+    var st = window.__apexOrder;
+    if (!st || st.mode !== 'order') return;
+    var lbl = (typeof getCurrencyLabel === 'function') ? getCurrencyLabel((document.getElementById('sales-currency') || {}).value || _baseCur()) : '';
+    ['sales-cash-afn', 'sales-cash-foreign'].forEach(function (id) {
+        var el = document.getElementById(id); if (el) el.placeholder = 'پیش‌پرداخت' + (lbl ? ' (' + lbl + ')' : '');
+    });
+    var cb = document.getElementById('sales-cashbox');
+    if (cb && cb.options && cb.options[0] && cb.options[0].value === '') cb.options[0].textContent = 'خزانه (برای پیش‌پرداخت)';
+}
+function _apexOrderEnter(st) {
+    window.__apexOrder = st;
+    var sec = document.getElementById('sales-form');
+    if (sec) {
+        sec.classList.toggle('apex-order-mode', st.mode === 'order');
+        sec.classList.toggle('apex-order-complete', st.mode === 'complete');
+        var t = sec.querySelector('.bill-header-title');
+        if (t) t.textContent = st.mode === 'complete' ? ('تکمیل سفارش ' + (st.orderBill || '')) : (st.editId ? 'ویرایش سفارش' : 'ثبت سفارش');
+    }
+    var cb = document.getElementById('sales-cashbox');
+    if (st.mode === 'order') {
+        if (cb) cb.required = false;
+        var sb = document.getElementById('sales-submit-btn');
+        if (sb) sb.innerHTML = '<i class="fas fa-folder"></i> ' + (st.editId ? 'ذخیره سفارش' : 'ثبت سفارش');
+        var cs = document.getElementById('sales-currency');
+        if (cs && !cs.__apexOrd) { cs.__apexOrd = true; cs.addEventListener('change', function () { setTimeout(_apexOrderPlaceholders, 0); }); }
+        _apexOrderPlaceholders();
+    }
+    try { calculateRemaining(); } catch (e) {}
+}
+function _apexOrderExit() {
+    var was = window.__apexOrder;
+    window.__apexOrder = null;
+    if (!was) return;
+    var sec = document.getElementById('sales-form');
+    if (sec) {
+        sec.classList.remove('apex-order-mode', 'apex-order-complete');
+        var t = sec.querySelector('.bill-header-title'); if (t) t.textContent = 'بل فروش';
+    }
+    var cb = document.getElementById('sales-cashbox');
+    if (cb) { cb.required = true; if (cb.options && cb.options[0] && cb.options[0].value === '') cb.options[0].textContent = 'خزانه'; }
+    var v = document.getElementById('apex-order-valid'); if (v) v.value = '';
+    try { if (typeof updateSalesCurrencyFields === 'function') updateSalesCurrencyFields(); } catch (e) {}
+}
+/** «سفارش جدید» یا ویرایشِ سفارشِ موجود (از دکمه‌های داشبورد/لیست سفارشات) */
+function apexOrderOpen(id) {
+    var from = (document.querySelector('.section.active') || {}).id || 'dashboard';
+    if (id != null && id !== '') {
+        var o = _apexOrderFind(id);
+        if (!o) { showMessage('خطا', 'سفارش یافت نشد.'); return; }
+        if (_apexOrderIsDone(o)) { showMessage('اطلاع', 'این سفارش تکمیل شده و به بل فروش ' + (o.saleBillNumber || '') + ' تبدیل گردیده است؛ ویرایشِ آن از همان بل فروش انجام می‌شود.'); return; }
+        _apexOrderExit();
+        window.__apexOrderHydrating = true;
+        try { editTransaction(o.id); } finally { window.__apexOrderHydrating = false; }
+        setTimeout(function () {
+            var adv = _apexOrderAdvanceTxs(o.id)[0] || null;
+            var inp = _apexOrderCashInput();
+            if (inp) inp.value = adv ? (parseFloat(adv.amount) || '') : '';
+            var cb = document.getElementById('sales-cashbox'); if (cb) cb.value = adv && adv.cashboxId ? String(adv.cashboxId) : '';
+            var v = document.getElementById('apex-order-valid'); if (v) v.value = o.validUntil || o.expiryDate || '';
+            var lay = document.getElementById('sales-bill-layout'); if (lay) lay.classList.remove('bill-locked');
+            var cbt = document.getElementById('sales-correct-btn'); if (cbt) cbt.style.display = 'none';
+            _apexOrderEnter({ mode: 'order', editId: o.id });
+            try { _setFormReturn({ section: from === 'sales-form' ? 'proforma-list' : from }); } catch (e) {}
+        }, 320);
+        return;
+    }
+    showSalesForm();
+    try { _setFormReturn({ section: from === 'sales-form' ? 'dashboard' : from }); } catch (e) {}
+    var bn = document.getElementById('sales-bill-number'); if (bn) bn.value = _apexOrderNextNumber();
+    _apexOrderEnter({ mode: 'order', editId: null });
+}
+/** جمع‌آوریِ اقلامِ بل (همان شکلی که بل فروش ذخیره می‌کند؛ بدونِ اثرِ موجودی/مفاد) */
+function _apexOrderCollect(currency) {
+    var items = [];
+    var rows = document.querySelectorAll('#sales-items-body .item-row');
+    Array.prototype.forEach.call(rows, function (row) {
+        var sel = row.querySelector('.item-product');
+        var productId = sel ? sel.value : '';
+        if (!productId) return;
+        if (typeof _wsIsRow === 'function' && _wsIsRow(row)) {
+            var wq = parseFloat((row.querySelector('.item-quantity') || {}).value) || 0;
+            var wp = parseFloat((row.querySelector('.item-price') || {}).value) || 0;
+            var wtEl = row.querySelector('.item-total');
+            var wt = (row.dataset && row.dataset.wastageAmount !== undefined && isFinite(parseFloat(row.dataset.wastageAmount)))
+                ? (parseFloat(row.dataset.wastageAmount) || 0)
+                : ((wtEl && wtEl.dataset && wtEl.dataset.raw !== undefined) ? (parseFloat(wtEl.dataset.raw) || 0) : (wq * wp));
+            if (wq > 0 && wp > 0) items.push({ productId: 'WASTE-BILL', productName: 'ضایعات', isService: true, isWastage: true, quantity: wq,
+                unit: (row.querySelector('.item-unit') || {}).textContent || '', price: (wq > 0 ? wt / wq : wp), discount: 0, total: wt,
+                wastagePct: parseFloat(row.dataset.wastagePct) || 0, unitType: 'primary', secondaryFactor: 0 });
+            return;
+        }
+        var name = 'جنس نامشخص';
+        if (sel.options && sel.selectedIndex >= 0 && sel.options.length > 0) name = sel.options[sel.selectedIndex].text.split(' (')[0];
+        else { var si = row.querySelector('.product-search-input'); if (si) name = si.value; }
+        var q = parseFloat((row.querySelector('.item-quantity') || {}).value) || 0;
+        var pr = parseFloat((row.querySelector('.item-price') || {}).value) || 0;
+        if (!(q > 0 && pr > 0)) return;
+        var isSvc = (typeof productId === 'string') && productId.indexOf('SVC-') === 0;
+        var it = {
+            productId: isSvc ? productId : parseInt(productId), productName: name, isService: isSvc,
+            quantity: q, unit: (row.querySelector('.item-unit') || {}).textContent || '', price: pr,
+            discount: parseFloat((row.querySelector('.item-discount') || {}).value) || 0,
+            total: parseFloat(String((row.querySelector('.item-total') || {}).textContent || '0').replace(/,/g, '')) || 0,
+            unitType: row.dataset.unitType || 'primary', secondaryFactor: parseFloat(row.dataset.secondaryFactor) || 0
+        };
+        if (!isSvc && typeof _wsQtyForRow === 'function') {
+            var wsq = _wsQtyForRow(row);
+            if (wsq > 0) { it.wastagePct = _wsPct(); it.wastageQty = wsq; it.wastageAmount = _wsAmountForRow(row); }
+        }
+        if (row.dataset.lineDetails != null && String(row.dataset.lineDetails).trim() !== '') it.details = String(row.dataset.lineDetails).trim();
+        if (row.dataset.lineCost != null && String(row.dataset.lineCost).trim() !== '') it.lineCost = parseFloat(row.dataset.lineCost) || 0;
+        if (row.dataset.lineFrom != null && String(row.dataset.lineFrom).trim() !== '') it.dateFrom = String(row.dataset.lineFrom).trim();
+        if (row.dataset.lineTo != null && String(row.dataset.lineTo).trim() !== '') it.dateTo = String(row.dataset.lineTo).trim();
+        if (!isSvc && row.dataset.parts && typeof _apexPartsForSave === 'function') { var pp = _apexPartsForSave(row, currency, false); if (pp) it.parts = pp; }
+        items.push(it);
+    });
+    return items;
+}
+/** «ثبت سفارش» / «ذخیره سفارش» */
+function _apexOrderSave() {
+    var st = window.__apexOrder || {};
+    var toEn = (typeof toEnglishDigits === 'function') ? toEnglishDigits : function (x) { return x; };
+    var customerId = (document.getElementById('qs-customer') || {}).value;
+    var customerName = ((document.getElementById('qs-customer-search') || {}).value || '').trim();
+    if (!customerId) { showMessage('خطا', 'لطفاً مشتری را از جستجو انتخاب کنید.'); return; }
+    var currency = (document.getElementById('sales-currency') || {}).value || _baseCur();
+    var items = _apexOrderCollect(currency);
+    if (!items.length) { showMessage('خطا', 'لطفاً حداقل یک جنس یا خدمت به سفارش اضافه کنید.'); return; }
+    var subTotal = items.reduce(function (s, it) { return s + (it.quantity * it.price); }, 0);
+    var perDisc = items.reduce(function (s, it) { return s + (parseFloat(it.discount) || 0); }, 0);
+    var dEl = document.getElementById('sales-total-discount');
+    var dDom = (dEl && dEl.dataset && dEl.dataset.raw !== undefined) ? parseFloat(dEl.dataset.raw) : NaN;
+    var totalDiscount = (!isNaN(dDom) && dDom >= perDisc) ? dDom : perDisc;
+    var totalAmount = subTotal - totalDiscount;
+    var inp = _apexOrderCashInput();
+    var adv = inp ? (parseFloat(inp.value) || 0) : 0;
+    var cbId = (document.getElementById('sales-cashbox') || {}).value || '';
+    if (adv < 0) { showMessage('خطا', 'مبلغِ پیش‌پرداخت معتبر نیست.'); return; }
+    if (adv > 0 && !cbId) { showMessage('خطا', 'برای پیش‌پرداخت، خزانه را انتخاب کنید.'); return; }
+    if (adv - totalAmount > 0.000001) { showMessage('خطا', 'پیش‌پرداخت نمی‌تواند از مجموعِ سفارش بیشتر باشد.'); return; }
+    var date = toEn((document.getElementById('sales-date') || {}).value || '');
+    var billNumber = toEn((document.getElementById('sales-bill-number') || {}).value || '') || _apexOrderNextNumber();
+    var notes = (document.getElementById('sales-notes') || {}).value || '';
+    var valid = toEn((document.getElementById('apex-order-valid') || {}).value || '');
+    var old = st.editId ? _apexOrderFind(st.editId) : null;
+    var base = (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : 'AFN';
+    var order = {
+        type: 'پیش‌فاکتور', isProforma: true, isOrder: true,
+        personId: parseInt(customerId), customerId: parseInt(customerId), personName: customerName, customerName: customerName,
+        date: date, billNumber: billNumber, currency: currency, items: items,
+        subTotal: subTotal, totalDiscount: totalDiscount, totalAmount: totalAmount, amount: totalAmount,
+        notes: notes, description: notes, validUntil: valid, expiryDate: valid,
+        status: (old && old.status && old.status !== 'تبدیل به فاکتور') ? old.status : 'در حال بررسی',
+        rateUsed: _dayRateFor(currency), baseCurrency: base
+    };
+    if (old) order.id = old.id; else order.createdAt = new Date().toISOString();
+    var res = db.saveTransaction(order);
+    if (!res || res.success === false) { showMessage('خطا', (res && res.error) || 'خطا در ثبتِ سفارش'); return; }
+    var oid = (res.data && res.data.id) || order.id;
+    // پیش‌پرداخت = یک «دریافت» واقعیِ مرتبط با سفارش (خزانه + حسابِ مشتری)
+    var advs = _apexOrderAdvanceTxs(oid);
+    if (adv > 0) {
+        var first = advs[0] || null;
+        var r = {
+            type: 'دریافت', personId: parseInt(customerId), personName: customerName,
+            date: (first && Math.abs((parseFloat(first.amount) || 0) - adv) < 0.000001 && first.currency === currency) ? first.date : date,
+            amount: adv, currency: currency, receiptType: 'نقد', cashboxId: parseInt(cbId), reference: billNumber,
+            description: 'پیش‌پرداختِ سفارش ' + billNumber, status: 'انجام شد', orderId: oid, orderAdvance: true,
+            free: false, freePersonId: null, noTrack: false, rateUsed: _dayRateFor(currency), baseCurrency: base
+        };
+        if (first) r.id = first.id;
+        db.saveTransaction(r);
+        advs.slice(1).forEach(function (t) { _apexDeleteSingleTx(t.id); });
+    } else {
+        advs.forEach(function (t) { _apexDeleteSingleTx(t.id); });
+    }
+    try { addChangelog(old ? 'ویرایش' : 'ثبت', 'سفارش', order, (old ? 'ویرایش سفارش ' : 'ثبت سفارش ') + billNumber + (adv > 0 ? (' — پیش‌پرداخت ' + adv) : '')); } catch (e) {}
+    showMessage('موفقیت', (old ? 'سفارش ویرایش شد.' : 'سفارش ثبت شد.') + (adv > 0 ? (' پیش‌پرداخت ' + formatNumber(adv) + ' به خزانه و حسابِ مشتری ثبت گردید.') : ''));
+    _apexOrderExit();
+    if (typeof resetSalesForm === 'function') resetSalesForm();
+    if (typeof loadDashboard === 'function') { try { loadDashboard(); } catch (e) {} }
+    if (!_consumeFormReturn()) showSection('proforma-list');
+    try { loadProformaList(); } catch (e) {}
+    if (typeof refreshOpenReport === 'function') refreshOpenReport();
+}
+/** «تکمیل سفارش»: همان اقلام در بل فروش؛ با «ثبت» فروشِ واقعی ساخته می‌شود */
+function apexOrderComplete(id) {
+    var o = _apexOrderFind(id);
+    if (!o) { showMessage('خطا', 'سفارش یافت نشد.'); return; }
+    if (_apexOrderIsDone(o)) { showMessage('اطلاع', 'این سفارش قبلاً تکمیل شده است (بل فروش ' + (o.saleBillNumber || '') + ').'); return; }
+    var from = (document.querySelector('.section.active') || {}).id || 'proforma-list';
+    _apexOrderExit();
+    window.__apexOrderHydrating = true;
+    try { editTransaction(o.id); } finally { window.__apexOrderHydrating = false; }
+    setTimeout(function () {
+        var f = document.getElementById('salesForm'); if (f) delete f.dataset.editId;
+        var lay = document.getElementById('sales-bill-layout'); if (lay) lay.classList.remove('bill-locked');
+        var cbt = document.getElementById('sales-correct-btn'); if (cbt) cbt.style.display = 'none';
+        var bn = document.getElementById('sales-bill-number'); if (bn) bn.value = db.generateBillNumber('فروش');
+        var dt = document.getElementById('sales-date'); if (dt && typeof _nowJalaliDateTime === 'function') dt.value = _nowJalaliDateTime();
+        ['sales-cash-afn', 'sales-cash-foreign', 'sales-cash-usd'].forEach(function (i) { var e = document.getElementById(i); if (e) { e.value = ''; e.disabled = false; } });
+        var fp = document.getElementById('full-payment-checkbox'); if (fp) fp.checked = false;
+        var fpi = document.getElementById('sales-fullpay-icon'); if (fpi) fpi.classList.remove('is-active');
+        var cb = document.getElementById('sales-cashbox'); if (cb) cb.value = '';
+        var sb = document.getElementById('sales-submit-btn'); if (sb) sb.innerHTML = '<i class="fas fa-folder"></i> ثبت';
+        var pb = document.getElementById('sales-print-btn'); if (pb) pb.style.display = '';
+        _apexOrderEnter({ mode: 'complete', orderId: o.id, orderBill: o.billNumber || '', advance: _apexOrderAdvanceSum(o.id), advanceCurrency: o.currency || _baseCur() });
+        try { _setFormReturn({ section: from === 'sales-form' ? 'proforma-list' : from }); } catch (e) {}
+    }, 330);
+}
+/** فروشِ حاصل از «تکمیل سفارش» ثبت شد → سفارش «تکمیل شده» */
+function _apexOrderCompleted(sale) {
+    var st = window.__apexOrder;
+    if (!st || st.mode !== 'complete') return;
+    var o = _apexOrderFind(st.orderId);
+    if (o && sale) {
+        db.saveTransaction(Object.assign({}, o, { status: 'تبدیل به فاکتور', saleId: sale.id, saleBillNumber: sale.billNumber || '', completedAt: new Date().toISOString() }));
+        try { addChangelog('ویرایش', 'سفارش', o, 'تکمیل سفارش ' + (o.billNumber || '') + ' ← بل فروش ' + (sale.billNumber || '')); } catch (e) {}
+    }
+    _apexOrderExit();
+}
+function apexOrderDelete(id) {
+    var o = _apexOrderFind(id);
+    if (!o) return;
+    var adv = _apexOrderAdvanceSum(o.id), done = _apexOrderIsDone(o);
+    var q = done
+        ? 'سفارش ' + (o.billNumber || '') + ' از لیست سفارشات حذف شود؟ بل فروشِ ساخته‌شده و پیش‌پرداختِ آن دست نمی‌خورند.'
+        : ('سفارش ' + (o.billNumber || '') + ' حذف شود؟' + (adv > 0 ? (' پیش‌پرداختِ ' + formatNumber(adv) + ' نیز از خزانه و حسابِ مشتری برگردانده می‌شود.') : ''));
+    var run = function () {
+        if (!done) _apexOrderAdvanceTxs(o.id).forEach(function (t) { _apexDeleteSingleTx(t.id); });
+        try {
+            var txs = db.getTransactions() || [];
+            localStorage.setItem('transactions', JSON.stringify(txs.filter(function (t) { return !(t && t.id == o.id); })));
+        } catch (e) {}
+        try { addChangelog('حذف', 'سفارش', o, 'حذف سفارش ' + (o.billNumber || '')); } catch (e) {}
+        loadProformaList();
+        if (typeof loadDashboard === 'function') { try { loadDashboard(); } catch (e) {} }
+        if (typeof refreshOpenReport === 'function') refreshOpenReport();
+        if (typeof showToast === 'function') showToast('سفارش حذف شد', 'success');
+    };
+    if (typeof showStyledConfirm === 'function') showStyledConfirm('حذف سفارش', q, run);
+    else if (window.confirm(q)) run();
+}
+function apexOrderRowActions(event, id) {
+    if (typeof _buildInoutFloatingBar !== 'function') return;
+    var o = _apexOrderFind(id); if (!o) return;
+    var done = _apexOrderIsDone(o);
+    var acts = [{ icon: 'fa-eye', color: '#2563eb', title: 'مشاهده', run: function () { viewTransaction(id); } }];
+    if (!done) {
+        acts.push({ icon: 'fa-edit', color: '#d97706', title: 'ویرایش', run: function () { apexOrderOpen(id); } });
+        acts.push({ icon: 'fa-check', color: '#059669', title: 'تکمیل سفارش', run: function () { apexOrderComplete(id); } });
+    } else if (o.saleId) {
+        acts.push({ icon: 'fa-file-invoice', color: '#1e3a5f', title: 'بل فروش', run: function () { viewTransaction(o.saleId); } });
+    }
+    acts.push({ icon: 'fa-trash', color: '#dc2626', title: 'حذف', run: function () { apexOrderDelete(id); } });
+    _buildInoutFloatingBar(event, acts);
 }
