@@ -68,6 +68,149 @@
         catch (e) { return false; }
     }
 
+    // ===========================================================================
+    //  (v1.6.11) ارز پایهٔ مستقل از اسناد — «تغییرِ ارز پایه نتیجهٔ اقتصادیِ معامله را عوض نمی‌کند»
+    //  ---------------------------------------------------------------------------
+    //  نرخِ ثبت‌شده روی هر سند نسبت به «ارز پایهٔ همان لحظه» است (snapshot.base).
+    //  اگر ارز پایه بعداً عوض شود، آن نرخ باید با «نرخِ تاریخیِ میانِ پایهٔ قبلی و
+    //  پایهٔ فعلی در روزِ همان سند» ترکیب شود؛ نه اینکه عیناً نسبت به پایهٔ جدید
+    //  خوانده شود (ریشهٔ مفادِ ۵۵۰۰ − ۷۷ = ۵۴۲۳). اسناد بازنویسی نمی‌شوند.
+    //  منبعِ نرخِ تاریخی (به ترتیب): بردارِ نرخِ خودِ سند ← نرخ‌های ثبت‌شده روی
+    //  اسنادِ دیگر (نزدیک‌ترین تاریخ) ← نرخِ لحظهٔ تغییرِ ارز پایه (settings.baseHistory).
+    //  هرگز نرخِ امروز به‌جای نرخِ تاریخی گذاشته نمی‌شود.
+    // ===========================================================================
+    function _digitsEn(s) {
+        return String(s == null ? '' : s)
+            .replace(/[۰-۹]/g, function (d) { return String(d.charCodeAt(0) - 1776); })
+            .replace(/[٠-٩]/g, function (d) { return String(d.charCodeAt(0) - 1632); });
+    }
+    // کلیدِ زمانیِ قابلِ مقایسه از رشتهٔ تاریخِ برنامه («1405/09/02 8:48:02 AM» یا ISO).
+    function _tkey(s) {
+        if (s == null || s === '') return null;
+        var t = _digitsEn(s);
+        var m = t.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})(?:[ T]+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM|am|pm|ق\.?ظ|ب\.?ظ)?)?/);
+        if (!m) return null;
+        var y = +m[1], mo = +m[2], d = +m[3];
+        if (y > 1700) y -= 621;     // میلادی → تقریبِ شمسی (فقط برای ترتیب‌دادنِ نزدیک‌ترین نرخ)
+        var h = m[4] ? +m[4] : 0, mi = m[5] ? +m[5] : 0, se = m[6] ? +m[6] : 0, ap = m[7] || '';
+        if (/PM|pm|ب/.test(ap) && h < 12) h += 12;
+        if (/AM|am|ق/.test(ap) && h === 12) h = 0;
+        return ((y * 13 + mo) * 32 + d) * 86400 + h * 3600 + mi * 60 + se;
+    }
+    function _settingsObj() {
+        try { if (window.db && typeof db.getSettings === 'function') return db.getSettings() || {}; } catch (e) {}
+        return {};
+    }
+    var _bhCache = { at: 0, list: null };
+    function _baseHistory() {
+        var now = Date.now();
+        if (_bhCache.list && (now - _bhCache.at) < 3000) return _bhCache.list;
+        var h = _settingsObj().baseHistory;
+        _bhCache = { at: now, list: Array.isArray(h) ? h : [] };
+        return _bhCache.list;
+    }
+    // ارز پایه‌ای که نرخِ این سند نسبت به آن ثبت شده است.
+    //  نبودِ اطلاعات → ارز پایهٔ فعلی (یعنی دقیقاً رفتارِ قبلی).
+    function _docStampBase(doc) {
+        if (!doc) return _baseCode();
+        var sn = doc.exchangeRateSnapshot;
+        if (sn && sn.base) return sn.base;
+        if (doc.baseCurrency) return doc.baseCurrency;
+        // سندِ قدیمیِ بدونِ ثبتِ پایه: پایهٔ حاکم در زمانِ سند از روی تاریخچهٔ تغییرِ پایه
+        var hist = _baseHistory();
+        if (hist.length) {
+            var tk = _tkey((sn && sn.capturedAt) || doc.createdAt || doc.date);
+            if (tk != null) {
+                var b = null;
+                for (var i = 0; i < hist.length; i++) {
+                    var hk = _tkey(hist[i].at);
+                    if (hk != null && hk <= tk) b = hist[i].to;
+                }
+                return b || hist[0].from || _baseCode();
+            }
+        }
+        return _baseCode();
+    }
+    function _docTime(doc) {
+        if (!doc) return null;
+        var sn = doc.exchangeRateSnapshot;
+        return _tkey((sn && sn.capturedAt) || doc.createdAt || doc.date);
+    }
+
+    // نمایهٔ نرخ‌های تاریخی از اسناد: [{a, b, r, t}] یعنی «۱ a = r b» در زمانِ t.
+    var _histIdx = { at: 0, list: null };
+    function _histPoints() {
+        var now = Date.now();
+        if (_histIdx.list && (now - _histIdx.at) < 3000) return _histIdx.list;
+        var pts = [];
+        function addDoc(d) {
+            if (!d) return;
+            var sn = d.exchangeRateSnapshot;
+            if (!sn || !sn.base) return;
+            var t = _tkey(sn.capturedAt || d.createdAt || d.date);
+            if (t == null) return;
+            var r = _num(sn.rate);
+            if (r > 0 && sn.currency && sn.currency !== sn.base) pts.push({ a: sn.currency, b: sn.base, r: r, t: t });
+            if (sn.rates && typeof sn.rates === 'object') {
+                for (var c in sn.rates) {
+                    var v = _num(sn.rates[c]);
+                    if (v > 0 && c !== sn.base) pts.push({ a: c, b: sn.base, r: v, t: t });
+                }
+            }
+        }
+        try {
+            if (window.db) {
+                if (typeof db.getTransactions === 'function') (db.getTransactions() || []).forEach(addDoc);
+                if (typeof db.getExpenses === 'function') (db.getExpenses() || []).forEach(addDoc);
+            }
+        } catch (e) {}
+        // دفترِ نرخ‌ها (هر بار که کاربر نرخی را ثبت/ویرایش می‌کند) — نرخِ تاریخیِ اسنادی که خودشان
+        //  نرخِ ارزِ دیگر را ندارند (مثلاً بلِ دالری وقتی پایه دالر بود).
+        (function () { var lg = _settingsObj().rateLog; return Array.isArray(lg) ? lg : []; })().forEach(function (h) {
+            var t = _tkey(h.at), r = _num(h.rate);
+            if (t != null && r > 0 && h.from && h.to && h.from !== h.to) pts.push({ a: h.from, b: h.to, r: r, t: t });
+        });
+        _baseHistory().forEach(function (h) {
+            var t = _tkey(h.at), r = _num(h.rate);
+            if (t != null && r > 0 && h.from && h.to && h.from !== h.to) pts.push({ a: h.from, b: h.to, r: r, t: t, sw: true });
+        });
+        _histIdx = { at: now, list: pts };
+        return pts;
+    }
+    // «۱ from = ؟ to» در زمانِ t؛ از نزدیک‌ترین نرخِ ثبت‌شده (اول: آخرین نرخِ پیش از t).
+    function _histRate(from, to, t) {
+        if (!from || !to) return null;
+        if (from === to) return 1;
+        var pts = _histPoints();
+        var bestB = null, bestA = null;
+        for (var i = 0; i < pts.length; i++) {
+            var p = pts[i], v = null;
+            if (p.a === from && p.b === to) v = p.r;
+            else if (p.a === to && p.b === from) v = 1 / p.r;
+            if (v == null || !(v > 0)) continue;
+            if (t == null || p.t <= t) { if (!bestB || p.t >= bestB.t) bestB = { t: p.t, v: v }; }
+            else if (!bestA || p.t < bestA.t) bestA = { t: p.t, v: v };
+        }
+        if (bestB) return bestB.v;
+        if (bestA) return bestA.v;
+        return null;
+    }
+    // ثبتِ نرخِ مؤثرِ یک جفت ارز با زمانِ همین لحظه در settings.rateLog (همگام با ابر).
+    //  فقط افزودنی است؛ هیچ محاسبهٔ فعلی از آن نمی‌خواند مگر تبدیلِ اسنادِ پایهٔ قبلی.
+    function _logRate(from, to) {
+        if (!from || !to || from === to || !window.db || typeof db.getSettings !== 'function' || typeof db.saveSettings !== 'function') return;
+        var v = CS.rateValue(from, to, 'rate');
+        if (!(v > 0)) return;
+        var s = db.getSettings() || {};
+        var lg = Array.isArray(s.rateLog) ? s.rateLog.slice() : [];
+        var at = (typeof db.getCurrentDate === 'function') ? db.getCurrentDate() : new Date().toISOString();
+        lg.push({ from: from, to: to, rate: v, at: at });
+        if (lg.length > 3000) lg = lg.slice(lg.length - 3000);
+        s.rateLog = lg;
+        db.saveSettings(s);
+        _histIdx = { at: 0, list: null };
+    }
+
     // ارز پایه از تنظیمات (پیش‌فرض AFN)
     function _baseCode() {
         try {
@@ -205,6 +348,7 @@
                 });
             }
             this.saveRates(list);
+            try { _logRate(rate.from, rate.to); } catch (e) {}
             this._changed();
             return { ok: true };
         },
@@ -230,6 +374,7 @@
             }
             if (!found) return { ok: false, msg: 'نرخ یافت نشد' };
             this.saveRates(list);
+            try { _logRate(nf, nt); } catch (e) {}
             this._changed();
             return { ok: true };
         },
@@ -308,6 +453,19 @@
             try {
                 if (window.db && typeof db.getSettings === 'function' && typeof db.saveSettings === 'function') {
                     var s = db.getSettings() || {};
+                    // (v1.6.11) ثبتِ لحظهٔ تغییرِ پایه با نرخِ همان لحظه — فقط برای تبدیلِ
+                    //  اسنادی که نرخِ تاریخیِ دیگری ندارند. هیچ سندی بازنویسی نمی‌شود.
+                    try {
+                        var _old = s.defaultCurrency || _baseCode();
+                        if (_old && _old !== code) {
+                            var _sw = this.rateValue(_old, code, 'rate');
+                            var _at = (typeof db.getCurrentDate === 'function') ? db.getCurrentDate() : new Date().toISOString();
+                            var _bh = Array.isArray(s.baseHistory) ? s.baseHistory.slice() : [];
+                            _bh.push({ from: _old, to: code, rate: (_sw != null && _sw > 0) ? _sw : null, at: _at });
+                            s.baseHistory = _bh;
+                            _histIdx = { at: 0, list: null }; _bhCache = { at: 0, list: null };
+                        }
+                    } catch (e) {}
                     s.defaultCurrency = code;
                     db.saveSettings(s);
                 } else {
@@ -327,7 +485,22 @@
             mode = mode || 'rate';
             if (from === to) return 1;
             var r = this.getRate(from, to);
-            if (!r) return null;
+            if (!r) {
+                // (v1.6.11) نرخِ متقاطع: اگر نرخِ مستقیمِ این دو ارز تعریف نشده باشد، از مسیرِ
+                //  یک ارزِ سوم (مثلاً یورو → افغانی → دالر) محاسبه می‌شود. پیش‌تر null برمی‌گشت.
+                var _all = this.getRates(), _seen = {};
+                for (var _i = 0; _i < _all.length; _i++) {
+                    var _p = _all[_i];
+                    if (!_p) continue;
+                    [_p.from, _p.to].forEach(function (x) { if (x && x !== from && x !== to) _seen[x] = true; });
+                }
+                for (var _mid in _seen) {
+                    if (!this.getRate(from, _mid) || !this.getRate(_mid, to)) continue;
+                    var _v1 = this.rateValue(from, _mid, mode), _v2 = this.rateValue(_mid, to, mode);
+                    if (_v1 != null && _v2 != null && _v1 > 0 && _v2 > 0) return _v1 * _v2;
+                }
+                return null;
+            }
             var v = (mode === 'buy') ? r.buy : (mode === 'sell') ? r.sell : r.rate;
             v = _num(v);
             // نرخِ مرجع (rate) اگر خالی/صفر باشد یا برابرِ ۱ در حالی که خرید/فروشِ واقعی
@@ -433,9 +606,21 @@
             var cur = code || base;
             var r = (cur === base) ? 1 : this.baseRate(cur, mode || 'rate');
             if (r == null || !(r > 0)) return null;
+            // (v1.6.11) بردارِ نرخِ همهٔ ارزها نسبت به پایه در همین لحظه — تا اگر ارز پایه
+            //  بعداً عوض شود، همین سند با نرخِ تاریخیِ خودش به پایهٔ جدید تبدیل گردد.
+            var rates = {};
+            try {
+                var self = this;
+                this.getCurrencies().forEach(function (c) {
+                    if (!c || !c.code || c.code === base) return;
+                    var v = self.baseRate(c.code, mode || 'rate');
+                    if (v != null && v > 0) rates[c.code] = v;
+                });
+            } catch (e) {}
             return {
                 base: base, currency: cur, rate: r,
-                mode: mode || 'rate', capturedAt: capturedAt || null
+                mode: mode || 'rate', capturedAt: capturedAt || null,
+                rates: rates
             };
         },
 
@@ -448,6 +633,11 @@
             var base = _baseCode();
             var cur = currency || doc.currency || base;
             if (cur === base) return 1;
+            // (v1.6.11) سندی که نرخش نسبت به «پایهٔ دیگری» ثبت شده (ارز پایه بعداً عوض شده):
+            //  نرخِ ارزِ سند نسبت به پایهٔ همان لحظه × نرخِ تاریخیِ پایهٔ قبلی به پایهٔ فعلی.
+            //  اسنادِ ثبت‌شده با همین پایه از مسیرِ قبلی (پایین) و بدونِ هیچ تغییری می‌روند.
+            var _sb = _docStampBase(doc);
+            if (_sb && _sb !== base) return this._rateAcrossBase(doc, cur, _sb, base);
             var snap = doc.exchangeRateSnapshot;
             if (snap && _num(snap.rate) > 0) {
                 var sc = snap.currency || doc.currency || cur;
@@ -461,6 +651,30 @@
                 if (dc === cur) return ru;
             }
             return null;
+        },
+
+        // (v1.6.11) «۱ cur = ؟ base» برای سندی که نرخش نسبت به پایهٔ قبلی (sb) ثبت شده.
+        _rateAcrossBase: function (doc, cur, sb, base) {
+            var snap = doc.exchangeRateSnapshot || null;
+            var vec = (snap && snap.rates && typeof snap.rates === 'object') ? snap.rates : null;
+            var t = _docTime(doc);
+            // (۱) نرخِ ارزِ موردِ تبدیل نسبت به پایهٔ قبلی (sb)
+            var rc = null;
+            if (cur === sb) rc = 1;
+            else if (snap && _num(snap.rate) > 0 && (snap.currency || doc.currency) === cur) rc = _num(snap.rate);
+            else if (vec && _num(vec[cur]) > 0) rc = _num(vec[cur]);
+            else {
+                var ru = _num(doc.rateUsed);
+                if (ru > 0 && (doc.rateCurrency || doc.currency) === cur) rc = ru;
+            }
+            if (rc == null) rc = _histRate(cur, sb, t);
+            if (!(rc > 0)) return null;
+            // (۲) نرخِ پایهٔ قبلی نسبت به پایهٔ فعلی در روزِ همین سند
+            var br = null;
+            if (vec && _num(vec[base]) > 0) br = 1 / _num(vec[base]);   // vec[base] = «۱ پایهٔ فعلی = ؟ sb»
+            if (br == null) br = _histRate(sb, base, t);
+            if (!(br > 0)) return null;
+            return rc * br;
         },
 
         // آیا این سند نرخِ ثبت‌شدهٔ معتبر دارد؟ (برای علامت‌گذاریِ شفافِ اسنادِ قدیمی)

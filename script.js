@@ -1381,7 +1381,8 @@ function _computeFifoProfitMaps() {
                         var _acur = it.currency || _base;
                         var _ac = {}; _ac[_acur] = parseFloat(it.price) || 0;
                         ensure(it.destProductId).push({ ts: _ats, kind: 0, seq: _aseq, qty: _aq, cost: _ac, buyCur: _acur,
-                            buyTx: { currency: _acur, rateUsed: parseFloat(it.rateUsed) || null } });
+                            buyTx: { currency: _acur, rateUsed: parseFloat(it.rateUsed) || null, rateCurrency: _acur,
+                                     baseCurrency: it.baseCurrency || rec.baseCurrency || undefined, createdAt: rec.createdAt || undefined } });
                     } else if (rec.adj === 'out' && it.srcProductId != null) {
                         ensure(it.srcProductId).push({ ts: _ats, kind: 1, seq: _aseq, qty: _aq, baseQty: _aq, currency: _base, saleTx: null,
                             isPurchaseReturn: true, costAcc: 0, costAccBase: 0, estAcc: false });
@@ -1689,7 +1690,10 @@ function _fifoSignature() {
                 });
             });
         } catch (e) {}
-        return txs.length + ':' + prods.length + ':' + acc + ':' + pacc + ':' + racc + ':' + tn + ':' + tacc + ':' + mx;
+        // (v1.6.11) ارز پایه هم جزءِ امضاست تا پس از تغییرِ پایه، مفاد فوراً با پایهٔ جدید حساب شود.
+        var _bsig = '';
+        try { _bsig = (typeof CurrencySystem !== 'undefined' && CurrencySystem.getBaseCode) ? CurrencySystem.getBaseCode() : ''; } catch (e) {}
+        return txs.length + ':' + prods.length + ':' + acc + ':' + pacc + ':' + racc + ':' + tn + ':' + tacc + ':' + mx + ':' + _bsig;
     } catch (e) { return 'x' + Math.random(); }
 }
 
@@ -2857,9 +2861,30 @@ function _txPaidInDocCurrency(tx, isPurchase) {
     var map = isPurchase ? tx.paidAmounts : tx.cashAmounts;
     // نرخِ USD→AFN معتبر برای همین سند (اولویت: نرخِ ثبت‌شده روی سند)
     var usdToAfn = 0;
-    if (docCur === 'USD' && parseFloat(tx.rateUsed) > 0) usdToAfn = parseFloat(tx.rateUsed);
-    if (!usdToAfn && tx.exchangeRateSnapshot && tx.exchangeRateSnapshot.currency === 'USD' &&
-        parseFloat(tx.exchangeRateSnapshot.rate) > 0) usdToAfn = parseFloat(tx.exchangeRateSnapshot.rate);
+    // (v1.6.11) rateUsed/مُهرِ سند «نرخِ ارزِ سند نسبت به ارز پایهٔ لحظهٔ ثبت» است؛ فقط وقتی آن
+    //  پایه افغانی بوده، همان نرخِ دالر→افغانی است. با پایهٔ دیگر (مثلاً دالر) rateUsed=۱ است
+    //  و نباید ۱ دالر = ۱ افغانی خوانده شود؛ در آن حالت نرخِ دالر/افغانیِ همان سند از موتور گرفته می‌شود.
+    var _sbP = (tx.exchangeRateSnapshot && tx.exchangeRateSnapshot.base) || tx.baseCurrency || _baseCur();
+    if (_sbP === 'AFN') {
+        if (docCur === 'USD' && parseFloat(tx.rateUsed) > 0) usdToAfn = parseFloat(tx.rateUsed);
+        if (!usdToAfn && tx.exchangeRateSnapshot && tx.exchangeRateSnapshot.currency === 'USD' &&
+            parseFloat(tx.exchangeRateSnapshot.rate) > 0) usdToAfn = parseFloat(tx.exchangeRateSnapshot.rate);
+    } else {
+        try {
+            if (typeof CurrencySystem !== 'undefined' && CurrencySystem.rateFromDoc) {
+                var _snP = tx.exchangeRateSnapshot || {};
+                var _rrP = function (c) {
+                    var r = CurrencySystem.rateFromDoc(tx, c);
+                    if (r != null && r > 0) return r;
+                    // بردارِ نرخِ همان سند (اسنادِ نسخهٔ 1.6.11 به بعد)
+                    if (_snP.rates && _snP.base === _baseCur() && parseFloat(_snP.rates[c]) > 0) return parseFloat(_snP.rates[c]);
+                    return null;
+                };
+                var _ru = _rrP('USD'), _ra = _rrP('AFN');
+                if (_ru > 0 && _ra > 0) usdToAfn = _ru / _ra;
+            }
+        } catch (e) {}
+    }
     if (!usdToAfn) {
         try {
             if (typeof CurrencySystem !== 'undefined' && CurrencySystem.rateValue) {
@@ -4011,6 +4036,28 @@ function saveProduct() {
     productData.secondarySalePrices = Object.assign({}, (_extraPrices.secSale || {}));
     productData.secondarySalePrices[_pBaseCode] = productData.secondarySalePriceAFN;
 
+    // (v1.6.11) آینه‌های قدیمیِ «…AFN/…USD» فقط قیمتِ همان ارز را نگه می‌دارند.
+    //  پیش‌تر با ارز پایهٔ غیرافغانی، عددِ فیلدِ ثابت (مثلاً ۷۷ دالر) در purchasePriceAFN هم
+    //  نوشته می‌شد و جنس «۷۷ افغانی» هم می‌شد. با پایهٔ افغانی هیچ چیزی تغییر نمی‌کند.
+    if (_pBaseCode !== 'AFN') {
+        var _mirV = function (m, k) { var v = (m && m[k] != null) ? parseFloat(m[k]) : 0; return isNaN(v) ? 0 : v; };
+        var _bP = productData.purchasePriceAFN, _bS = productData.salePriceAFN,
+            _bSP = productData.secondaryPurchasePriceAFN, _bSS = productData.secondarySalePriceAFN;
+        productData.purchasePriceAFN          = _mirV(_extraPrices.purchase, 'AFN');
+        productData.salePriceAFN              = _mirV(_extraPrices.sale, 'AFN');
+        productData.secondaryPurchasePriceAFN = _mirV(_extraPrices.secPurchase, 'AFN');
+        productData.secondarySalePriceAFN     = _mirV(_extraPrices.secSale, 'AFN');
+        if (_pBaseCode === 'USD') {
+            productData.purchasePriceUSD = _bP; productData.salePriceUSD = _bS;
+            productData.secondaryPurchasePriceUSD = _bSP; productData.secondarySalePriceUSD = _bSS;
+        } else {
+            if (_extraPrices.purchase && _extraPrices.purchase.USD != null) productData.purchasePriceUSD = _mirV(_extraPrices.purchase, 'USD');
+            if (_extraPrices.sale && _extraPrices.sale.USD != null) productData.salePriceUSD = _mirV(_extraPrices.sale, 'USD');
+            if (_extraPrices.secPurchase && _extraPrices.secPurchase.USD != null) productData.secondaryPurchasePriceUSD = _mirV(_extraPrices.secPurchase, 'USD');
+            if (_extraPrices.secSale && _extraPrices.secSale.USD != null) productData.secondarySalePriceUSD = _mirV(_extraPrices.secSale, 'USD');
+        }
+    }
+
     if (editId) {
         productData.id = parseInt(editId);
     }
@@ -4525,6 +4572,8 @@ function _migrateBatchInitialCost() {
         } catch (e) { _purchasedIds = {}; }
 
         var changed = false;
+        // (v1.6.11) ترمیمِ آینهٔ افغانیِ آلوده (پیش از هر نسخه‌برداری از آن به بهای موجودیِ اولیه)
+        try { if (_apexRepairAfnMirror(prods)) changed = true; } catch (e) {}
         prods.forEach(function (p) {
             if (!p) return;
             if (p._batchInitialCostAFN === undefined || p._batchInitialCostAFN === null) {
@@ -4577,6 +4626,46 @@ function _migrateBatchInitialCost() {
     } catch (e) { console.error('migrate batch initial cost:', e); }
 }
 if (typeof window !== 'undefined') window._migrateBatchInitialCost = _migrateBatchInitialCost;
+
+// (v1.6.11) ترمیمِ «آینهٔ افغانیِ آلوده» — فقط یک الگوی قطعی و بدونِ ابهام:
+//  فورمِ جنس با ارز پایهٔ غیرافغانی، عددِ قیمتِ ارز پایه (مثلاً ۷۷ دالر) را در فیلدهای
+//  قدیمیِ …AFN هم می‌نوشت؛ در حالی که نقشهٔ چندارزیِ همان جنس (منبعِ اصلیِ قیمت) اصلاً
+//  قیمتِ افغانی ندارد. نتیجه: جنس «۷۷ افغانی» هم حساب می‌شد.
+//  شرطِ ترمیم (همه با هم): نقشه قیمتِ افغانیِ مثبت ندارد + آینهٔ افغانی دقیقاً برابرِ قیمتِ
+//  یک ارزِ دیگرِ همان نقشه است + نرخِ آن ارز با افغانی ۱ نیست. فقط همان آینه صفر می‌شود؛
+//  قیمت‌های نقشه، اسناد و موجودی دست نمی‌خورند. اجرای مکرر بی‌اثر است.
+function _apexRepairAfnMirror(prods) {
+    var changed = false;
+    if (!Array.isArray(prods)) return false;
+    var _CS = (typeof CurrencySystem !== 'undefined') ? CurrencySystem : null;
+    function _notOne(code) {
+        try { var r = _CS && _CS.rateValue ? _CS.rateValue(code, 'AFN', 'rate') : null; return (r != null && r > 0 && Math.abs(r - 1) > 0.05); } catch (e) { return false; }
+    }
+    function _pos(v) { var n = parseFloat(v); return (!isNaN(n) && n > 0) ? n : 0; }
+    function _twin(map, val) {
+        if (!map || typeof map !== 'object' || !(val > 0)) return false;
+        return Object.keys(map).some(function (k) { return k !== 'AFN' && Math.abs(_pos(map[k]) - val) < 1e-9 && _notOne(k); });
+    }
+    prods.forEach(function (p) {
+        if (!p) return;
+        [['purchasePrices', 'purchasePriceAFN'], ['salePrices', 'salePriceAFN'],
+         ['secondaryPurchasePrices', 'secondaryPurchasePriceAFN'], ['secondarySalePrices', 'secondarySalePriceAFN']].forEach(function (pr) {
+            var map = p[pr[0]];
+            if (!map || typeof map !== 'object' || Array.isArray(map) || _pos(map.AFN) > 0) return;
+            var v = _pos(p[pr[1]]);
+            if (v > 0 && _twin(map, v)) { p[pr[1]] = 0; changed = true; }
+        });
+        // بهای موجودیِ اولیه: همان الگو روی آینه و نقشهٔ _batchInitialCosts
+        var pp = p.purchasePrices, bic = p._batchInitialCosts;
+        if (pp && typeof pp === 'object' && !(_pos(pp.AFN) > 0)) {
+            var bA = _pos(p._batchInitialCostAFN);
+            if (bA > 0 && (_twin(bic, bA) || _twin(pp, bA))) { p._batchInitialCostAFN = 0; changed = true; }
+            if (bic && typeof bic === 'object' && _pos(bic.AFN) > 0 && (_twin(bic, _pos(bic.AFN)) || _twin(pp, _pos(bic.AFN)))) { bic.AFN = 0; changed = true; }
+        }
+    });
+    return changed;
+}
+if (typeof window !== 'undefined') window._apexRepairAfnMirror = _apexRepairAfnMirror;
 
 // ========================================================================
 // چارچوبِ عمومیِ «بازسازیِ داده» (General Data Rebuild) روی سیستم Migration
@@ -7495,6 +7584,15 @@ function convertAtDocRate(amount, currency, tx) {
     } catch (e) {}
     var cur = currency || base;
     if (cur === base) return amt;
+    // (v1.6.11) نرخِ سندی که با «ارز پایهٔ دیگری» ثبت شده، مستقیم قابلِ استفاده نیست؛
+    //  موتورِ مرکزی آن را با نرخِ تاریخیِ پایهٔ قبلی به پایهٔ فعلی می‌برد.
+    try {
+        var _sbC = tx && ((tx.exchangeRateSnapshot && tx.exchangeRateSnapshot.base) || tx.baseCurrency);
+        if (_sbC && _sbC !== base && typeof CurrencySystem !== 'undefined' && CurrencySystem.rateFromDoc) {
+            var _rx = CurrencySystem.rateFromDoc(tx, cur);
+            if (_rx != null && _rx > 0) return amt * _rx;
+        }
+    } catch (e) {}
     var r = _txStoredRate(tx);
     // نرخِ ثبت‌شده فقط وقتی معتبر است که ارزِ سند با ارزِ موردِ تبدیل یکی باشد
     var snapCur = tx && (tx.rateUsed != null ? (tx.currency || cur)
@@ -8509,8 +8607,12 @@ function loadProductData(productId) {
         }
         var _spp = (product.secondaryPurchasePrices && typeof product.secondaryPurchasePrices === 'object') ? product.secondaryPurchasePrices : {};
         var _ssp = (product.secondarySalePrices && typeof product.secondarySalePrices === 'object') ? product.secondarySalePrices : {};
-        var _sppBase = (_spp[_ebase] != null) ? _spp[_ebase] : product.secondaryPurchasePriceAFN;
-        var _sspBase = (_ssp[_ebase] != null) ? _ssp[_ebase] : product.secondarySalePriceAFN;
+        // (v1.6.11) فیلدِ ثابت = قیمتِ «ارز پایهٔ فعلی». اگر جنس در ارز پایه قیمت ندارد، فقط
+        //  وقتی پایه افغانی/دالر است از فیلدِ قدیمیِ همان ارز خوانده می‌شود؛ هرگز قیمتِ افغانی
+        //  به‌جای قیمتِ ارزِ دیگر نشانده نمی‌شود (وگرنه با «ذخیره» ۵۰۰۰ افغانی ۵۰۰۰ دالر می‌شد).
+        var _legacyOf = function (afnVal, usdVal) { return (_ebase === 'AFN') ? afnVal : ((_ebase === 'USD') ? usdVal : undefined); };
+        var _sppBase = (_spp[_ebase] != null) ? _spp[_ebase] : _legacyOf(product.secondaryPurchasePriceAFN, product.secondaryPurchasePriceUSD);
+        var _sspBase = (_ssp[_ebase] != null) ? _ssp[_ebase] : _legacyOf(product.secondarySalePriceAFN, product.secondarySalePriceUSD);
         _setSecPrice('product-secondary-purchase-price-afn', _sppBase);
         _setSecPrice('product-secondary-purchase-price-usd', product.secondaryPurchasePriceUSD);
         _setSecPrice('product-secondary-sale-price-afn',     _sspBase);
@@ -8539,14 +8641,19 @@ function loadProductData(productId) {
         // فیلدِ ثابتِ HTML = قیمتِ «ارزِ پایهٔ فعلی» از نقشهٔ پویا (با fallback به فیلدِ قدیمی)
         var _pp = (product.purchasePrices && typeof product.purchasePrices === 'object') ? product.purchasePrices : {};
         var _sp = (product.salePrices && typeof product.salePrices === 'object') ? product.salePrices : {};
-        var _ppBase = (_pp[_ebase] != null) ? _pp[_ebase] : product.purchasePriceAFN;
-        var _spBase = (_sp[_ebase] != null) ? _sp[_ebase] : product.salePriceAFN;
+        var _ppBase = (_pp[_ebase] != null) ? _pp[_ebase] : _legacyOf(product.purchasePriceAFN, product.purchasePriceUSD);
+        var _spBase = (_sp[_ebase] != null) ? _sp[_ebase] : _legacyOf(product.salePriceAFN, product.salePriceUSD);
         _setPrice('product-purchase-price-afn', _ppBase);
         _setPrice('product-purchase-price-usd', product.purchasePriceUSD);
         // در حالتِ «ویرایش موجودی اولیه»، قیمت خرید = قیمتِ سری اول (موجودی اولیه) نمایش داده می‌شود
         // تا ویرایشِ آن فقط روی همان موجودی اولیه اثر بگذارد (نه روی خریدهای بعدی).
         if (_editingInitialStock) {
             var _bAFN = (product._batchInitialCostAFN !== undefined && product._batchInitialCostAFN !== null) ? product._batchInitialCostAFN : _ppBase;
+            // (v1.6.11) با ارز پایهٔ غیرافغانی، بهای موجودیِ اولیهٔ «همان ارز پایه» نمایش داده شود
+            if (_ebase !== 'AFN') {
+                var _bicE = (product._batchInitialCosts && typeof product._batchInitialCosts === 'object') ? product._batchInitialCosts[_ebase] : undefined;
+                _bAFN = (_bicE != null) ? _bicE : ((_ebase === 'USD' && product._batchInitialCostUSD != null) ? product._batchInitialCostUSD : _ppBase);
+            }
             var _bUSD = (product._batchInitialCostUSD !== undefined && product._batchInitialCostUSD !== null) ? product._batchInitialCostUSD : product.purchasePriceUSD;
             _setPrice('product-purchase-price-afn', _bAFN);
             _setPrice('product-purchase-price-usd', _bUSD);
